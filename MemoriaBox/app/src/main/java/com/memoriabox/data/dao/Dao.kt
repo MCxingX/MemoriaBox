@@ -68,6 +68,18 @@ interface EventDao {
 
     @Query("UPDATE events SET box_id = :newBoxId WHERE id IN (:ids)")
     suspend fun moveEventsToBox(ids: List<String>, newBoxId: String)
+
+    @Query("DELETE FROM events WHERE id IN (:ids)")
+    suspend fun deleteEventsByIds(ids: List<String>)
+
+    @Query("SELECT * FROM events WHERE id IN (:ids)")
+    suspend fun getEventsByIds(ids: List<String>): List<Event>
+
+    @Query("SELECT * FROM events WHERE date >= :now ORDER BY date ASC LIMIT 1")
+    suspend fun getNextUpcomingEvent(now: Long): Event?
+
+    @Query("SELECT COUNT(*) FROM events WHERE date >= :start AND date <= :end")
+    suspend fun getEventCountBetween(start: Long, end: Long): Int
 }
 
 @Dao

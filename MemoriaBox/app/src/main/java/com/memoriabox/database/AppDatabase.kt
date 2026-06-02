@@ -6,9 +6,6 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.memoriabox.data.dao.*
 import com.memoriabox.data.model.*
-import com.memoriabox.utils.ColorUtils
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
 import net.sqlcipher.database.SupportFactory
 import java.security.SecureRandom
 import javax.crypto.spec.PBEKeySpec
@@ -55,11 +52,15 @@ abstract class AppDatabase : RoomDatabase() {
                         super.onCreate(db)
                         // Insert default box after database is created
                         // Use execSQL directly since INSTANCE is not yet available
-                        db.execSQL("INSERT INTO boxes (id, name, icon, bg_type, bg_value, created_at) VALUES ('default_1', '我的盒子', '📦', 0, '#7C4DFF', strftime('%s', 'now') * 1000)")
+                        db.execSQL("""
+                            INSERT INTO boxes (id, name, icon, bg_type, bg_value, sort_order, is_archived, created_at)
+                            VALUES ('default_1', '我的盒子', '📦', 'COLOR', '#7C4DFF', 0, 0, strftime('%s', 'now') * 1000)
+                        """.trimIndent())
                     }
 
                     override fun onOpen(db: SupportSQLiteDatabase) {
                         super.onOpen(db)
+                        repairLegacyData(db)
                         migrationCallback()
                     }
                 })
@@ -91,6 +92,18 @@ abstract class AppDatabase : RoomDatabase() {
             }
             
             return android.util.Base64.decode(encodedKey, android.util.Base64.NO_WRAP)
+        }
+
+        private fun repairLegacyData(db: SupportSQLiteDatabase) {
+            db.execSQL("UPDATE boxes SET bg_type = 'COLOR' WHERE bg_type NOT IN ('COLOR', 'IMAGE')")
+            db.execSQL("UPDATE events SET type = 'COUNTDOWN' WHERE type NOT IN ('COUNTDOWN', 'ANNIVERSARY', 'ELAPSED', 'BIRTHDAY', 'TODO')")
+            db.execSQL("UPDATE events SET todo_status = 'PENDING' WHERE todo_status NOT IN ('PENDING', 'COMPLETED', 'CANCELLED')")
+            db.execSQL("UPDATE boxes SET sort_order = 0 WHERE sort_order IS NULL")
+            db.execSQL("UPDATE boxes SET is_archived = 0 WHERE is_archived IS NULL")
+            db.execSQL("""
+                INSERT OR IGNORE INTO boxes (id, name, icon, bg_type, bg_value, sort_order, is_archived, created_at)
+                VALUES ('default_1', '我的盒子', '📦', 'COLOR', '#7C4DFF', 0, 0, strftime('%s', 'now') * 1000)
+            """.trimIndent())
         }
     }
 }

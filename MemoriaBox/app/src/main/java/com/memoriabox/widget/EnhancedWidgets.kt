@@ -8,9 +8,13 @@ import android.content.Intent
 import android.widget.RemoteViews
 import com.memoriabox.MainActivity
 import com.memoriabox.R
-import android.graphics.Bitmap
-import android.graphics.drawable.ColorDrawable
-import androidx.compose.ui.graphics.toArgb
+import com.memoriabox.database.AppDatabase
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 class CountdownWidget : AppWidgetProvider() {
 
@@ -42,11 +46,22 @@ class CountdownWidget : AppWidgetProvider() {
             )
             views.setOnClickPendingIntent(R.id.widget_main_container, pendingIntent)
             
-            // TODO: Fetch next upcoming event from database
-            // For now, show placeholder
-            views.setTextViewText(R.id.widget_next_event, "下一个事件")
-            views.setTextViewText(R.id.widget_event_name, "点击配置")
-            views.setTextViewText(R.id.widget_days_left, "--")
+            val event = runCatching {
+                runBlocking(Dispatchers.IO) {
+                    AppDatabase.getDatabase(context).eventDao().getNextUpcomingEvent(System.currentTimeMillis())
+                }
+            }.getOrNull()
+
+            if (event != null) {
+                val daysLeft = ((event.date - System.currentTimeMillis()) / 86_400_000L).coerceAtLeast(0)
+                views.setTextViewText(R.id.widget_next_event, "下一个事件")
+                views.setTextViewText(R.id.widget_event_name, event.name)
+                views.setTextViewText(R.id.widget_days_left, daysLeft.toString())
+            } else {
+                views.setTextViewText(R.id.widget_next_event, "暂无 upcoming")
+                views.setTextViewText(R.id.widget_event_name, "添加纪念日")
+                views.setTextViewText(R.id.widget_days_left, "--")
+            }
             
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }
@@ -83,9 +98,25 @@ class CalendarWidget : AppWidgetProvider() {
             )
             views.setOnClickPendingIntent(R.id.widget_calendar_container, pendingIntent)
             
-            // TODO: Show today's events
-            views.setTextViewText(R.id.widget_today_date, "今天")
-            views.setTextViewText(R.id.widget_event_count, "0 个事件")
+            val calendar = Calendar.getInstance()
+            val dateText = SimpleDateFormat("MM月dd日", Locale.getDefault()).format(Date())
+            val dayText = calendar.get(Calendar.DAY_OF_MONTH).toString()
+            val start = calendar.apply {
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+            val end = start + 86_400_000L - 1
+            val count = runCatching {
+                runBlocking(Dispatchers.IO) {
+                    AppDatabase.getDatabase(context).eventDao().getEventCountBetween(start, end)
+                }
+            }.getOrDefault(0)
+
+            views.setTextViewText(R.id.widget_today_date, dateText)
+            views.setTextViewText(R.id.widget_today_day, dayText)
+            views.setTextViewText(R.id.widget_event_count, "$count 个事件")
             
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }

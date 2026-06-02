@@ -8,6 +8,9 @@ import android.content.Intent
 import android.widget.RemoteViews
 import com.memoriabox.MainActivity
 import com.memoriabox.R
+import com.memoriabox.database.AppDatabase
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 
 class MemoriaBoxWidget : AppWidgetProvider() {
 
@@ -45,9 +48,22 @@ class MemoriaBoxWidget : AppWidgetProvider() {
             )
             views.setOnClickPendingIntent(R.id.widget_container, pendingIntent)
             
-            // Set default text (in real implementation, fetch from database)
-            views.setTextViewText(R.id.widget_title, "MemoriaBox")
-            views.setTextViewText(R.id.widget_content, "点击打开应用")
+            val event = runCatching {
+                runBlocking(Dispatchers.IO) {
+                    AppDatabase.getDatabase(context).eventDao().getNextUpcomingEvent(System.currentTimeMillis())
+                }
+            }.getOrNull()
+
+            if (event != null) {
+                val daysLeft = ((event.date - System.currentTimeMillis()) / 86_400_000L).coerceAtLeast(0)
+                views.setTextViewText(R.id.widget_title, event.name)
+                views.setTextViewText(R.id.widget_content, "距离目标还有")
+                views.setTextViewText(R.id.widget_days, "$daysLeft 天")
+            } else {
+                views.setTextViewText(R.id.widget_title, "MemoriaBox")
+                views.setTextViewText(R.id.widget_content, "点击添加第一个纪念日")
+                views.setTextViewText(R.id.widget_days, "")
+            }
             
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }

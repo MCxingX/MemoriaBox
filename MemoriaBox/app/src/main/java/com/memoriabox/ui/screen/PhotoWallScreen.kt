@@ -274,17 +274,25 @@ fun ShareOptionsDialog(
 @Composable
 fun ExportScreen(application: Application) {
     val context = LocalContext.current
+    val vm = remember { createCalendarViewModel(application) }
+    val events by vm.allEvents.collectAsState(initial = emptyList())
     
     var showExportOptions by remember { mutableStateOf(false) }
     var isExporting by remember { mutableStateOf(false) }
     var exportResult by remember { mutableStateOf<String?>(null) }
-
     val exportPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/json")
     ) { uri ->
         uri?.let {
-            // TODO: Export data to file
-            exportResult = "导出成功"
+            exportResult = if (writeTextToUri(context, it, buildJsonExport(events))) "JSON 导出成功" else "JSON 导出失败"
+        }
+    }
+
+    val icalPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("text/calendar")
+    ) { uri ->
+        uri?.let {
+            exportResult = if (writeTextToUri(context, it, buildIcalExport(events))) "iCal 导出成功" else "iCal 导出失败"
         }
     }
 
@@ -345,6 +353,43 @@ fun ExportScreen(application: Application) {
             Spacer(Modifier.height(12.dp))
 
             Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { icalPicker.launch("MemoriaBox_${System.currentTimeMillis()}.ics") }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.CalendarToday,
+                            null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(32.dp)
+                        )
+                        Spacer(Modifier.width(16.dp))
+                        Column {
+                            Text("导出为 iCal", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "可导入系统日历、Google Calendar 等应用",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                    Icon(Icons.Default.ArrowForward, null)
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            Card(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -360,7 +405,16 @@ fun ExportScreen(application: Application) {
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         OutlinedButton(
-                            onClick = { isExporting = true },
+                            onClick = {
+                                val event = events.firstOrNull()
+                                if (event != null) {
+                                    val daysLeft = ((event.date - System.currentTimeMillis()) / 86_400_000L).coerceAtLeast(0)
+                                    shareBitmap(context, generateEventCardBitmap(context, event, daysLeft))
+                                    exportResult = "事件卡片已生成"
+                                } else {
+                                    exportResult = "暂无可分享事件"
+                                }
+                            },
                             modifier = Modifier.weight(1f)
                         ) {
                             Icon(Icons.Default.Event, null)
@@ -368,7 +422,10 @@ fun ExportScreen(application: Application) {
                             Text("事件卡片")
                         }
                         OutlinedButton(
-                            onClick = { isExporting = true },
+                            onClick = {
+                                shareBitmap(context, generateStatisticsBitmap(events))
+                                exportResult = "统计图表已生成"
+                            },
                             modifier = Modifier.weight(1f)
                         ) {
                             Icon(Icons.Default.BarChart, null)
@@ -412,6 +469,59 @@ fun ExportScreen(application: Application) {
         }
     }
 }
+
+private fun writeTextToUri(context: android.content.Context, uri: Uri, content: String): Boolean {
+    return try {
+        context.contentResolver.openOutputStream(uri)?.use { output ->
+            output.write(content.toByteArray(Charsets.UTF_8))
+        }
+        true
+    } catch (e: Exception) {
+        e.printStackTrace()
+        false
+    }
+}
+
+private fun buildJsonExport(events: List<Event>): String {
+    return buildString {
+        append("{\n  \"version\": \"1.0\",\n  \"events\": [\n")
+        events.forEachIndexed { index, event ->
+            append("    {")
+            append("\"id\": \"${event.id.escapeJson()}\", ")
+            append("\"boxId\": \"${event.boxId.escapeJson()}\", ")
+            append("\"name\": \"${event.name.escapeJson()}\", ")
+            append("\"date\": ${event.date}, ")
+            append("\"type\": \"${event.type.name}\", ")
+            append("\"note\": \"${event.note.escapeJson()}\"")
+            append("}")
+            if (index != events.lastIndex) append(",")
+            append("\n")
+        }
+        append("  ]\n}")
+    }
+}
+
+private fun buildIcalExport(events: List<Event>): String {
+    val formatter = SimpleDateFormat("yyyyMMdd", Locale.US)
+    return buildString {
+        appendLine("BEGIN:VCALENDAR")
+        appendLine("VERSION:2.0")
+        appendLine("PRODID:-//MemoriaBox//CN")
+        events.forEach { event ->
+            appendLine("BEGIN:VEVENT")
+            appendLine("UID:${event.id}@memoriabox")
+            appendLine("SUMMARY:${event.name.escapeIcal()}")
+            appendLine("DTSTART;VALUE=DATE:${formatter.format(Date(event.date))}")
+            appendLine("DESCRIPTION:${event.note.escapeIcal()}")
+            appendLine("END:VEVENT")
+        }
+        appendLine("END:VCALENDAR")
+    }
+}
+
+private fun String.escapeJson(): String = replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")
+
+private fun String.escapeIcal(): String = replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
 
 // Generate shareable image from event
 fun generateEventCardBitmap(
@@ -503,4 +613,66 @@ fun shareBitmap(context: android.content.Context, bitmap: Bitmap) {
     } catch (e: Exception) {
         e.printStackTrace()
     }
+}
+
+fun generateStatisticsBitmap(events: List<Event>): Bitmap {
+    val width = 1080
+    val height = 1600
+    val bitmap = createBitmap(width, height)
+    val canvas = Canvas(bitmap)
+    val background = Paint().apply {
+        color = android.graphics.Color.parseColor("#1E1B4B")
+    }
+    canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), background)
+
+    val titlePaint = Paint().apply {
+        color = android.graphics.Color.WHITE
+        textSize = 72f
+        isAntiAlias = true
+        typeface = Typeface.DEFAULT_BOLD
+        textAlign = Paint.Align.CENTER
+    }
+    canvas.drawText("MemoriaBox 数据统计", width / 2f, 180f, titlePaint)
+
+    val metricPaint = Paint().apply {
+        color = android.graphics.Color.WHITE
+        textSize = 56f
+        isAntiAlias = true
+        typeface = Typeface.DEFAULT_BOLD
+    }
+    val labelPaint = Paint().apply {
+        color = android.graphics.Color.argb(210, 255, 255, 255)
+        textSize = 42f
+        isAntiAlias = true
+    }
+    val accentPaint = Paint().apply {
+        color = android.graphics.Color.parseColor("#FF4081")
+        isAntiAlias = true
+    }
+
+    val birthdays = events.count { it.type == com.memoriabox.data.model.EventType.BIRTHDAY }
+    val todos = events.count { it.type == com.memoriabox.data.model.EventType.TODO }
+    val reminders = events.count { it.reminderEnabled }
+    val rows = listOf(
+        "总事件" to events.size,
+        "生日" to birthdays,
+        "待办" to todos,
+        "已开提醒" to reminders
+    )
+
+    rows.forEachIndexed { index, (label, value) ->
+        val top = 320f + index * 220f
+        canvas.drawRoundRect(100f, top, 980f, top + 150f, 36f, 36f, accentPaint)
+        canvas.drawText(label, 150f, top + 92f, labelPaint)
+        canvas.drawText(value.toString(), 820f, top + 96f, metricPaint)
+    }
+
+    val footerPaint = Paint().apply {
+        color = android.graphics.Color.argb(180, 255, 255, 255)
+        textSize = 36f
+        isAntiAlias = true
+        textAlign = Paint.Align.CENTER
+    }
+    canvas.drawText("Generated by MemoriaBox", width / 2f, height - 120f, footerPaint)
+    return bitmap
 }

@@ -23,8 +23,10 @@ import androidx.navigation.compose.rememberNavController
 import com.memoriabox.ui.navigation.Screen
 import com.memoriabox.ui.navigation.bottomNavItems
 import com.memoriabox.ui.screen.components.*
+import com.memoriabox.ui.screen.dialogs.BatchSelectDialog
 import com.memoriabox.ui.screen.dialogs.BoxDialog
 import com.memoriabox.ui.screen.dialogs.EventDialog
+import com.memoriabox.ui.screen.dialogs.MoveToBoxDialog
 import com.memoriabox.data.model.*
 import com.memoriabox.viewmodel.*
 
@@ -92,6 +94,9 @@ fun MainScreen(
                     onNavigateToFriends = { navController.navigate(Screen.Friends.route) },
                     onNavigateToPhotoWall = { navController.navigate(Screen.PhotoWall.route) },
                     onNavigateToExport = { navController.navigate(Screen.Export.route) },
+                    onNavigateToAiSuggestions = { navController.navigate(Screen.AiSuggestions.route) },
+                    onNavigateToAchievements = { navController.navigate(Screen.Achievements.route) },
+                    onNavigateToSyncStatus = { navController.navigate(Screen.SyncStatus.route) },
                     onBackupSettingsClick = { navController.navigate(Screen.BackupSettings.route) },
                     onWebDavSettingsClick = { navController.navigate(Screen.WebDavSettings.route) }
                 )
@@ -125,6 +130,15 @@ fun MainScreen(
             }
             composable(Screen.Timeline.route) {
                 TimelineScreen(application)
+            }
+            composable(Screen.AiSuggestions.route) {
+                AiSuggestionsScreen(application)
+            }
+            composable(Screen.Achievements.route) {
+                AchievementsScreen(application)
+            }
+            composable(Screen.SyncStatus.route) {
+                SyncStatusScreen(application)
             }
         }
     }
@@ -188,6 +202,9 @@ fun BoxDetailScreen(
 
     var showCreateEvent by remember { mutableStateOf(false) }
     var showEditEvent by remember { mutableStateOf<Event?>(null) }
+    var showBatchDialog by remember { mutableStateOf(false) }
+    var showMoveDialog by remember { mutableStateOf(false) }
+    var selectedEvents by remember { mutableStateOf<Set<String>>(emptySet()) }
 
     LaunchedEffect(boxId) {
         viewModel.loadBox(boxId)
@@ -200,6 +217,11 @@ fun BoxDetailScreen(
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "返回")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { showBatchDialog = true }) {
+                        Icon(Icons.Default.Checklist, contentDescription = "批量操作")
                     }
                 }
             )
@@ -246,6 +268,38 @@ fun BoxDetailScreen(
             onSave = { updatedEvent ->
                 viewModel.updateEvent(updatedEvent)
                 showEditEvent = null
+            }
+        )
+    }
+
+    if (showBatchDialog) {
+        BatchSelectDialog(
+            events = events,
+            selectedEvents = selectedEvents,
+            onSelectionChange = { selectedEvents = it },
+            onDismiss = { showBatchDialog = false },
+            onBatchDelete = {
+                viewModel.deleteEvents(selectedEvents)
+                selectedEvents = emptySet()
+                showBatchDialog = false
+            },
+            onBatchMove = { showMoveDialog = true },
+            onBatchEdit = {
+                showEditEvent = events.firstOrNull { selectedEvents.contains(it.id) }
+                showBatchDialog = false
+            }
+        )
+    }
+
+    if (showMoveDialog) {
+        MoveToBoxDialog(
+            boxes = box?.let { listOf(it) } ?: emptyList(),
+            onDismiss = { showMoveDialog = false },
+            onBoxSelected = { targetBoxId ->
+                viewModel.moveEvents(selectedEvents, targetBoxId)
+                selectedEvents = emptySet()
+                showMoveDialog = false
+                showBatchDialog = false
             }
         )
     }
@@ -296,6 +350,9 @@ fun SettingsScreen(
     onNavigateToFriends: () -> Unit,
     onNavigateToPhotoWall: () -> Unit,
     onNavigateToExport: () -> Unit,
+    onNavigateToAiSuggestions: () -> Unit,
+    onNavigateToAchievements: () -> Unit,
+    onNavigateToSyncStatus: () -> Unit,
     onBackupSettingsClick: () -> Unit,
     onWebDavSettingsClick: () -> Unit
 ) {
@@ -333,6 +390,24 @@ fun SettingsScreen(
             title = "导出分享",
             description = "导出数据和分享图片",
             onClick = onNavigateToExport
+        )
+        SettingsItem(
+            icon = Icons.Default.AutoAwesome,
+            title = "AI 智能建议",
+            description = "根据事件和提醒状态给出整理建议",
+            onClick = onNavigateToAiSuggestions
+        )
+        SettingsItem(
+            icon = Icons.Default.EmojiEvents,
+            title = "成就系统",
+            description = "查看记录事件、生日、照片等成就进度",
+            onClick = onNavigateToAchievements
+        )
+        SettingsItem(
+            icon = Icons.Default.CloudSync,
+            title = "多设备同步",
+            description = "查看 WebDAV 跨设备同步状态和建议",
+            onClick = onNavigateToSyncStatus
         )
         
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))

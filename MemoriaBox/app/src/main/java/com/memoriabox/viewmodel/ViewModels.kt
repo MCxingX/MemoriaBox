@@ -152,6 +152,30 @@ class BoxDetailViewModel(
             Log.e("BoxDetailVM", "Delete event failed", e)
         }
     }
+
+    fun deleteEvents(ids: Set<String>) = viewModelScope.launch {
+        if (ids.isEmpty()) return@launch
+        try {
+            val selectedEvents = eventRepository.getEventsByIds(ids.toList())
+            selectedEvents.forEach { notificationHelper.cancelReminder(it) }
+            eventRepository.deleteEventsByIds(ids.toList())
+            logRepository.logEventOperation("BATCH_DELETE", ids.joinToString(), "${ids.size} events")
+            backupManager.onDataChanged()
+        } catch (e: Exception) {
+            Log.e("BoxDetailVM", "Batch delete failed", e)
+        }
+    }
+
+    fun moveEvents(ids: Set<String>, targetBoxId: String) = viewModelScope.launch {
+        if (ids.isEmpty()) return@launch
+        try {
+            eventRepository.moveEventsToBox(ids.toList(), targetBoxId)
+            logRepository.logEventOperation("BATCH_MOVE", ids.joinToString(), "${ids.size} events")
+            backupManager.onDataChanged()
+        } catch (e: Exception) {
+            Log.e("BoxDetailVM", "Batch move failed", e)
+        }
+    }
 }
 
 class CalendarViewModel(

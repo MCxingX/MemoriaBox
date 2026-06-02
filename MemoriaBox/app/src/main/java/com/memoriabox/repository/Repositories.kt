@@ -33,6 +33,8 @@ class EventRepository(private val eventDao: EventDao) {
     suspend fun deleteEvent(event: Event) = eventDao.deleteEvent(event)
     suspend fun moveEventToBox(id: String, newBoxId: String) = eventDao.moveEventToBox(id, newBoxId)
     suspend fun moveEventsToBox(ids: List<String>, newBoxId: String) = eventDao.moveEventsToBox(ids, newBoxId)
+    suspend fun deleteEventsByIds(ids: List<String>) = eventDao.deleteEventsByIds(ids)
+    suspend fun getEventsByIds(ids: List<String>): List<Event> = eventDao.getEventsByIds(ids)
 }
 
 class LogRepository(private val logDao: LogDao) {
