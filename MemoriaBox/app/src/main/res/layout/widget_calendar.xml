@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_calendar_container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="12dp"
+    android:background="@drawable/widget_calendar_bg">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/widget_today_date"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="今天"
+            android:textSize="16sp"
+            android:textColor="#80FFFFFF" />
+
+        <TextView
+            android:id="@+id/widget_today_day"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="25"
+            android:textSize="36sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:layout_marginTop="4dp" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#40FFFFFF"
+            android:layout_marginVertical="8dp" />
+
+        <TextView
+            android:id="@+id/widget_event_count"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="0 个事件"
+            android:textSize="14sp"
+            android:textColor="#FFFFFF" />
+
+    </LinearLayout>
+</FrameLayout>

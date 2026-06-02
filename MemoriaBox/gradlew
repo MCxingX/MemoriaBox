@@ -1,0 +1,16 @@
+#!/bin/sh
+# Gradle wrapper script
+
+GRADLE_USER_HOME="${GRADLE_USER_HOME:-$HOME/.gradle}"
+GRADLE_VERSION="8.0"
+
+if [ ! -f "$GRADLE_USER_HOME/wrapper/dists/gradle-$GRADLE_VERSION-bin/"*"/gradle-$GRADLE_VERSION/bin/gradle" ]; then
+    echo "Downloading Gradle $GRADLE_VERSION..."
+    mkdir -p "$GRADLE_USER_HOME/wrapper/dists"
+    cd "$GRADLE_USER_HOME/wrapper/dists"
+    curl -L "https://services.gradle.org/distributions/gradle-$GRADLE_VERSION-bin.zip" -o "gradle-$GRADLE_VERSION-bin.zip"
+    unzip -q "gradle-$GRADLE_VERSION-bin.zip"
+fi
+
+GRADLE_HOME=$(find "$GRADLE_USER_HOME/wrapper/dists" -name "gradle-$GRADLE_VERSION" -type d | head -1)
+exec "$GRADLE_HOME/bin/gradle" "$@"

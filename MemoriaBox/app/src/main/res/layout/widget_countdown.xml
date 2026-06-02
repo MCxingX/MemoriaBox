@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_main_container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="16dp"
+    android:background="@drawable/widget_countdown_bg">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center">
+
+        <TextView
+            android:id="@+id/widget_next_event"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="下一个事件"
+            android:textSize="14sp"
+            android:textColor="#80FFFFFF" />
+
+        <TextView
+            android:id="@+id/widget_event_name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="事件名称"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:layout_marginTop="4dp"
+            android:gravity="center" />
+
+        <TextView
+            android:id="@+id/widget_days_left"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="--"
+            android:textSize="48sp"
+            android:textStyle="bold"
+            android:textColor="#FFD700"
+            android:layout_marginTop="12dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="天"
+            android:textSize="16sp"
+            android:textColor="#FFFFFF" />
+
+    </LinearLayout>
+</FrameLayout>

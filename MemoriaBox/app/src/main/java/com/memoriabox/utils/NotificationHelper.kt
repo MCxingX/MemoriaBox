@@ -1,0 +1,226 @@
+package com.memoriabox.utils
+
+import android.app.AlarmManager
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
+import android.os.Build
+import android.util.Log
+import androidx.core.content.ContextCompat
+import com.memoriabox.data.model.Event
+import com.memoriabox.receiver.ReminderReceiver
+import kotlinx.coroutines.*
+import java.io.OutputStreamWriter
+import java.net.HttpURLConnection
+import java.net.URL
+import java.util.Calendar
+
+class NotificationHelper(private val context: Context) {
+    
+    private val TAG = "NotificationHelper"
+    
+    private val alarmManager: AlarmManager?
+    private val prefs = context.getSharedPreferences("pushplus_config", Context.MODE_PRIVATE)
+    
+    companion object {
+        private const val CHANNEL_ID = "memoriabox_reminders"
+    }
+
+    init {
+        alarmManager = try {
+            context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get AlarmManager", e)
+            null
+        }
+        createNotificationChannel()
+    }
+
+    private fun createNotificationChannel() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val manager = context.getSystemService(NotificationManager::class.java)
+                
+                val existingChannel = manager.getNotificationChannel(CHANNEL_ID)
+                if (existingChannel == null) {
+                    val channel = NotificationChannel(
+                        CHANNEL_ID,
+                        "纪念日提醒",
+                        NotificationManager.IMPORTANCE_DEFAULT
+                    ).apply {
+                        description = "用于纪念日倒计时提醒"
+                        setShowBadge(true)
+                        enableVibration(true)
+                        enableLights(false)
+                    }
+                    manager.createNotificationChannel(channel)
+                    Log.d(TAG, "Notification channel created")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to create notification channel", e)
+        }
+    }
+
+    fun scheduleReminder(event: Event) {
+        if (alarmManager == null) {
+            Log.w(TAG, "AlarmManager not available")
+            return
+        }
+        
+        try {
+            val calendar = Calendar.getInstance().apply {
+                timeInMillis = event.date
+                add(Calendar.DAY_OF_YEAR, -event.reminderDays)
+                set(Calendar.HOUR_OF_DAY, event.alarmTime.substring(0, 2).toInt())
+                set(Calendar.MINUTE, event.alarmTime.substring(3, 5).toInt())
+                set(Calendar.SECOND, 0)
+            }
+
+            val triggerTime = calendar.timeInMillis
+            if (triggerTime < System.currentTimeMillis()) {
+                Log.d(TAG, "Reminder time already passed: ${event.name}")
+                return
+            }
+
+            val intent = Intent(context, ReminderReceiver::class.java).apply {
+                putExtra("event_id", event.id)
+                putExtra("event_title", event.name)
+                putExtra("event_note", event.note)
+            }
+
+            val pendingIntent = PendingIntent.getBroadcast(
+                context,
+                event.id.hashCode(),
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        if (alarmManager.canScheduleExactAlarms()) {
+                            alarmManager.setExactAndAllowWhileIdle(
+                                AlarmManager.RTC_WAKEUP,
+                                triggerTime,
+                                pendingIntent
+                            )
+                            Log.d(TAG, "Exact alarm scheduled: ${event.name}")
+                        } else {
+                            Log.w(TAG, "Exact alarm permission not granted, using inexact")
+                            alarmManager.setAndAllowWhileIdle(
+                                AlarmManager.RTC_WAKEUP,
+                                triggerTime,
+                                pendingIntent
+                            )
+                        }
+                    } else {
+                        alarmManager.setExactAndAllowWhileIdle(
+                            AlarmManager.RTC_WAKEUP,
+                            triggerTime,
+                            pendingIntent
+                        )
+                    }
+                } else {
+                    alarmManager.set(
+                        AlarmManager.RTC_WAKEUP,
+                        triggerTime,
+                        pendingIntent
+                    )
+                }
+            } catch (e: SecurityException) {
+                Log.e(TAG, "SecurityException scheduling alarm", e)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to schedule reminder", e)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in scheduleReminder", e)
+        }
+    }
+
+    fun cancelReminder(event: Event) {
+        val alarmMgr = alarmManager ?: return
+        try {
+            val intent = Intent(context, ReminderReceiver::class.java)
+            val pendingIntent = PendingIntent.getBroadcast(
+                context,
+                event.id.hashCode(),
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            alarmMgr.cancel(pendingIntent)
+            Log.d(TAG, "Reminder cancelled: ${event.name}")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to cancel reminder", e)
+        }
+    }
+
+    fun getPushPlusToken(): String {
+        return prefs.getString("pushplus_token", "") ?: ""
+    }
+
+    fun setPushPlusToken(token: String) {
+        prefs.edit().putString("pushplus_token", token).apply()
+    }
+
+    fun isPushPlusEnabled(): Boolean {
+        return prefs.getBoolean("pushplus_enabled", false)
+    }
+
+    fun setPushPlusEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("pushplus_enabled", enabled).apply()
+    }
+
+    fun getPushPlusChannel(): String {
+        return prefs.getString("pushplus_channel", "wechat") ?: "wechat"
+    }
+
+    fun setPushPlusChannel(channel: String) {
+        prefs.edit().putString("pushplus_channel", channel).apply()
+    }
+
+    fun sendPushPlusNotification(title: String, content: String) {
+        if (!isPushPlusEnabled()) return
+        
+        val token = getPushPlusToken()
+        if (token.isEmpty()) return
+
+        val channel = getPushPlusChannel()
+        
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val url = URL("https://www.pushplus.plus/send")
+                val connection = url.openConnection() as HttpURLConnection
+                connection.requestMethod = "POST"
+                connection.setRequestProperty("Content-Type", "application/json")
+                connection.doOutput = true
+
+                val jsonPayload = """
+                    {
+                        "token": "$token",
+                        "title": "$title",
+                        "content": "$content",
+                        "template": "html",
+                        "channel": "$channel"
+                    }
+                """.trimIndent()
+
+                OutputStreamWriter(connection.outputStream).use {
+                    it.write(jsonPayload)
+                    it.flush()
+                }
+
+                val responseCode = connection.responseCode
+                if (responseCode == 200) {
+                    android.util.Log.d("PushPlus", "Notification sent successfully")
+                } else {
+                    android.util.Log.e("PushPlus", "Failed to send notification: $responseCode")
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("PushPlus", "Error sending PushPlus notification", e)
+            }
+        }
+    }
+}

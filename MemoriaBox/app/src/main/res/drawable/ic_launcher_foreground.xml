@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 礼物盒主体 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M30,50h48v30h-48z"/>
+    <!-- 盒盖 -->
+    <path
+        android:fillColor="#F5F5F5"
+        android:pathData="M28,44h52v8h-52z"/>
+    <path
+        android:fillColor="#EEEEEE"
+        android:pathData="M30,50h48v2h-48z"/>
+    <!-- 竖条丝带 -->
+    <path
+        android:fillColor="#FF4081"
+        android:pathData="M51,44h6v36h-6z"/>
+    <!-- 横条丝带 -->
+    <path
+        android:fillColor="#FF4081"
+        android:pathData="M30,58h48v6h-48z"/>
+    <!-- 蝴蝶结左环 -->
+    <path
+        android:fillColor="#FF4081"
+        android:pathData="M54,44 c-8,-4 -16,2 -12,10 c3,5 10,0 10,-4 L46,44h8z"/>
+    <!-- 蝴蝶结右环 -->
+    <path
+        android:fillColor="#FF4081"
+        android:pathData="M54,44 c8,-4 16,2 12,10 c-3,5 -10,0 -10,-4 L62,44h-8z"/>
+    <!-- 结中心 -->
+    <path
+        android:fillColor="#C51162"
+        android:pathData="M51,42h6v4h-6z"/>
+    <!-- 心形装饰 -->
+    <path
+        android:fillColor="#FF4081"
+        android:pathData="M54,34c-2,-3 -7,-3 -7,2 c0,4 4,8 7,9 c3,-1 7,-5 7,-9 c0,-5 -5,-5 -7,-2z"/>
+</vector>
