@@ -1,0 +1,369 @@
+以下是为您量身定制的 **《MemoriaBox · 纪念盒子安卓应用开发设计文档》**，基于您的原始需求进行了系统性完善、技术细化与用户体验优化。文档涵盖产品定位、完整功能规格、安卓技术架构、数据安全方案、备份策略（含您要求的防抖自动备份+保留5份）、WebDAV集成、操作日志、UI/UX设计指导及开发实施建议。您可直接交付给开发团队作为技术蓝图。
+
+---
+
+# MemoriaBox 纪念盒子 - Android 应用开发设计文档
+
+**版本**：1.0  
+**目标平台**：Android 7.0+ (API 24+)  
+**开发语言**：Kotlin  
+**架构模式**：MVVM + Repository  
+**最低兼容**：Android 6.0 (API 23，针对存储权限适配)  
+
+---
+
+## 1. 产品概述
+
+### 1.1 产品定位
+情感记录与纪念日管理工具。用户创建“盒子”（分组），在盒子内添加多个纪念日子（事件），通过高度自定义的背景、卡片样式及动态排版，打造私人的记忆空间。强调数据安全（本地+WebDAV加密备份）与操作可追溯（日志审计）。
+
+### 1.2 目标用户
+- 注重仪式感的个人
+- 记录重要时刻（生日、恋爱纪念日、考试倒数等）的用户
+- 管理多个项目/事件截止日期的团队（轻度协作场景）
+
+### 1.3 核心价值
+- **情感可视化**：用卡片、色彩、图片承载记忆
+- **灵活组织**：盒子套日子，支持批量移动
+- **数据主权**：用户掌握所有备份文件，支持加密导出/导入
+- **隐私合规**：操作日志不记录敏感信息，备份全程加密
+
+---
+
+## 2. 功能需求详细设计
+
+### 2.1 盒子（分组）管理
+| 功能 | 描述 |
+|------|------|
+| 创建盒子 | 名称（必填）、封面图标（内置图标库 + emoji + 本地图片）、默认背景（颜色/图片，可被子事件继承或独立） |
+| 盒子排序 | 拖拽排序（长按拖动）、手动排序；按创建时间、名称排序（设置中切换） |
+| 盒子操作 | 编辑、删除（内部事件一并删除，并二次确认）、归档（隐藏至“归档”列表，可恢复或彻底删除） |
+| 盒子封面 | 支持从相册选取或拍照，自动裁剪为正方形。 |
+
+### 2.2 日子（事件）管理
+每个事件包含以下属性：
+
+| 属性 | 说明 |
+|------|------|
+| 事件名称 | 必填，最多50字符 |
+| 日期 | 公历日期 + 可选农历（提供农历选择器） |
+| 类型 | 倒数日（未来日期）、纪念日（过去日期）、正计时（已过天数） |
+| 备注 | 纯文本（最多500字符） |
+| 提醒开关 | 开启后，可设置提前N天（1~30天）通知，使用系统通知栏 |
+| 卡片外观 | 可独立于盒子背景：颜色/图片、文字颜色、圆角半径、阴影 |
+| 附加功能 | 支持批量移动至其他盒子；支持复制事件（快速创建相似事件） |
+
+### 2.3 个性化与美工系统
+
+#### 2.3.1 背景自定义
+- **颜料盘**：HSV色盘、RGB滑块、预设色（莫兰迪色系、渐变色（线性/径向））
+- **自定义图片**：从图库选取，支持**裁剪**、**高斯模糊（0~20级）**、**暗色遮罩（0~100%）**，实时预览
+- **作用域**：全局背景（所有盒子/卡片未单独设置时继承）、盒子背景、卡片背景（三级覆盖）
+
+#### 2.3.2 卡片样式与排版
+
+**卡片形状**：
+- 正方形卡片（1:1）
+- 长方形卡片（2:3 或 16:9，用户可选比例）
+
+**卡片内容布局**（可配置）：
+- 显示字段：标题、日期、剩余/已过天数、农历、备注图标
+- 装饰：分割线、小图标（内置）、渐变遮罩
+
+**排版网格模式**（核心特色）：
+- `1×1`：单列垂直滚动，每个卡片占满宽度
+- `2×4`：2列 × 4行（固定高度），左右横向滑动（或垂直滚动）— 用户需求2*4通常指每行2个，共4行的网格，支持更多行滚动。
+- `3×3`：3列 × 3行九宫格，支持滚动。
+- **动态流式布局**：可设置最小列数（2~4），卡片自适应宽高。
+- 排版切换控件位于盒子顶部（下拉菜单或图标按钮），实时重绘卡片网格。
+
+**卡片美化**：
+- 圆角半径调节（0~40dp）
+- 阴影大小、颜色
+- 边框宽度、颜色
+- 动效（可选）：加载渐显、点击涟漪、节日特效（如生日撒花，可全局开关）
+
+### 2.4 数据备份与恢复（核心安全模块）
+
+> 备份策略完全符合您的需求：**每次数据变更后延迟触发备份（防抖），保留最近5份自动备份；支持手动备份；用户可配置“时间间隔备份”**。
+
+#### 2.4.1 本地自动备份（全程后台无感）
+
+**授权流程**：
+- 首次安装进入“设置-备份”或启动时检测是否已授权备份目录。
+- 未授权则弹窗引导：使用系统 `DocumentFile` (SAF) 让用户选择一个父目录（例如 `Documents/MemoriaBox/`）。
+- 用户确认后，系统持有该目录的**持久化 URI 权限**（通过 `takePersistableUriPermission`），后续无需再次授权。
+
+**备份触发逻辑**（防抖 + 增量时间窗）：
+1. 监听所有数据修改操作（创建/更新/删除 盒子、事件、卡片样式、背景等）。
+2. 用户每次修改后，启动一个 **20秒的延时协程**（防抖）。
+3. 若20秒内无新的修改，则执行一次完整备份。
+4. 若20秒内又发生修改，则重置计时器（继续等待20秒）。
+5. 最终备份文件写入授权目录下的 `auto_backup/` 子文件夹。
+
+**备份文件命名与轮转**：
+- 文件名：`auto_YYYYMMDD_HHMMSS.db.enc`
+- 使用 AES-256-GCM 加密（密钥派生自设备唯一ID + 可选用户主密码）。
+- **最多保留最近5个自动备份文件**，超出则删除最旧的（按文件生成时间，非修改时间）。
+- 支持用户手动触发“立即备份”（不经过防抖，立即执行）。
+
+**手动备份（导出加密包）**：
+- 用户点击“导出备份”，弹出系统文件选择器（SAF），选择任意目录。
+- 生成 `memoria_export_YYYYMMDD_HHMMSS.mbox` 文件（格式：AES-256 加密的 zip 包，内含数据库 SQLite + 配置文件 + 图片引用清单）。
+- 可设置导出密码（若未设置则使用默认密钥，但强制提示建议设置）。
+
+**导入加密备份**：
+- 点击“导入备份”，选择 `.mbox` 文件。
+- 输入解密密码 → 校验完整性 → 选择导入模式：“覆盖当前数据” 或 “合并（重复事件跳过/重命名）” → 执行后刷新界面。
+
+#### 2.4.2 WebDAV 备份
+
+**配置界面**：
+- 字段：服务器地址、用户名、密码（加密存储于 `EncryptedSharedPreferences`）、路径（可选，如 `/MemoriaBox/`）。
+- **测试连接按钮**：发送 `PROPFIND` 请求，显示成功/失败及状态码。
+- 保存配置时进行连通性测试（可选）。
+
+**上传加密备份**：
+- 生成与本地导出相同格式的 `.mbox` 临时文件。
+- 通过 HTTP PUT 上传至 `{server_url}/{path}/backup_YYYYMMDD_HHMMSS.mbox`。
+- 显示上传进度（`ProgressDialog` 或通知栏），支持取消。
+
+**下载并恢复**：
+- 获取远程文件列表（`PROPFIND` 解析），按修改时间排序。
+- 用户选择某个备份文件 → 下载到应用私有缓存 → 输入密码 → 导入（同本地导入）。
+
+#### 2.4.3 用户可选备份频率（增强功能）
+在“设置-备份”中增加选项：
+- **自动备份频率**：每次变更后延迟（10秒/20秒/30秒）— 默认20秒
+- **定时备份**：可开启“每隔X小时自动备份一次”（不依赖变更），与防抖备份并存（去重控制）。
+
+### 2.5 数据操作日志（审计日志）
+
+**记录内容**：
+- 创建/编辑/删除盒子或事件
+- 查看事件详情（可选，用户可在设置中关闭“记录查看”）
+- 导出/导入备份（记录时间、成功/失败，不记录密码）
+- 尝试解密备份（记录“密码错误”次数，但不明文存储）
+- 修改 WebDAV 配置、备份目录授权
+
+**日志字段**：
+`timestamp`, `operationType`, `targetId`, `targetName`, `result (success/failure)`, `extraInfo (JSON)`, `appVersion`
+
+**存储与查看**：
+- 存储在加密的 SQLite 表中（与主数据同库加密）。
+- 最多保留 **2000 条**，超出自动删除最旧。
+- 提供“日志查看”页面，支持按类型筛选、关键词搜索、时间范围过滤。
+- 支持导出日志为 CSV（加密导出，需输入主密码）。
+
+---
+
+## 3. 技术架构与实现方案
+
+### 3.1 整体架构图
+
+```mermaid
+graph TD
+A[UI Layer: Activities/Fragments] --> B[ViewModel + LiveData/Flow]
+B --> C[Repository]
+C --> D[Local Data Source: Room + SQLCipher]
+C --> E[Preferences DataStore]
+C --> F[Backup Manager]
+F --> G[Local SAF Backup]
+F --> H[WebDAV Client]
+C --> I[Logging Interceptor]
+```
+
+### 3.2 核心组件选型
+
+| 组件 | 技术选型 | 说明 |
+|------|----------|------|
+| UI | Jetpack Compose (Material 3) | 现代声明式 UI，便于定制动画和卡片布局 |
+| 数据库 | Room + SQLCipher (androidx.room:room-runtime, net.zetetic:android-database-sqlcipher) | 加密存储盒子、事件、日志 |
+| 异步处理 | Kotlin Coroutines + Flow | 备份防抖、IO 操作 |
+| 文件授权 | DocumentFile (SAF) + 持久化 URI 权限 | 访问用户选定的任意目录 |
+| 加密 | Java Cryptography Architecture (AES/GCM/NoPadding) + PBKDF2 | 备份文件加密 |
+| WebDAV | OkHttp + 自定义 PROPFIND/PUT/GET | 轻量实现，不引入大库 |
+| 图片处理 | Coil (图片加载) + 自定义 Transformation (模糊、遮罩) | 背景图片处理 |
+| 日志 | 手动实现 Repository 拦截器 + Room | 记录所有写操作 |
+
+### 3.3 数据库设计（简化 ER）
+
+#### 表名：`boxes`
+| 列名 | 类型 | 说明 |
+|------|------|------|
+| id | TEXT PRIMARY KEY | UUID |
+| name | TEXT | |
+| icon | TEXT | emoji 或资源名 |
+| bg_type | TEXT | "color" / "image" |
+| bg_value | TEXT | 色值或图片 URI (相对路径) |
+| sort_order | INTEGER | 排序序号 |
+| is_archived | INTEGER (0/1) | 是否归档 |
+| created_at | INTEGER | Unix 时间戳 |
+
+#### 表名：`events`
+| 列名 | 类型 | 说明 |
+|------|------|------|
+| id | TEXT PRIMARY KEY | |
+| box_id | TEXT | 外键, 关联 boxes.id, 索引 |
+| name | TEXT | |
+| date | INTEGER | 毫秒时间戳 (UTC) |
+| lunar | TEXT | 农历字符串 e.g. "2024年农历正月初一" |
+| type | TEXT | "countdown"/"anniversary"/"elapsed" |
+| note | TEXT | |
+| reminder_enabled | INTEGER | 0/1 |
+| reminder_days | INTEGER | 提前天数 |
+| card_style_json | TEXT | JSON 存储独立卡片样式 |
+| created_at | INTEGER | |
+
+#### 表名：`logs`
+| 列名 | 类型 |
+|------|------|
+| id | INTEGER PRIMARY KEY AUTOINCREMENT |
+| timestamp | INTEGER |
+| operation | TEXT |
+| target_id | TEXT |
+| target_name | TEXT |
+| result | TEXT |
+| extra | TEXT |
+
+### 3.4 备份详细流程
+
+#### 自动备份防抖算法伪代码
+
+```kotlin
+class BackupManager(private val scope: CoroutineScope) {
+    private var debounceJob: Job? = null
+    private val DEBOUNCE_DELAY_MS = 20_000L // 20秒
+
+    fun onDataChanged() {
+        debounceJob?.cancel()
+        debounceJob = scope.launch {
+            delay(DEBOUNCE_DELAY_MS)
+            performBackup(isAuto = true)
+        }
+    }
+
+    private suspend fun performBackup(isAuto: Boolean) {
+        // 1. 生成加密数据库副本
+        val backupFile = createEncryptedBackupFile()
+        // 2. 移动到用户授权目录下的 auto_backup/
+        val destFile = saveToUserBackupDir(backupFile, type = "auto")
+        // 3. 轮转：保留最多5个自动备份
+        rotateAutoBackups(maxCount = 5)
+    }
+}
+```
+
+#### 备份文件加密规格
+- **算法**：AES-256-GCM
+- **密钥派生**：用户提供密码 + 随机 16 字节 salt → PBKDF2 (迭代 100000, SHA-256) → 32 字节密钥
+- **文件结构**：
+  ```
+  [salt: 16 bytes][iv: 12 bytes][ciphertext][auth_tag: 16 bytes]
+  ```
+- 若用户未设置密码，使用设备 `AndroidKeyStore` 生成的对称密钥（备份时提示用户设置密码更安全）。
+
+### 3.5 WebDAV 实现要点
+
+- 使用 OkHttp 自定义 `RequestBody` 实现 PUT 上传。
+- PROPFIND 请求需设置 `Depth: 1` 头，解析响应 XML（简化版使用 XmlPullParser）。
+- 支持自签名证书（可选功能，在设置中添加“信任所有证书”开关，但提示风险）。
+- 使用 `java.net.Authenticator` 或 OkHttp 的 `addInterceptor` 添加 Basic Auth。
+
+### 3.6 操作日志实现
+
+- 在 Repository 层，所有写方法（insert/update/delete）执行前，调用 `LoggingHelper.recordOperation()`。
+- 使用 `@Transaction` 保证日志与业务数据同时提交（或异步记录但允许少量丢失）。
+- 查看日志页面使用 Paging 3 库分页加载，避免性能问题。
+
+---
+
+## 4. UI/UX 设计指引
+
+### 4.1 主界面结构
+- **底部导航栏**：盒子（首页）、日历视图（可选）、日志、我的。
+- **盒子列表页**：横向滑动网格（2列）或垂直列表（用户可切换）。每个盒子卡片显示名称、封面、内含事件数量。
+- **内部盒子页面**：顶部为盒子名称、背景预览、排版切换器；下方为事件卡片网格（根据当前排版模式渲染）。
+- **卡片长按菜单**：编辑、删除、移动至其他盒子、复制。
+- **全局悬浮按钮（FAB）**：快速添加新事件。
+
+### 4.2 自定义编辑器流程
+- 点击背景/卡片样式 → 弹出 `BottomSheetDialog`，包含色盘、图片选择、模糊调节滑块、遮罩调节滑块。实时预览背景变化（使用 `Compose` 重组）。
+- 卡片编辑器：可单独配置文字颜色、对齐方式、是否显示农历/备注。
+
+### 4.3 备份与恢复引导
+- “我的”页面内“数据安全”专区，若未配置本地备份目录，显示红色提示条。
+- WebDAV 配置提供预设模板（Nextcloud、坚果云等），帮助用户填写路径。
+
+### 4.4 无障碍支持
+- 卡片支持内容描述（TalkBack）
+- 对比度足够（暗色遮罩默认开启）
+
+---
+
+## 5. 开发阶段与交付里程碑
+
+| 阶段 | 任务 | 预估工时 |
+|------|------|----------|
+| 第1周 | 搭建项目骨架，实现盒子与事件基础 CRUD，Room 数据库 | 5人日 |
+| 第2周 | 自定义背景（色盘、图片）、卡片样式、排版网格（1x1,2x4,3x3） | 6人日 |
+| 第3周 | 备份系统：SAF 授权、防抖自动备份、手动导出/导入、保留5份轮转 | 8人日 |
+| 第4周 | WebDAV 集成（配置、测试连接、上传、下载） | 5人日 |
+| 第5周 | 操作日志模块、通知提醒、批量移动 | 4人日 |
+| 第6周 | 全局美化优化、动画、性能测试、安全加固 | 4人日 |
+| 第7周 | 内部测试、Bug修复、编写帮助文档 | 3人日 |
+
+**总计约 35 人日**（可并行）
+
+---
+
+## 6. 安全与隐私说明
+
+- 所有用户数据（数据库、备份文件、图片文件）本地存储，不上传任何未加密原始数据至云端（WebDAV 上传的是加密文件）。
+- 日志不含密码、文件内容等敏感信息。
+- 授权目录 URI 持久化存储时使用 `getPersistedUriPermissions`，在 Android 11+ 需注意 `FLAG_GRANT_PERSISTABLE_URI_PERMISSION`。
+- 建议增加“App锁”，用户设置主密码后，每次打开 App 或进入备份页面需验证（可选生物识别）。
+
+---
+
+## 7. 附录：关键代码结构示例
+
+### 7.1 防抖自动备份在 ViewModel 中的使用
+
+```kotlin
+class MainViewModel(application: Application) : AndroidViewModel(application) {
+    private val backupManager = BackupManager(viewModelScope)
+
+    fun insertEvent(event: Event) = viewModelScope.launch {
+        repository.insertEvent(event)
+        backupManager.onDataChanged()  // 触发防抖备份
+    }
+}
+```
+
+### 7.2 WebDAV 上传核心代码（简化）
+
+```kotlin
+suspend fun uploadBackup(file: File, webDavConfig: WebDavConfig): Result<Unit> {
+    val client = OkHttpClient.Builder()
+        .authenticator { _, response ->
+            val credential = Credentials.basic(webDavConfig.username, webDavConfig.password)
+            response.request.newBuilder().header("Authorization", credential).build()
+        }.build()
+
+    val request = Request.Builder()
+        .url("${webDavConfig.url}/${webDavConfig.path}/backup_${System.currentTimeMillis()}.mbox")
+        .put(file.asRequestBody("application/octet-stream".toMediaType()))
+        .build()
+    return try {
+        client.newCall(request).execute().use { response ->
+            if (response.isSuccessful) Result.success(Unit)
+            else Result.failure(Exception("Upload failed: ${response.code}"))
+        }
+    } catch (e: Exception) { Result.failure(e) }
+}
+```
+
+---
+
+以上文档可直接作为 Android 开发团队的实施方案
