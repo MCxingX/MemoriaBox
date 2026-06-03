@@ -24,6 +24,7 @@ sealed class Screen(val route: String) {
     object Achievements : Screen("achievements")
     object SyncStatus : Screen("sync_status")
     object DayTools : Screen("day_tools")
+    object CustomizationSettings : Screen("customization_settings")
 }
 
 sealed class BottomNavigationItem(

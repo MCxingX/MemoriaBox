@@ -164,16 +164,23 @@ fun MainScreen(
             composable(Screen.Calendar.route) {
                 val calendarVM = remember { createCalendarViewModel(application) }
                 val events by calendarVM.allEvents.collectAsState(initial = emptyList())
-                CalendarViewScreen(events = events)
+                ScreenBgWrapper(context = androidx.compose.ui.platform.LocalContext.current, page = "CALENDAR") {
+                    CalendarViewScreen(events = events)
+                }
             }
             composable(Screen.Todo.route) {
-                TodoScreen(application)
+                ScreenBgWrapper(context = androidx.compose.ui.platform.LocalContext.current, page = "TODO") {
+                    TodoScreen(application)
+                }
             }
             composable(Screen.Logs.route) {
-                LogsScreen(application)
+                ScreenBgWrapper(context = androidx.compose.ui.platform.LocalContext.current, page = "LOGS") {
+                    LogsScreen(application)
+                }
             }
             composable(Screen.Settings.route) {
-                SettingsScreen(
+                ScreenBgWrapper(context = androidx.compose.ui.platform.LocalContext.current, page = "SETTINGS") {
+                    SettingsScreen(
                     application = application,
                     currentThemeMode = currentThemeMode,
                     onThemeModeChange = onThemeModeChange,
@@ -185,9 +192,11 @@ fun MainScreen(
                     onNavigateToAchievements = { navController.navigate(Screen.Achievements.route) },
                     onNavigateToSyncStatus = { navController.navigate(Screen.SyncStatus.route) },
                     onNavigateToDayTools = { navController.navigate(Screen.DayTools.route) },
+                    onNavigateToCustomization = { navController.navigate(Screen.CustomizationSettings.route) },
                     onBackupSettingsClick = { navController.navigate(Screen.BackupSettings.route) },
                     onWebDavSettingsClick = { navController.navigate(Screen.WebDavSettings.route) }
                 )
+                }
             }
             composable(Screen.Statistics.route) {
                 StatisticsScreen(application)
@@ -234,6 +243,12 @@ fun MainScreen(
                     onNavigateToCalendar = { navController.navigate(Screen.Calendar.route) },
                     onNavigateToPhotoWall = { navController.navigate(Screen.PhotoWall.route) },
                     onNavigateToExport = { navController.navigate(Screen.Export.route) }
+                )
+            }
+            composable(Screen.CustomizationSettings.route) {
+                CustomizationSettingsScreen(
+                    application = application,
+                    onNavigateBack = { navController.popBackStack() }
                 )
             }
         }
@@ -570,20 +585,33 @@ fun HomeDashboard(
         selectedBoxId?.let { boxId -> sortedEvents.filter { it.boxId == boxId } } ?: sortedEvents
     }
     val selectedBoxName = selectedBoxId?.let { id -> boxes.firstOrNull { it.id == id }?.name } ?: "全部分组"
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    listOf(
-                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
-                        MaterialTheme.colorScheme.background
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val homeBgUri = remember { com.memoriabox.utils.AppSettings.getHomeBgUri(context) }
+
+    Box(modifier = modifier.fillMaxSize()) {
+        // 强制背景
+        if (!homeBgUri.isNullOrBlank()) {
+            coil.compose.AsyncImage(model = homeBgUri, contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.matchParentSize())
+            Box(modifier = Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.32f)))
+        } else {
+            Box(
+                modifier = Modifier.matchParentSize().background(
+                    Brush.verticalGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+                            MaterialTheme.colorScheme.background
+                        )
                     )
                 )
             )
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 12.dp)
-    ) {
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+        ) {
         HomeHeroCard(
             onEventsClick = { onTabSelected(0) },
             onFriendsClick = onNavigateToFriends,
@@ -608,6 +636,7 @@ fun HomeDashboard(
         }
         Spacer(Modifier.height(8.dp))
         AllEventsTab(events = visibleEvents, onEventClick = onEventClick, onEventLongClick = onEventLongClick)
+        }
     }
 }
 
@@ -617,7 +646,12 @@ fun HomeHeroCard(
     onFriendsClick: () -> Unit = {},
     onBoxesClick: () -> Unit = {}
 ) {
-    val dailyQuote = remember {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val useCustom = remember { com.memoriabox.utils.AppSettings.getUseCustomQuote(context) }
+    val customQuote = remember { com.memoriabox.utils.AppSettings.getCustomDailyQuote(context) }
+    val dailyQuote = if (useCustom && !customQuote.isNullOrBlank()) {
+        DailyQuote("每日语录", customQuote)
+    } else {
         val quotes = listOf(
             DailyQuote("晨光收藏家", "把今天第一束光，放进值得纪念的小盒子。"),
             DailyQuote("小日子巡航", "慢慢走，也能抵达很多闪闪发亮的时刻。"),
@@ -1574,6 +1608,38 @@ fun BoxDetailScreen(
 }
 
 @Composable
+fun ScreenBgWrapper(context: android.content.Context, page: String, content: @Composable () -> Unit) {
+    val bgUri = remember {
+        when (page) {
+            "CALENDAR" -> com.memoriabox.utils.AppSettings.getCalendarBgUri(context)
+            "TODO" -> com.memoriabox.utils.AppSettings.getTodoBgUri(context)
+            "SETTINGS" -> com.memoriabox.utils.AppSettings.getSettingsBgUri(context)
+            "LOGS" -> com.memoriabox.utils.AppSettings.getSettingsBgUri(context)
+            else -> null
+        }
+    }
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (!bgUri.isNullOrBlank()) {
+            coil.compose.AsyncImage(model = bgUri, contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.matchParentSize())
+            Box(modifier = Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.32f)))
+        } else {
+            Box(
+                modifier = Modifier.matchParentSize().background(
+                    Brush.verticalGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f),
+                            MaterialTheme.colorScheme.background,
+                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.24f)
+                        )
+                    )
+                )
+            )
+        }
+        content()
+    }
+}
+
+@Composable
 fun TodoScreen(application: Application) {
     val todoVM = remember { createTodoViewModel(application) }
     val todoEvents by todoVM.todoEvents.collectAsState(initial = emptyList())
@@ -1624,6 +1690,7 @@ fun SettingsScreen(
     onNavigateToAchievements: () -> Unit,
     onNavigateToSyncStatus: () -> Unit,
     onNavigateToDayTools: () -> Unit,
+    onNavigateToCustomization: () -> Unit,
     onBackupSettingsClick: () -> Unit,
     onWebDavSettingsClick: () -> Unit
 ) {
@@ -1656,6 +1723,12 @@ fun SettingsScreen(
             title = "日子工具箱",
             description = "模板、节日库、提醒中心、今日回忆和批量导入",
             onClick = onNavigateToDayTools
+        )
+        SettingsItem(
+            icon = Icons.Default.Palette,
+            title = "个性化设置",
+            description = "自定义页面背景、固定每日语录",
+            onClick = onNavigateToCustomization
         )
         SettingsItem(
             icon = Icons.Default.BarChart,
