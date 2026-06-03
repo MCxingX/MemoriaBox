@@ -1,6 +1,7 @@
 package com.memoriabox.ui.screen
 
 import android.app.Application
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -14,12 +15,14 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -30,6 +33,7 @@ import coil.compose.AsyncImage
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.*
 import androidx.navigation.compose.rememberNavController
+import com.memoriabox.ui.navigation.BottomNavigationItem
 import com.memoriabox.ui.navigation.Screen
 import com.memoriabox.ui.navigation.bottomNavItems
 import com.memoriabox.ui.screen.components.*
@@ -39,6 +43,7 @@ import com.memoriabox.ui.screen.dialogs.EventDialog
 import com.memoriabox.ui.screen.dialogs.MoveToBoxDialog
 import com.memoriabox.data.model.*
 import com.memoriabox.ui.theme.AppThemeMode
+import com.memoriabox.utils.AppSettings
 import com.memoriabox.viewmodel.*
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -51,6 +56,8 @@ fun MainScreen(
     onThemeModeChange: (AppThemeMode) -> Unit = {},
     navController: NavHostController = rememberNavController()
 ) {
+    val context = LocalContext.current
+    val settingsVersion = AppSettings.settingsVersion
     var selectedTab by remember { mutableStateOf(0) }
     val mainViewModel = remember { createMainViewModel(application) }
     val boxes by mainViewModel.boxes.collectAsState(initial = emptyList())
@@ -88,7 +95,7 @@ fun MainScreen(
             NavigationBar(tonalElevation = 4.dp) {
                 bottomNavItems.take(2).forEachIndexed { index, item ->
                     NavigationBarItem(
-                        icon = { Icon(item.icon, contentDescription = item.label) },
+                        icon = { CustomBottomNavIcon(item = item, context = context, version = settingsVersion) },
                         label = { Text(item.label) },
                         selected = selectedTab == index,
                         onClick = {
@@ -126,7 +133,7 @@ fun MainScreen(
                 bottomNavItems.drop(2).forEachIndexed { offset, item ->
                     val index = offset + 2
                     NavigationBarItem(
-                        icon = { Icon(item.icon, contentDescription = item.label) },
+                        icon = { CustomBottomNavIcon(item = item, context = context, version = settingsVersion) },
                         label = { Text(item.label) },
                         selected = selectedTab == index,
                         onClick = {
@@ -247,7 +254,6 @@ fun MainScreen(
             }
             composable(Screen.CustomizationSettings.route) {
                 CustomizationSettingsScreen(
-                    application = application,
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
@@ -277,6 +283,29 @@ fun MainScreen(
                 }
             )
         }
+    }
+}
+
+@Composable
+private fun CustomBottomNavIcon(item: BottomNavigationItem, context: Context, version: Int) {
+    val iconUri = remember(version, item.route) {
+        when (item.route) {
+            Screen.Boxes.route -> AppSettings.getHomeIconUri(context)
+            Screen.Calendar.route -> AppSettings.getCalendarIconUri(context)
+            Screen.Todo.route -> AppSettings.getTodoIconUri(context)
+            Screen.Settings.route -> AppSettings.getSettingsIconUri(context)
+            else -> null
+        }
+    }
+    if (iconUri.isNullOrBlank()) {
+        Icon(item.icon, contentDescription = item.label)
+    } else {
+        AsyncImage(
+            model = iconUri,
+            contentDescription = item.label,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.size(24.dp).clip(MaterialTheme.shapes.small)
+        )
     }
 }
 
@@ -406,44 +435,67 @@ fun BoxesScreen(
     var eventForDelete by remember { mutableStateOf<Event?>(null) }
     var showQuickAdd by remember { mutableStateOf(false) }
     var pendingQuickAddType by remember { mutableStateOf<EventType?>(null) }
+    val context = LocalContext.current
+    val settingsVersion = AppSettings.settingsVersion
+    val homeBgUri = remember(settingsVersion) { AppSettings.getHomeBgUri(context) }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("我的日子") },
-                actions = {
-                    IconButton(onClick = { showCreateDialog = true }) {
-                        Icon(Icons.Default.Add, contentDescription = "添加分类")
-                    }
-                }
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (!homeBgUri.isNullOrBlank()) {
+            AsyncImage(model = homeBgUri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
+            Box(modifier = Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.32f)))
+        } else {
+            Box(
+                modifier = Modifier.matchParentSize().background(
+                    Brush.verticalGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+                            MaterialTheme.colorScheme.background
+                        )
+                    )
+                )
             )
-        },
-        floatingActionButton = {
-            FloatingActionButton(onClick = {
-                showQuickAdd = true
-                pendingQuickAddType = null
-            }) {
-                Icon(Icons.Default.Add, contentDescription = "添加日子")
-            }
         }
-    ) { paddingValues ->
-        HomeDashboard(
-            boxes = boxes,
-            events = events,
-            friends = friends,
-            selectedTab = homeTab,
-            onTabSelected = { homeTab = it },
-            onBoxClick = onBoxClick,
-            onCreateBox = { showCreateDialog = true },
-            onNavigateToCalendar = onNavigateToCalendar,
-            onNavigateToFriends = onNavigateToFriends,
-            onNavigateToPhotoWall = onNavigateToPhotoWall,
-            onNavigateToStatistics = onNavigateToStatistics,
-            onNavigateToAiSuggestions = onNavigateToAiSuggestions,
-            onEventClick = { event -> selectedEvent = event },
-            onEventLongClick = { event -> eventForActions = event },
-            modifier = Modifier.padding(paddingValues)
-        )
+
+        Scaffold(
+            containerColor = Color.Transparent,
+            topBar = {
+                TopAppBar(
+                    title = { Text("我的日子") },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+                    actions = {
+                        IconButton(onClick = { showCreateDialog = true }) {
+                            Icon(Icons.Default.Add, contentDescription = "添加分类")
+                        }
+                    }
+                )
+            },
+            floatingActionButton = {
+                FloatingActionButton(onClick = {
+                    showQuickAdd = true
+                    pendingQuickAddType = null
+                }) {
+                    Icon(Icons.Default.Add, contentDescription = "添加日子")
+                }
+            }
+        ) { paddingValues ->
+            HomeDashboard(
+                boxes = boxes,
+                events = events,
+                friends = friends,
+                selectedTab = homeTab,
+                onTabSelected = { homeTab = it },
+                onBoxClick = onBoxClick,
+                onCreateBox = { showCreateDialog = true },
+                onNavigateToCalendar = onNavigateToCalendar,
+                onNavigateToFriends = onNavigateToFriends,
+                onNavigateToPhotoWall = onNavigateToPhotoWall,
+                onNavigateToStatistics = onNavigateToStatistics,
+                onNavigateToAiSuggestions = onNavigateToAiSuggestions,
+                onEventClick = { event -> selectedEvent = event },
+                onEventLongClick = { event -> eventForActions = event },
+                modifier = Modifier.padding(paddingValues)
+            )
+        }
     }
 
     if (showCreateDialog) {
@@ -585,27 +637,8 @@ fun HomeDashboard(
         selectedBoxId?.let { boxId -> sortedEvents.filter { it.boxId == boxId } } ?: sortedEvents
     }
     val selectedBoxName = selectedBoxId?.let { id -> boxes.firstOrNull { it.id == id }?.name } ?: "全部分组"
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val homeBgUri = remember { com.memoriabox.utils.AppSettings.getHomeBgUri(context) }
 
     Box(modifier = modifier.fillMaxSize()) {
-        // 强制背景
-        if (!homeBgUri.isNullOrBlank()) {
-            coil.compose.AsyncImage(model = homeBgUri, contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.matchParentSize())
-            Box(modifier = Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.32f)))
-        } else {
-            Box(
-                modifier = Modifier.matchParentSize().background(
-                    Brush.verticalGradient(
-                        listOf(
-                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
-                            MaterialTheme.colorScheme.background
-                        )
-                    )
-                )
-            )
-        }
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -646,9 +679,10 @@ fun HomeHeroCard(
     onFriendsClick: () -> Unit = {},
     onBoxesClick: () -> Unit = {}
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val useCustom = remember { com.memoriabox.utils.AppSettings.getUseCustomQuote(context) }
-    val customQuote = remember { com.memoriabox.utils.AppSettings.getCustomDailyQuote(context) }
+    val context = LocalContext.current
+    val settingsVersion = AppSettings.settingsVersion
+    val useCustom = remember(settingsVersion) { AppSettings.getUseCustomQuote(context) }
+    val customQuote = remember(settingsVersion) { AppSettings.getCustomDailyQuote(context) }
     val dailyQuote = if (useCustom && !customQuote.isNullOrBlank()) {
         DailyQuote("每日语录", customQuote)
     } else {
@@ -1512,7 +1546,7 @@ fun BoxDetailScreen(
                 title = { Text(box?.name ?: "日子详情") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                     }
                 },
                 actions = {
@@ -1609,12 +1643,13 @@ fun BoxDetailScreen(
 
 @Composable
 fun ScreenBgWrapper(context: android.content.Context, page: String, content: @Composable () -> Unit) {
-    val bgUri = remember {
+    val settingsVersion = AppSettings.settingsVersion
+    val bgUri = remember(settingsVersion, page) {
         when (page) {
-            "CALENDAR" -> com.memoriabox.utils.AppSettings.getCalendarBgUri(context)
-            "TODO" -> com.memoriabox.utils.AppSettings.getTodoBgUri(context)
-            "SETTINGS" -> com.memoriabox.utils.AppSettings.getSettingsBgUri(context)
-            "LOGS" -> com.memoriabox.utils.AppSettings.getSettingsBgUri(context)
+            "CALENDAR" -> AppSettings.getCalendarBgUri(context)
+            "TODO" -> AppSettings.getTodoBgUri(context)
+            "SETTINGS" -> AppSettings.getSettingsBgUri(context)
+            "LOGS" -> AppSettings.getSettingsBgUri(context)
             else -> null
         }
     }
@@ -1645,9 +1680,11 @@ fun TodoScreen(application: Application) {
     val todoEvents by todoVM.todoEvents.collectAsState(initial = emptyList())
 
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
                 title = { Text("待办事项") },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
             )
         }
     ) { paddingValues ->
@@ -1702,15 +1739,6 @@ fun SettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    listOf(
-                        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f),
-                        MaterialTheme.colorScheme.background,
-                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.24f)
-                    )
-                )
-            )
             .verticalScroll(rememberScrollState())
             .padding(top = 12.dp, bottom = 20.dp)
     ) {
@@ -1962,7 +1990,7 @@ fun BackupSettingsScreen(
                 title = { Text("备份设置") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                     }
                 }
             )
@@ -1988,7 +2016,7 @@ fun WebDavSettingsScreen(
                 title = { Text("WebDAV 设置") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                     }
                 }
             )

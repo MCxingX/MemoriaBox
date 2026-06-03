@@ -1,6 +1,7 @@
 package com.memoriabox.ui.screen.dialogs
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -55,12 +56,18 @@ fun BoxDialog(
     onDismiss: () -> Unit,
     onSave: (name: String, icon: String, bgType: BgType, bgValue: String) -> Unit
 ) {
+    val context = LocalContext.current
     var name by remember { mutableStateOf(existingBox?.name ?: "") }
     var selectedIcon by remember { mutableStateOf(existingBox?.icon ?: "\uD83D\uDCE6") }
     var selectedBgType by remember { mutableStateOf(existingBox?.bgType ?: BgType.COLOR) }
     var selectedBgValue by remember { mutableStateOf(existingBox?.bgValue ?: "#7C4DFF") }
     var showEmojiPicker by remember { mutableStateOf(false) }
     var showColorPicker by remember { mutableStateOf(false) }
+    val iconImagePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        uri ?: return@rememberLauncherForActivityResult
+        persistReadPermission(context, uri)
+        selectedIcon = uri.toString()
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -90,18 +97,26 @@ fun BoxDialog(
                     ) {
                         Text("图标", style = MaterialTheme.typography.labelLarge)
                         Spacer(modifier = Modifier.height(8.dp))
-                        Icon(
-                            imageVector = Icons.Default.Star,
-                            contentDescription = null,
+                        Box(
                             modifier = Modifier
                                 .size(48.dp)
                                 .clip(CircleShape)
                                 .background(MaterialTheme.colorScheme.primary.copy(0.2f))
-                                .padding(8.dp)
                                 .clickable { showEmojiPicker = true },
-                            tint = Color.Unspecified
-                        )
-                        Text(selectedIcon, style = MaterialTheme.typography.headlineMedium)
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (selectedIcon.isImageUri()) {
+                                AsyncImage(
+                                    model = selectedIcon,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                Text(selectedIcon, style = MaterialTheme.typography.headlineMedium)
+                            }
+                        }
+                        Text(if (selectedIcon.isImageUri()) "自定义图片" else selectedIcon, style = MaterialTheme.typography.bodySmall)
                     }
 
                     Column(
@@ -137,6 +152,14 @@ fun BoxDialog(
                         Icon(Icons.Default.EmojiEmotions, contentDescription = null)
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("选择图标")
+                    }
+                    OutlinedButton(
+                        onClick = { iconImagePicker.launch(arrayOf("image/*")) },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.AddPhotoAlternate, contentDescription = null)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("上传图片")
                     }
                     OutlinedButton(
                         onClick = { showColorPicker = true },
@@ -184,6 +207,15 @@ fun BoxDialog(
                 showColorPicker = false
             }
         )
+    }
+}
+
+private fun String.isImageUri(): Boolean = startsWith("content://") || startsWith("file://")
+
+private fun persistReadPermission(context: Context, uri: Uri) {
+    try {
+        context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    } catch (_: SecurityException) {
     }
 }
 

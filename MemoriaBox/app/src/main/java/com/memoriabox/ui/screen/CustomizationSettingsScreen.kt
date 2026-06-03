@@ -1,6 +1,7 @@
 package com.memoriabox.ui.screen
 
-import android.app.Application
+import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -23,40 +25,74 @@ import coil.compose.AsyncImage
 import com.memoriabox.utils.AppSettings
 
 @Composable
-fun CustomizationSettingsScreen(application: Application, onNavigateBack: () -> Unit) {
+fun CustomizationSettingsScreen(onNavigateBack: () -> Unit) {
     val context = LocalContext.current
     var homeBg by remember { mutableStateOf(AppSettings.getHomeBgUri(context)) }
     var calendarBg by remember { mutableStateOf(AppSettings.getCalendarBgUri(context)) }
     var todoBg by remember { mutableStateOf(AppSettings.getTodoBgUri(context)) }
     var settingsBg by remember { mutableStateOf(AppSettings.getSettingsBgUri(context)) }
+    var allBg by remember {
+        mutableStateOf(if (!homeBg.isNullOrBlank() && homeBg == calendarBg && homeBg == todoBg && homeBg == settingsBg) homeBg else null)
+    }
+    var homeIcon by remember { mutableStateOf(AppSettings.getHomeIconUri(context)) }
+    var calendarIcon by remember { mutableStateOf(AppSettings.getCalendarIconUri(context)) }
+    var todoIcon by remember { mutableStateOf(AppSettings.getTodoIconUri(context)) }
+    var settingsIcon by remember { mutableStateOf(AppSettings.getSettingsIconUri(context)) }
 
     var targetForPick by remember { mutableStateOf<String?>(null) }
     var customQuote by remember { mutableStateOf(AppSettings.getCustomDailyQuote(context).orEmpty()) }
     var useCustomQuote by remember { mutableStateOf(AppSettings.getUseCustomQuote(context)) }
 
-    val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-        when (targetForPick) {
-            "HOME" -> { homeBg = uri.toString(); AppSettings.setHomeBgUri(context, uri.toString()) }
-            "CALENDAR" -> { calendarBg = uri.toString(); AppSettings.setCalendarBgUri(context, uri.toString()) }
-            "TODO" -> { todoBg = uri.toString(); AppSettings.setTodoBgUri(context, uri.toString()) }
-            "SETTINGS" -> { settingsBg = uri.toString(); AppSettings.setSettingsBgUri(context, uri.toString()) }
+    val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        val target = targetForPick
+        targetForPick = null
+        uri ?: return@rememberLauncherForActivityResult
+        persistReadPermission(context, uri)
+        val value = uri.toString()
+        when (target) {
+            "ALL_BG" -> {
+                allBg = value
+                homeBg = value
+                calendarBg = value
+                todoBg = value
+                settingsBg = value
+                AppSettings.setHomeBgUri(context, value)
+                AppSettings.setCalendarBgUri(context, value)
+                AppSettings.setTodoBgUri(context, value)
+                AppSettings.setSettingsBgUri(context, value)
+            }
+            "HOME_BG" -> { homeBg = value; AppSettings.setHomeBgUri(context, value) }
+            "CALENDAR_BG" -> { calendarBg = value; AppSettings.setCalendarBgUri(context, value) }
+            "TODO_BG" -> { todoBg = value; AppSettings.setTodoBgUri(context, value) }
+            "SETTINGS_BG" -> { settingsBg = value; AppSettings.setSettingsBgUri(context, value) }
+            "HOME_ICON" -> { homeIcon = value; AppSettings.setHomeIconUri(context, value) }
+            "CALENDAR_ICON" -> { calendarIcon = value; AppSettings.setCalendarIconUri(context, value) }
+            "TODO_ICON" -> { todoIcon = value; AppSettings.setTodoIconUri(context, value) }
+            "SETTINGS_ICON" -> { settingsIcon = value; AppSettings.setSettingsIconUri(context, value) }
         }
     }
 
-    LaunchedEffect(targetForPick) {
-        if (targetForPick != null) {
-            pickImage.launch("image/*")
-        }
+    fun chooseImage(target: String) {
+        targetForPick = target
+        pickImage.launch(arrayOf("image/*"))
     }
 
-    Scaffold(topBar = { TopAppBar(title = { Text("个性化设置") }, navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.Default.ArrowBack, "返回") } }) }) { paddingValues ->
+    Scaffold(topBar = { TopAppBar(title = { Text("个性化设置") }, navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } }) }) { paddingValues ->
         Column(modifier = Modifier.padding(paddingValues).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text("页面背景", style = MaterialTheme.typography.titleLarge)
-            CustomizationBgCard(title = "日子首页背景", uri = homeBg, onClick = { targetForPick = "HOME" }, onClear = { homeBg = null; AppSettings.setHomeBgUri(context, null) })
-            CustomizationBgCard(title = "日历页背景", uri = calendarBg, onClick = { targetForPick = "CALENDAR" }, onClear = { calendarBg = null; AppSettings.setCalendarBgUri(context, null) })
-            CustomizationBgCard(title = "待办页背景", uri = todoBg, onClick = { targetForPick = "TODO" }, onClear = { todoBg = null; AppSettings.setTodoBgUri(context, null) })
-            CustomizationBgCard(title = "我的页背景", uri = settingsBg, onClick = { targetForPick = "SETTINGS" }, onClear = { settingsBg = null; AppSettings.setSettingsBgUri(context, null) })
-            Button(onClick = { AppSettings.setHomeBgUri(context, null); AppSettings.setCalendarBgUri(context, null); AppSettings.setTodoBgUri(context, null); AppSettings.setSettingsBgUri(context, null); homeBg = null; calendarBg = null; todoBg = null; settingsBg = null }, modifier = Modifier.fillMaxWidth()) { Text("全部清除") }
+            CustomizationBgCard(title = "全部页面背景", uri = allBg, onClick = { chooseImage("ALL_BG") }, onClear = { allBg = null; homeBg = null; calendarBg = null; todoBg = null; settingsBg = null; AppSettings.setHomeBgUri(context, null); AppSettings.setCalendarBgUri(context, null); AppSettings.setTodoBgUri(context, null); AppSettings.setSettingsBgUri(context, null) })
+            CustomizationBgCard(title = "日子首页背景", uri = homeBg, onClick = { chooseImage("HOME_BG") }, onClear = { homeBg = null; AppSettings.setHomeBgUri(context, null) })
+            CustomizationBgCard(title = "日历页背景", uri = calendarBg, onClick = { chooseImage("CALENDAR_BG") }, onClear = { calendarBg = null; AppSettings.setCalendarBgUri(context, null) })
+            CustomizationBgCard(title = "待办页背景", uri = todoBg, onClick = { chooseImage("TODO_BG") }, onClear = { todoBg = null; AppSettings.setTodoBgUri(context, null) })
+            CustomizationBgCard(title = "我的页背景", uri = settingsBg, onClick = { chooseImage("SETTINGS_BG") }, onClear = { settingsBg = null; AppSettings.setSettingsBgUri(context, null) })
+            Button(onClick = { AppSettings.setHomeBgUri(context, null); AppSettings.setCalendarBgUri(context, null); AppSettings.setTodoBgUri(context, null); AppSettings.setSettingsBgUri(context, null); allBg = null; homeBg = null; calendarBg = null; todoBg = null; settingsBg = null }, modifier = Modifier.fillMaxWidth()) { Text("全部清除") }
+
+            Text("底部图标", style = MaterialTheme.typography.titleLarge)
+            CustomizationBgCard(title = "日子图标", uri = homeIcon, onClick = { chooseImage("HOME_ICON") }, onClear = { homeIcon = null; AppSettings.setHomeIconUri(context, null) })
+            CustomizationBgCard(title = "日历图标", uri = calendarIcon, onClick = { chooseImage("CALENDAR_ICON") }, onClear = { calendarIcon = null; AppSettings.setCalendarIconUri(context, null) })
+            CustomizationBgCard(title = "待办图标", uri = todoIcon, onClick = { chooseImage("TODO_ICON") }, onClear = { todoIcon = null; AppSettings.setTodoIconUri(context, null) })
+            CustomizationBgCard(title = "我的图标", uri = settingsIcon, onClick = { chooseImage("SETTINGS_ICON") }, onClear = { settingsIcon = null; AppSettings.setSettingsIconUri(context, null) })
+            Button(onClick = { AppSettings.setHomeIconUri(context, null); AppSettings.setCalendarIconUri(context, null); AppSettings.setTodoIconUri(context, null); AppSettings.setSettingsIconUri(context, null); homeIcon = null; calendarIcon = null; todoIcon = null; settingsIcon = null }, modifier = Modifier.fillMaxWidth()) { Text("恢复默认图标") }
 
             Text("每日一言", style = MaterialTheme.typography.titleLarge)
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -71,9 +107,16 @@ fun CustomizationSettingsScreen(application: Application, onNavigateBack: () -> 
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 2
                 )
-                Button(onClick = { customQuote = ""; AppSettings.setCustomDailyQuote(context, null); useCustomQuote = false }, modifier = Modifier.fillMaxWidth()) { Text("恢复随机轮换") }
+                Button(onClick = { customQuote = ""; AppSettings.setCustomDailyQuote(context, null); useCustomQuote = false; AppSettings.setUseCustomQuote(context, false) }, modifier = Modifier.fillMaxWidth()) { Text("恢复随机轮换") }
             }
         }
+    }
+}
+
+private fun persistReadPermission(context: Context, uri: Uri) {
+    try {
+        context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    } catch (_: SecurityException) {
     }
 }
 

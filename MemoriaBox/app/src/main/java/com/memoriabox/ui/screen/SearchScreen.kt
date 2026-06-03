@@ -162,7 +162,7 @@ fun SearchScreen(application: Application) {
                         items(filteredBoxes) { box ->
                             SearchResultCard(
                                 title = box.name,
-                                subtitle = "分类 · ${box.icon}",
+                                subtitle = "分类 · ${if (box.icon.isImageUri()) "自定义图标" else box.icon}",
                                 icon = Icons.Default.Folder,
                                 onClick = { /* Navigate to box */ }
                             )
@@ -297,3 +297,5 @@ fun getEventIcon(event: Event) = when (event.type) {
     com.memoriabox.data.model.EventType.BIRTHDAY -> Icons.Default.Cake
     com.memoriabox.data.model.EventType.TODO -> Icons.Default.CheckCircle
 }
+
+private fun String.isImageUri(): Boolean = startsWith("content://") || startsWith("file://")

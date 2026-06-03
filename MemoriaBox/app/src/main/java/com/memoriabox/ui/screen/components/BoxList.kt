@@ -64,7 +64,24 @@ fun BoxCard(box: Box, onClick: () -> Unit) {
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(box.icon, style = MaterialTheme.typography.headlineMedium)
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(MaterialTheme.shapes.medium)
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                if (box.icon.isImageUri()) {
+                    AsyncImage(
+                        model = box.icon,
+                        contentDescription = box.name,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Text(box.icon, style = MaterialTheme.typography.headlineMedium)
+                }
+            }
             Spacer(Modifier.width(12.dp))
             Column {
                 Text(box.name, style = MaterialTheme.typography.titleLarge)
@@ -73,6 +90,8 @@ fun BoxCard(box: Box, onClick: () -> Unit) {
         }
     }
 }
+
+private fun String.isImageUri(): Boolean = startsWith("content://") || startsWith("file://")
 
 @Composable
 fun TodoListView(

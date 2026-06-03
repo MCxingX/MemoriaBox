@@ -1,12 +1,16 @@
 package com.memoriabox.ui.screen.dialogs
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.memoriabox.data.model.Event
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
@@ -171,10 +175,24 @@ fun MoveToBoxDialog(
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    box.icon,
-                                    style = MaterialTheme.typography.headlineSmall
-                                )
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(MaterialTheme.shapes.small)
+                                        .background(MaterialTheme.colorScheme.primaryContainer),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (box.icon.isImageUri()) {
+                                        AsyncImage(
+                                            model = box.icon,
+                                            contentDescription = box.name,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    } else {
+                                        Text(box.icon, style = MaterialTheme.typography.headlineSmall)
+                                    }
+                                }
                                 Text(box.name, style = MaterialTheme.typography.bodyLarge)
                             }
                             Icon(
@@ -192,3 +210,5 @@ fun MoveToBoxDialog(
         }
     )
 }
+
+private fun String.isImageUri(): Boolean = startsWith("content://") || startsWith("file://")

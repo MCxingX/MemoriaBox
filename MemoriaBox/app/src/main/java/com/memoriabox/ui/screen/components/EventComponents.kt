@@ -294,7 +294,10 @@ fun CalendarViewScreen(
     }
 
     Column(modifier = modifier.fillMaxSize()) {
-        TopAppBar(title = { Text("日历视图") })
+        TopAppBar(
+            title = { Text("日历视图") },
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+        )
         CalendarBoardSummary(
             totalCount = events.size,
             monthCount = monthEvents.size,
