@@ -56,7 +56,7 @@ fun FriendsScreen(application: Application) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("好友管理") },
+                title = { Text("生日分组") },
                 actions = {
                     IconButton(onClick = { showManageLabels = true }) {
                         Icon(Icons.Default.LocalOffer, contentDescription = "管理标签")
@@ -66,7 +66,7 @@ fun FriendsScreen(application: Application) {
         },
         floatingActionButton = {
             FloatingActionButton(onClick = { showAddFriend = true }) {
-                Icon(Icons.Default.PersonAdd, contentDescription = "添加好友")
+                Icon(Icons.Default.PersonAdd, contentDescription = "添加成员")
             }
         }
     ) { paddingValues ->
@@ -106,7 +106,7 @@ fun FriendsScreen(application: Application) {
                             tint = MaterialTheme.colorScheme.outline
                         )
                         Spacer(Modifier.height(16.dp))
-                        Text("暂无好友，点击右上角添加")
+                        Text("暂无成员，点击右下角添加")
                     }
                 }
             } else {
@@ -126,7 +126,7 @@ fun FriendsScreen(application: Application) {
 
     if (showAddFriend) {
         AddFriendDialog(
-            title = "添加好友",
+            title = "添加成员",
             onDismiss = { showAddFriend = false },
             onSave = { name, birthdayDate, avatarUri, selectedLabels ->
                 friendVM.createFriend(name, avatarUri, birthdayDate, selectedLabels)
@@ -142,7 +142,7 @@ fun FriendsScreen(application: Application) {
     friendForEdit?.let { friend ->
         val existingLabels = friendRelations.filter { it.friendId == friend.id }.map { it.label }
         AddFriendDialog(
-            title = "编辑好友",
+            title = "编辑成员",
             existingFriend = friend,
             existingLabels = existingLabels,
             onDismiss = { friendForEdit = null },
@@ -171,7 +171,7 @@ fun FriendsScreen(application: Application) {
 
 @Composable
 fun AddFriendDialog(
-    title: String = "添加好友",
+    title: String = "添加成员",
     existingFriend: Friend? = null,
     existingLabels: List<String> = emptyList(),
     onDismiss: () -> Unit,
@@ -246,7 +246,7 @@ fun AddFriendDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("好友姓名") },
+                    label = { Text("姓名") },
                     modifier = Modifier.fillMaxWidth()
                 )
                 

@@ -251,7 +251,8 @@ fun MainScreen(
 @Composable
 fun AddTypePickerDialog(
     onDismiss: () -> Unit,
-    onTypeSelected: (EventType) -> Unit
+    onTypeSelected: (EventType) -> Unit,
+    onCreateBox: (() -> Unit)? = null
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -261,6 +262,9 @@ fun AddTypePickerDialog(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
+                onCreateBox?.let { createBox ->
+                    AddActionOption(Icons.Default.CreateNewFolder, "新增分类分组", "用来收纳不同类型的小日子", onClick = createBox)
+                }
                 AddTypeOption(Icons.Default.Timer, "倒数日", "适合考试、旅行、纪念节点", EventType.COUNTDOWN, onTypeSelected)
                 AddTypeOption(Icons.Default.Favorite, "纪念日", "记录恋爱、结婚、相识等重要日子", EventType.ANNIVERSARY, onTypeSelected)
                 AddTypeOption(Icons.Default.History, "正计时", "记录已经坚持了多久", EventType.ELAPSED, onTypeSelected)
@@ -273,6 +277,41 @@ fun AddTypePickerDialog(
             TextButton(onClick = onDismiss) { Text("取消") }
         }
     )
+}
+
+@Composable
+fun AddActionOption(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    description: String,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.secondaryContainer) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    modifier = Modifier.padding(10.dp).size(24.dp),
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Icon(Icons.Default.ChevronRight, contentDescription = null)
+        }
+    }
 }
 
 @Composable
@@ -509,6 +548,11 @@ fun HomeDashboard(
                 .thenBy { kotlin.math.abs(it.date - System.currentTimeMillis()) }
         )
     }
+    var selectedBoxId by rememberSaveable { mutableStateOf<String?>(null) }
+    val visibleEvents = remember(sortedEvents, selectedBoxId) {
+        selectedBoxId?.let { boxId -> sortedEvents.filter { it.boxId == boxId } } ?: sortedEvents
+    }
+    val selectedBoxName = selectedBoxId?.let { id -> boxes.firstOrNull { it.id == id }?.name } ?: "全部分组"
     var showShortcuts by rememberSaveable { mutableStateOf(false) }
 
     Column(
@@ -526,9 +570,6 @@ fun HomeDashboard(
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
         HomeHeroCard(
-            events = events,
-            friends = friends,
-            boxes = boxes,
             onEventsClick = { onTabSelected(0) },
             onFriendsClick = onNavigateToFriends,
             onBoxesClick = { onTabSelected(1) }
@@ -539,25 +580,19 @@ fun HomeDashboard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("全部日子", style = MaterialTheme.typography.titleMedium)
-            Text("${events.size} 个", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Column {
+                Text("全部日子", style = MaterialTheme.typography.titleMedium)
+                Text("${visibleEvents.size} 个 · $selectedBoxName", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            HomeBoxFilter(
+                boxes = boxes,
+                selectedBoxId = selectedBoxId,
+                onBoxSelected = { selectedBoxId = it },
+                onCreateBox = onCreateBox
+            )
         }
         Spacer(Modifier.height(8.dp))
-        when (selectedTab) {
-            0 -> AllEventsTab(events = sortedEvents, onEventClick = onEventClick, onEventLongClick = onEventLongClick)
-            1 -> CategoryFoldersTab(boxes = boxes, onBoxClick = onBoxClick, onCreateBox = onCreateBox)
-            2 -> FriendGroupsTab(friends = friends, onNavigateToFriends = onNavigateToFriends)
-        }
-        Spacer(Modifier.height(12.dp))
-        TabRow(selectedTabIndex = selectedTab) {
-            listOf("全部", "我的分类", "好友组").forEachIndexed { index, title ->
-                Tab(
-                    selected = selectedTab == index,
-                    onClick = { onTabSelected(index) },
-                    text = { Text(title) }
-                )
-            }
-        }
+        AllEventsTab(events = visibleEvents, onEventClick = onEventClick, onEventLongClick = onEventLongClick)
         Spacer(Modifier.height(10.dp))
         OutlinedCard(modifier = Modifier.fillMaxWidth()) {
             Row(
@@ -570,7 +605,7 @@ fun HomeDashboard(
             ) {
                 Column {
                     Text("常用功能", style = MaterialTheme.typography.titleMedium)
-                    Text("日历、好友、照片墙等工具", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("日历、生日分组、照片墙等工具", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Icon(if (showShortcuts) Icons.Default.ExpandLess else Icons.Default.ExpandMore, contentDescription = null)
             }
@@ -578,7 +613,7 @@ fun HomeDashboard(
                 Column(modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                         HomeShortcutCard(Icons.Default.CalendarToday, "日历", "按月查看所有提醒", onNavigateToCalendar, Modifier.weight(1f))
-                        HomeShortcutCard(Icons.Default.People, "好友", "生日和好友标签", onNavigateToFriends, Modifier.weight(1f))
+                        HomeShortcutCard(Icons.Default.People, "生日分组", "生日和分组标签", onNavigateToFriends, Modifier.weight(1f))
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                         HomeShortcutCard(Icons.Default.PhotoLibrary, "照片墙", "查看照片回忆", onNavigateToPhotoWall, Modifier.weight(1f))
@@ -594,9 +629,6 @@ fun HomeDashboard(
 
 @Composable
 fun HomeHeroCard(
-    events: List<Event>,
-    friends: List<com.memoriabox.data.model.Friend>,
-    boxes: List<com.memoriabox.data.model.Box>,
     onEventsClick: () -> Unit = {},
     onFriendsClick: () -> Unit = {},
     onBoxesClick: () -> Unit = {}
@@ -622,15 +654,54 @@ fun HomeHeroCard(
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Surface(color = Color.White.copy(alpha = 0.22f), shape = MaterialTheme.shapes.large) {
-                    Text("今天也要把小日子过漂亮", modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp), color = Color.White, style = MaterialTheme.typography.labelSmall)
+                    Text("每日一言", modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp), color = Color.White, style = MaterialTheme.typography.labelSmall)
                 }
-                Text("MemoriaBox", color = Color.White, style = MaterialTheme.typography.titleLarge)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    HeroStatPill("日子", events.size.toString(), Modifier.weight(1f), onClick = onEventsClick)
-                    HeroStatPill("好友", friends.size.toString(), Modifier.weight(1f), onClick = onFriendsClick)
-                    HeroStatPill("分类", boxes.size.toString(), Modifier.weight(1f), onClick = onBoxesClick)
-                }
+                Text("今天也要把小日子过漂亮", color = Color.White, style = MaterialTheme.typography.titleMedium)
             }
+        }
+    }
+}
+
+@Composable
+fun HomeBoxFilter(
+    boxes: List<com.memoriabox.data.model.Box>,
+    selectedBoxId: String?,
+    onBoxSelected: (String?) -> Unit,
+    onCreateBox: () -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        OutlinedButton(onClick = { expanded = true }) {
+            Text(selectedBoxId?.let { id -> boxes.firstOrNull { it.id == id }?.name } ?: "全部分组", maxLines = 1)
+            Spacer(Modifier.width(4.dp))
+            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text("全部分组") },
+                onClick = {
+                    onBoxSelected(null)
+                    expanded = false
+                }
+            )
+            boxes.forEach { box ->
+                DropdownMenuItem(
+                    text = { Text(box.name) },
+                    onClick = {
+                        onBoxSelected(box.id)
+                        expanded = false
+                    }
+                )
+            }
+            HorizontalDivider()
+            DropdownMenuItem(
+                text = { Text("新增分类分组") },
+                leadingIcon = { Icon(Icons.Default.CreateNewFolder, contentDescription = null) },
+                onClick = {
+                    expanded = false
+                    onCreateBox()
+                }
+            )
         }
     }
 }
@@ -669,7 +740,7 @@ fun AllEventsTab(events: List<Event>, onEventClick: (Event) -> Unit, onEventLong
         Spacer(Modifier.height(12.dp))
     }
     if (events.isNotEmpty()) {
-        normalEvents.take(10).forEach { event ->
+        normalEvents.forEach { event ->
             HomeEventRow(event = event, onClick = { onEventClick(event) }, onLongClick = { onEventLongClick(event) })
             Spacer(Modifier.height(6.dp))
         }
@@ -721,16 +792,16 @@ fun FriendGroupsTab(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text("好友组", style = MaterialTheme.typography.titleMedium)
-        TextButton(onClick = onNavigateToFriends) { Text("管理好友") }
+        Text("生日分组", style = MaterialTheme.typography.titleMedium)
+        TextButton(onClick = onNavigateToFriends) { Text("管理分组") }
     }
     Spacer(Modifier.height(8.dp))
     if (friends.isEmpty()) {
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("还没有好友组", style = MaterialTheme.typography.titleSmall)
+                Text("还没有生日分组", style = MaterialTheme.typography.titleSmall)
                 Spacer(Modifier.height(4.dp))
-                Text("添加好友后，可以按标签管理生日、纪念日和重要联系人。", style = MaterialTheme.typography.bodyMedium)
+                Text("添加成员后，可以按标签管理生日、纪念日和重要联系人。", style = MaterialTheme.typography.bodyMedium)
             }
         }
     } else {
@@ -1317,8 +1388,8 @@ fun SettingsScreen(
         )
         SettingsItem(
             icon = Icons.Default.People,
-            title = "好友管理",
-            description = "管理好友信息和标签",
+            title = "生日分组",
+            description = "管理生日资料和分组标签",
             onClick = onNavigateToFriends
         )
         SettingsItem(
