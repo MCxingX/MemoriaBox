@@ -23,6 +23,7 @@ sealed class Screen(val route: String) {
     object AiSuggestions : Screen("ai_suggestions")
     object Achievements : Screen("achievements")
     object SyncStatus : Screen("sync_status")
+    object DayTools : Screen("day_tools")
 }
 
 sealed class BottomNavigationItem(

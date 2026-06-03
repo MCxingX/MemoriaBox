@@ -184,6 +184,7 @@ fun MainScreen(
                     onNavigateToAiSuggestions = { navController.navigate(Screen.AiSuggestions.route) },
                     onNavigateToAchievements = { navController.navigate(Screen.Achievements.route) },
                     onNavigateToSyncStatus = { navController.navigate(Screen.SyncStatus.route) },
+                    onNavigateToDayTools = { navController.navigate(Screen.DayTools.route) },
                     onBackupSettingsClick = { navController.navigate(Screen.BackupSettings.route) },
                     onWebDavSettingsClick = { navController.navigate(Screen.WebDavSettings.route) }
                 )
@@ -226,6 +227,14 @@ fun MainScreen(
             }
             composable(Screen.SyncStatus.route) {
                 SyncStatusScreen(application)
+            }
+            composable(Screen.DayTools.route) {
+                DayToolsScreen(
+                    application = application,
+                    onNavigateToCalendar = { navController.navigate(Screen.Calendar.route) },
+                    onNavigateToPhotoWall = { navController.navigate(Screen.PhotoWall.route) },
+                    onNavigateToExport = { navController.navigate(Screen.Export.route) }
+                )
             }
         }
     }
@@ -1066,8 +1075,16 @@ fun EventDetailDialog(
                 DetailLine("PushPlus", if (event.pushPlusEnabled) "开启" else "关闭")
                 if (event.isPinned) DetailLine("状态", "已置顶")
                 DetailLine("模板", cardTemplateLabel(event.cardTemplate))
+                DetailLine("心情标签", eventMoodLabel(event))
+                DetailLine("封面主题", "可在编辑资料中选择背景、渐变色和卡片模板")
+                DetailLine("分享和小组件", "可分享图片/文本，也可在桌面添加小组件查看重要日子")
                 HorizontalDivider()
-                Text("历史记录", style = MaterialTheme.typography.titleSmall)
+                Text("时间线记录", style = MaterialTheme.typography.titleSmall)
+                if (event.note.isNotBlank()) {
+                    Text(event.note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                HorizontalDivider()
+                Text("操作历史", style = MaterialTheme.typography.titleSmall)
                 if (logs.isEmpty()) {
                     Text("暂无历史记录", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
@@ -1124,6 +1141,14 @@ fun cardTemplateLabel(template: String): String = when (template) {
     else -> "大图"
 }
 
+fun eventMoodLabel(event: Event): String = when (event.type) {
+    EventType.COUNTDOWN -> "期待"
+    EventType.ANNIVERSARY -> "心动"
+    EventType.ELAPSED -> "坚持"
+    EventType.BIRTHDAY -> "祝福"
+    EventType.TODO -> "重要"
+}
+
 @Composable
 fun DetailLine(label: String, value: String) {
     Column {
@@ -1158,6 +1183,248 @@ fun EventActionDialog(
             TextButton(onClick = onDismiss) { Text("取消") }
         }
     )
+}
+
+@Composable
+fun DayToolsScreen(
+    application: Application,
+    onNavigateToCalendar: () -> Unit,
+    onNavigateToPhotoWall: () -> Unit,
+    onNavigateToExport: () -> Unit
+) {
+    val viewModel = remember { createMainViewModel(application) }
+    val boxes by viewModel.boxes.collectAsState(initial = emptyList())
+    val events by viewModel.allEvents.collectAsState(initial = emptyList())
+    var showBatchImport by remember { mutableStateOf(false) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    val defaultBoxId = boxes.firstOrNull()?.id ?: ""
+    val today = remember { Calendar.getInstance() }
+    val todayEvents = remember(events) { events.filter { isSameMonthDay(it.date, System.currentTimeMillis()) } }
+    val upcomingEvents = remember(events) {
+        events.filter { it.date >= System.currentTimeMillis() }
+            .sortedBy { it.date }
+            .take(8)
+    }
+    val archivedSuggestions = remember(events) {
+        val cutoff = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -30) }.timeInMillis
+        events.filter { it.date < cutoff && !it.isPinned }
+            .sortedByDescending { it.date }
+            .take(8)
+    }
+    val filteredEvents = remember(events, searchQuery) {
+        if (searchQuery.isBlank()) emptyList() else events.filter {
+            it.name.contains(searchQuery, ignoreCase = true) || it.note.contains(searchQuery, ignoreCase = true)
+        }.take(20)
+    }
+
+    Scaffold(topBar = { TopAppBar(title = { Text("日子工具箱") }) }) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .padding(paddingValues)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            ToolSection("日子模板", "一键创建常用类型，自动带提醒和文案") {
+                dayTemplates().forEach { template ->
+                    ToolActionRow(template.title, template.description, Icons.Default.AddCircle) {
+                        viewModel.createQuickEvent(template.toEvent(defaultBoxId))
+                    }
+                }
+            }
+            ToolSection("节日库", "常见节日可一键加入我的日子") {
+                holidayTemplates(today.get(Calendar.YEAR)).forEach { template ->
+                    ToolActionRow(template.title, template.description, Icons.Default.EventAvailable) {
+                        viewModel.createQuickEvent(template.toEvent(defaultBoxId))
+                    }
+                }
+            }
+            ToolSection("批量导入", "按行输入名称和日期，快速生成多个日子") {
+                ToolActionRow("打开批量导入", "支持：木羽生日 6月24日 / 考试 2026-07-10", Icons.Default.Upload) {
+                    showBatchImport = true
+                }
+            }
+            ToolSection("提醒中心", "集中查看接下来要发生的日子") {
+                if (upcomingEvents.isEmpty()) {
+                    Text("暂无即将到来的日子", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    upcomingEvents.forEach { event -> CompactToolEventRow(event) }
+                }
+            }
+            ToolSection("今日回忆", "查看历史今天和今天相关的日子") {
+                if (todayEvents.isEmpty()) {
+                    Text("今天还没有对应回忆", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    todayEvents.forEach { event -> CompactToolEventRow(event) }
+                }
+            }
+            ToolSection("搜索和筛选", "按名称或备注查找日子") {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    label = { Text("搜索日子") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                filteredEvents.forEach { event -> CompactToolEventRow(event) }
+            }
+            ToolSection("归档建议", "过去较久且未置顶的日子可移入历史视角") {
+                if (archivedSuggestions.isEmpty()) {
+                    Text("暂无需要归档的日子", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    archivedSuggestions.forEach { event -> CompactToolEventRow(event) }
+                }
+            }
+            ToolSection("纪念节点", "自动节点保持轻量生成，后续可继续细化开关") {
+                Text("纪念日会自动生成 100天、520天、666天、999天、1/2/3/5/10周年。", style = MaterialTheme.typography.bodySmall)
+            }
+            ToolSection("分享和小组件", "分享海报、照片墙和桌面小组件集中入口") {
+                ToolActionRow("分享海报", "生成社交分享图片", Icons.Default.PhotoLibrary, onNavigateToPhotoWall)
+                ToolActionRow("导出分享", "导出数据和分享内容", Icons.Default.Share, onNavigateToExport)
+                ToolActionRow("月历看板", "查看所有事件分布", Icons.Default.CalendarToday, onNavigateToCalendar)
+                Text("桌面小组件可在手机桌面长按后添加 MemoriaBox 小组件。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+
+    if (showBatchImport) {
+        BatchImportDialog(
+            onDismiss = { showBatchImport = false },
+            onImport = { text ->
+                parseBatchEvents(text, defaultBoxId).forEach { viewModel.createQuickEvent(it) }
+                showBatchImport = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun ToolSection(title: String, subtitle: String, content: @Composable ColumnScope.() -> Unit) {
+    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            content()
+        }
+    }
+}
+
+@Composable
+private fun ToolActionRow(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyMedium)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Icon(Icons.Default.ChevronRight, contentDescription = null)
+    }
+}
+
+@Composable
+private fun CompactToolEventRow(event: Event) {
+    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(event.name, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+            Text(eventTypeLabel(event.type), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Text(com.memoriabox.ui.screen.components.formatDate(event.date), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+    }
+}
+
+@Composable
+private fun BatchImportDialog(onDismiss: () -> Unit, onImport: (String) -> Unit) {
+    var text by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("批量导入日子") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("每行一个日子，例如：木羽生日 6月24日", style = MaterialTheme.typography.bodySmall)
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    minLines = 6,
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("旅行 2026-08-01\n木羽生日 6月24日") }
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = { onImport(text) }) { Text("导入") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
+    )
+}
+
+private data class DayTemplate(val title: String, val description: String, val type: EventType, val offsetDays: Int, val note: String)
+
+private fun DayTemplate.toEvent(boxId: String): Event = Event(
+    boxId = boxId,
+    name = title,
+    date = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, offsetDays) }.timeInMillis,
+    type = type,
+    note = note,
+    reminderEnabled = true,
+    reminderOffsets = "0,1,7",
+    gradientStart = if (type == EventType.BIRTHDAY) "#FF8A80" else "#1677FF",
+    gradientEnd = if (type == EventType.BIRTHDAY) "#FFC069" else "#13C2C2"
+)
+
+private fun dayTemplates(): List<DayTemplate> = listOf(
+    DayTemplate("重要考试", "默认 30 天后，适合考试倒计时", EventType.COUNTDOWN, 30, "认真准备，稳稳发挥。"),
+    DayTemplate("旅行出发", "默认 60 天后，适合旅行计划", EventType.COUNTDOWN, 60, "把期待装进行李箱。"),
+    DayTemplate("恋爱纪念日", "默认今天，自动生成纪念节点", EventType.ANNIVERSARY, 0, "把心动的日子好好保存。"),
+    DayTemplate("还款提醒", "默认 7 天后，适合财务提醒", EventType.TODO, 7, "提前安排，安心一点。"),
+    DayTemplate("体检提醒", "默认 14 天后，适合健康事项", EventType.TODO, 14, "照顾好自己。"),
+    DayTemplate("宠物生日", "默认 90 天后，适合毛孩子生日", EventType.BIRTHDAY, 90, "今天也要给小可爱加餐。")
+)
+
+private fun holidayTemplates(year: Int): List<DayTemplate> = listOf(
+    fixedDateTemplate("元旦", year, 1, 1, "新的一年开始啦。"),
+    fixedDateTemplate("情人节", year, 2, 14, "把喜欢准时送达。"),
+    fixedDateTemplate("劳动节", year, 5, 1, "给认真生活的自己放个假。"),
+    fixedDateTemplate("儿童节", year, 6, 1, "保持一点童心。"),
+    fixedDateTemplate("国庆节", year, 10, 1, "假期和重要安排都值得记录。"),
+    fixedDateTemplate("圣诞节", year, 12, 25, "冬天也要有一点仪式感。")
+)
+
+private fun fixedDateTemplate(title: String, year: Int, month: Int, day: Int, note: String): DayTemplate {
+    val date = Calendar.getInstance().apply { set(year, month - 1, day, 9, 0, 0) }
+    val offset = ((date.timeInMillis - System.currentTimeMillis()) / 86_400_000L).toInt().coerceAtLeast(0)
+    return DayTemplate(title, "一键添加 $month 月 $day 日", EventType.ANNIVERSARY, offset, note)
+}
+
+private fun parseBatchEvents(text: String, boxId: String): List<Event> {
+    return text.lines().mapNotNull { line ->
+        val trimmed = line.trim()
+        if (trimmed.isBlank()) return@mapNotNull null
+        val dateRegex = Regex("(\\d{4}-\\d{1,2}-\\d{1,2}|\\d{1,2}月\\d{1,2}日)")
+        val match = dateRegex.find(trimmed) ?: return@mapNotNull null
+        val name = trimmed.removeRange(match.range).trim().ifBlank { "新日子" }
+        Event(boxId = boxId, name = name, date = parseFlexibleDate(match.value), type = if (name.contains("生日")) EventType.BIRTHDAY else EventType.COUNTDOWN, reminderEnabled = true, reminderOffsets = "0,1,7")
+    }
+}
+
+private fun parseFlexibleDate(value: String): Long {
+    val cal = Calendar.getInstance()
+    if (value.contains("-")) {
+        val parts = value.split("-").map { it.toInt() }
+        cal.set(parts[0], parts[1] - 1, parts[2], 9, 0, 0)
+    } else {
+        val parts = Regex("(\\d{1,2})月(\\d{1,2})日").find(value)?.groupValues ?: return System.currentTimeMillis()
+        cal.set(cal.get(Calendar.YEAR), parts[1].toInt() - 1, parts[2].toInt(), 9, 0, 0)
+    }
+    return cal.timeInMillis
+}
+
+private fun isSameMonthDay(left: Long, right: Long): Boolean {
+    val leftCal = Calendar.getInstance().apply { timeInMillis = left }
+    val rightCal = Calendar.getInstance().apply { timeInMillis = right }
+    return leftCal.get(Calendar.MONTH) == rightCal.get(Calendar.MONTH) && leftCal.get(Calendar.DAY_OF_MONTH) == rightCal.get(Calendar.DAY_OF_MONTH)
 }
 
 @Composable
@@ -1356,6 +1623,7 @@ fun SettingsScreen(
     onNavigateToAiSuggestions: () -> Unit,
     onNavigateToAchievements: () -> Unit,
     onNavigateToSyncStatus: () -> Unit,
+    onNavigateToDayTools: () -> Unit,
     onBackupSettingsClick: () -> Unit,
     onWebDavSettingsClick: () -> Unit
 ) {
@@ -1383,6 +1651,12 @@ fun SettingsScreen(
         SettingsSectionTitle("主题设置", "默认蓝白，也可以切换深色、护眼和彩色")
         ThemeModeCard(currentThemeMode = currentThemeMode, onThemeModeChange = onThemeModeChange)
         SettingsSectionTitle("常用工具", "高频功能放前面，少找一步")
+        SettingsItem(
+            icon = Icons.Default.AutoAwesome,
+            title = "日子工具箱",
+            description = "模板、节日库、提醒中心、今日回忆和批量导入",
+            onClick = onNavigateToDayTools
+        )
         SettingsItem(
             icon = Icons.Default.BarChart,
             title = "数据统计",
