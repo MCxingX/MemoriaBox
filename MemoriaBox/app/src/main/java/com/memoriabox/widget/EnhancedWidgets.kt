@@ -8,6 +8,7 @@ import android.content.Intent
 import android.widget.RemoteViews
 import com.memoriabox.MainActivity
 import com.memoriabox.R
+import com.memoriabox.data.model.EventType
 import com.memoriabox.database.AppDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -54,13 +55,17 @@ class CountdownWidget : AppWidgetProvider() {
 
             if (event != null) {
                 val daysLeft = ((event.date - System.currentTimeMillis()) / 86_400_000L).coerceAtLeast(0)
-                views.setTextViewText(R.id.widget_next_event, "下一个事件")
+                views.setTextViewText(R.id.widget_next_event, "下一个${widgetTypeLabel(event.type)}")
                 views.setTextViewText(R.id.widget_event_name, event.name)
-                views.setTextViewText(R.id.widget_days_left, daysLeft.toString())
+                views.setTextViewText(R.id.widget_event_meta, SimpleDateFormat("yyyy年M月d日", Locale.getDefault()).format(Date(event.date)))
+                views.setTextViewText(R.id.widget_days_left, if (daysLeft == 0L) "今天" else daysLeft.toString())
+                views.setTextViewText(R.id.widget_days_unit, if (daysLeft == 0L) "" else "天")
             } else {
-                views.setTextViewText(R.id.widget_next_event, "暂无 upcoming")
+                views.setTextViewText(R.id.widget_next_event, "暂无即将到来的日子")
                 views.setTextViewText(R.id.widget_event_name, "添加纪念日")
+                views.setTextViewText(R.id.widget_event_meta, "点击打开 MemoriaBox")
                 views.setTextViewText(R.id.widget_days_left, "--")
+                views.setTextViewText(R.id.widget_days_unit, "天")
             }
             
             appWidgetManager.updateAppWidget(appWidgetId, views)
@@ -113,12 +118,29 @@ class CalendarWidget : AppWidgetProvider() {
                     AppDatabase.getDatabase(context).eventDao().getEventCountBetween(start, end)
                 }
             }.getOrDefault(0)
+            val nextEvent = runCatching {
+                runBlocking(Dispatchers.IO) {
+                    AppDatabase.getDatabase(context).eventDao().getNextUpcomingEvent(System.currentTimeMillis())
+                }
+            }.getOrNull()
 
             views.setTextViewText(R.id.widget_today_date, dateText)
             views.setTextViewText(R.id.widget_today_day, dayText)
-            views.setTextViewText(R.id.widget_event_count, "$count 个事件")
+            views.setTextViewText(R.id.widget_event_count, if (count == 0) "今天暂无日程" else "今天 $count 个日程")
+            views.setTextViewText(
+                R.id.widget_next_event_name,
+                nextEvent?.let { "最近：${it.name}" } ?: "暂无即将到来的日子"
+            )
             
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }
     }
+}
+
+private fun widgetTypeLabel(type: EventType): String = when (type) {
+    EventType.COUNTDOWN -> "倒数日"
+    EventType.ANNIVERSARY -> "纪念日"
+    EventType.ELAPSED -> "正计时"
+    EventType.BIRTHDAY -> "生日"
+    EventType.TODO -> "待办"
 }

@@ -586,6 +586,26 @@ fun EventDialog(
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true
                         )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf(
+                                "当天" to 0,
+                                "提前1天" to 1,
+                                "提前3天" to 3,
+                                "提前7天" to 7,
+                                "提前30天" to 30
+                            ).forEach { (label, offset) ->
+                                val offsets = reminderOffsetsText.split(",").mapNotNull { it.trim().toIntOrNull() }.toSet()
+                                FilterChip(
+                                    selected = offset in offsets,
+                                    onClick = {
+                                        val updated = if (offset in offsets) offsets - offset else offsets + offset
+                                        reminderOffsetsText = updated.sorted().joinToString(",")
+                                    },
+                                    label = { Text(label) }
+                                )
+                            }
+                        }
                         Text(
                             "0 表示当天提醒，多个提醒点用英文逗号分隔",
                             style = MaterialTheme.typography.labelSmall,

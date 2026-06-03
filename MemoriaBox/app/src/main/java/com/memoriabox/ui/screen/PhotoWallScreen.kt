@@ -34,7 +34,9 @@ import androidx.compose.ui.graphics.Color as ComposeColor
 import java.text.SimpleDateFormat
 import java.util.*
 import android.graphics.Canvas
+import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.Shader
 import android.graphics.Typeface
 import androidx.core.graphics.createBitmap
 import java.io.File
@@ -175,7 +177,7 @@ fun ShareOptionsDialog(
                             val event = events.firstOrNull()
                             if (event != null) {
                                 val daysLeft = ((event.date - System.currentTimeMillis()) / 86_400_000L).coerceAtLeast(0)
-                                shareBitmap(context, generateEventCardBitmap(context, event, daysLeft))
+                                shareBitmap(context, generateEventCardBitmap(context, event, daysLeft), buildShareCaption(event, daysLeft))
                                 shareResult = "已生成第一张事件卡片，请在系统分享面板中选择目标应用。"
                             } else {
                                 shareResult = "当前没有可分享的带图事件。"
@@ -212,7 +214,7 @@ fun ShareOptionsDialog(
                         .fillMaxWidth()
                         .clickable {
                             if (events.isNotEmpty()) {
-                                shareBitmap(context, generateStatisticsBitmap(events))
+                                shareBitmap(context, generateStatisticsBitmap(events), "我用 MemoriaBox 记录了 ${events.size} 个重要日子。")
                                 shareResult = "已生成照片墙概览，请在系统分享面板中选择目标应用。"
                             } else {
                                 shareResult = "当前没有可分享的照片墙内容。"
@@ -248,7 +250,7 @@ fun ShareOptionsDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable {
-                            shareBitmap(context, generateStatisticsBitmap(events))
+                            shareBitmap(context, generateStatisticsBitmap(events), "我的 MemoriaBox 重要日子统计。")
                             shareResult = "已生成统计图片，请在系统分享面板中选择目标应用。"
                         }
                 ) {
@@ -417,40 +419,67 @@ fun ExportScreen(application: Application) {
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("分享图片", style = MaterialTheme.typography.titleMedium)
+                    Text("分享模板", style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "生成精美的事件卡片图片，可分享到社交媒体",
+                        "选择不同模板生成事件卡片或统计图片。",
                         style = MaterialTheme.typography.bodySmall
                     )
                     Spacer(Modifier.height(12.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = {
-                                val event = events.firstOrNull()
-                                if (event != null) {
-                                    val daysLeft = ((event.date - System.currentTimeMillis()) / 86_400_000L).coerceAtLeast(0)
-                                    shareBitmap(context, generateEventCardBitmap(context, event, daysLeft))
-                                    exportResult = "事件卡片已生成"
-                                } else {
-                                    exportResult = "暂无可分享事件"
-                                }
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Default.Event, null)
-                            Spacer(Modifier.width(4.dp))
-                            Text("事件卡片")
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            OutlinedButton(
+                                onClick = {
+                                    val event = events.firstOrNull()
+                                    if (event != null) {
+                                        val daysLeft = ((event.date - System.currentTimeMillis()) / 86_400_000L).coerceAtLeast(0)
+                                        shareBitmap(context, generateEventCardBitmap(context, event, daysLeft, "CLASSIC"), buildShareCaption(event, daysLeft))
+                                        exportResult = "经典卡片已生成"
+                                    } else {
+                                        exportResult = "暂无可分享事件"
+                                    }
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("经典")
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    val event = events.firstOrNull()
+                                    if (event != null) {
+                                        val daysLeft = ((event.date - System.currentTimeMillis()) / 86_400_000L).coerceAtLeast(0)
+                                        shareBitmap(context, generateEventCardBitmap(context, event, daysLeft, "POSTER"), buildShareCaption(event, daysLeft))
+                                        exportResult = "海报卡片已生成"
+                                    } else {
+                                        exportResult = "暂无可分享事件"
+                                    }
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("海报")
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    val event = events.firstOrNull()
+                                    if (event != null) {
+                                        val daysLeft = ((event.date - System.currentTimeMillis()) / 86_400_000L).coerceAtLeast(0)
+                                        shareBitmap(context, generateEventCardBitmap(context, event, daysLeft, "MINIMAL"), buildShareCaption(event, daysLeft))
+                                        exportResult = "极简卡片已生成"
+                                    } else {
+                                        exportResult = "暂无可分享事件"
+                                    }
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("极简")
+                            }
                         }
                         OutlinedButton(
                             onClick = {
-                                shareBitmap(context, generateStatisticsBitmap(events))
+                                shareBitmap(context, generateStatisticsBitmap(events), "我的 MemoriaBox 重要日子统计。")
                                 exportResult = "统计图表已生成"
                             },
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.fillMaxWidth()
                         ) {
                             Icon(Icons.Default.BarChart, null)
                             Spacer(Modifier.width(4.dp))
@@ -551,60 +580,104 @@ private fun String.escapeIcal(): String = replace("\\", "\\\\").replace(";", "\\
 fun generateEventCardBitmap(
     context: android.content.Context,
     event: Event,
-    daysLeft: Long
+    daysLeft: Long,
+    template: String = "CLASSIC"
 ): Bitmap {
     val width = 1080
     val height = 1920
     val bitmap = createBitmap(width, height)
     val canvas = Canvas(bitmap)
 
-    // Background gradient
+    val isMinimal = template == "MINIMAL"
+    val isPoster = template == "POSTER"
+
     val bgPaint = Paint().apply {
-        color = android.graphics.Color.parseColor("#7C4DFF")
+        isAntiAlias = true
+        if (isMinimal) {
+            color = android.graphics.Color.WHITE
+        } else {
+            shader = LinearGradient(
+                0f,
+                0f,
+                width.toFloat(),
+                height.toFloat(),
+                intArrayOf(
+                    android.graphics.Color.parseColor(if (isPoster) "#FF7A00" else "#1677FF"),
+                    android.graphics.Color.parseColor(if (isPoster) "#FFB020" else "#13C2C2")
+                ),
+                null,
+                Shader.TileMode.CLAMP
+            )
+        }
     }
     canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
 
+    val mainColor = if (isMinimal) android.graphics.Color.parseColor("#111827") else android.graphics.Color.WHITE
+    val subColor = if (isMinimal) android.graphics.Color.parseColor("#52677D") else android.graphics.Color.argb(220, 255, 255, 255)
+
+    if (isPoster) {
+        val decorPaint = Paint().apply {
+            color = android.graphics.Color.argb(42, 255, 255, 255)
+            isAntiAlias = true
+        }
+        canvas.drawCircle(920f, 260f, 260f, decorPaint)
+        canvas.drawCircle(110f, 1660f, 220f, decorPaint)
+    }
+
+    if (isMinimal) {
+        val linePaint = Paint().apply {
+            color = android.graphics.Color.parseColor("#1677FF")
+            strokeWidth = 12f
+            isAntiAlias = true
+        }
+        canvas.drawLine(120f, 180f, 980f, 180f, linePaint)
+    }
+
     // Title
     val titlePaint = Paint().apply {
-        color = android.graphics.Color.WHITE
-        textSize = 80f
+        color = mainColor
+        textSize = if (isPoster) 88f else 76f
         isAntiAlias = true
         typeface = Typeface.DEFAULT_BOLD
         textAlign = Paint.Align.CENTER
     }
-    canvas.drawText(event.name, width / 2f, 400f, titlePaint)
+    canvas.drawText(event.name.take(18), width / 2f, if (isPoster) 360f else 420f, titlePaint)
 
     // Days count
     val daysPaint = Paint().apply {
-        color = android.graphics.Color.WHITE
-        textSize = 200f
+        color = mainColor
+        textSize = if (isPoster) 260f else 220f
         isAntiAlias = true
+        typeface = Typeface.DEFAULT_BOLD
         textAlign = Paint.Align.CENTER
     }
-    canvas.drawText("$daysLeft", width / 2f, 900f, daysPaint)
+    canvas.drawText(if (daysLeft == 0L) "今天" else "$daysLeft", width / 2f, if (isPoster) 900f else 880f, daysPaint)
 
     // Label
     val labelPaint = Paint().apply {
-        color = android.graphics.Color.WHITE
+        color = subColor
         textSize = 60f
         isAntiAlias = true
         textAlign = Paint.Align.CENTER
     }
-    canvas.drawText("天", width / 2f + 100f, 900f, labelPaint)
+    canvas.drawText(if (daysLeft == 0L) "就是今天" else "天", width / 2f + if (isPoster) 180f else 130f, if (isPoster) 900f else 880f, labelPaint)
 
     // Date
     val datePaint = Paint().apply {
-        color = android.graphics.Color.WHITE
+        color = subColor
         textSize = 50f
         isAntiAlias = true
         textAlign = Paint.Align.CENTER
     }
     val dateStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(event.date))
-    canvas.drawText(dateStr, width / 2f, 1200f, datePaint)
+    canvas.drawText(dateStr, width / 2f, 1180f, datePaint)
+    if (event.note.isNotBlank()) {
+        canvas.drawText(event.note.take(24), width / 2f, 1280f, datePaint)
+    }
 
     // App signature
     val sigPaint = Paint().apply {
-        color = android.graphics.Color.argb(180, 255, 255, 255)
+        color = if (isMinimal) android.graphics.Color.parseColor("#52677D") else android.graphics.Color.argb(180, 255, 255, 255)
         textSize = 40f
         isAntiAlias = true
         textAlign = Paint.Align.CENTER
@@ -614,7 +687,7 @@ fun generateEventCardBitmap(
     return bitmap
 }
 
-fun shareBitmap(context: android.content.Context, bitmap: Bitmap) {
+fun shareBitmap(context: android.content.Context, bitmap: Bitmap, caption: String = "") {
     try {
         val file = File(context.cacheDir, "share_image.png")
         FileOutputStream(file).use { fos ->
@@ -630,6 +703,7 @@ fun shareBitmap(context: android.content.Context, bitmap: Bitmap) {
         val shareIntent = Intent(Intent.ACTION_SEND).apply {
             type = "image/png"
             putExtra(Intent.EXTRA_STREAM, uri)
+            if (caption.isNotBlank()) putExtra(Intent.EXTRA_TEXT, caption)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
 
@@ -637,6 +711,12 @@ fun shareBitmap(context: android.content.Context, bitmap: Bitmap) {
     } catch (e: Exception) {
         e.printStackTrace()
     }
+}
+
+private fun buildShareCaption(event: Event, daysLeft: Long): String {
+    val dateText = SimpleDateFormat("yyyy年M月d日", Locale.getDefault()).format(Date(event.date))
+    val dayText = if (daysLeft == 0L) "就是今天" else "还有 ${daysLeft} 天"
+    return "${event.name}，$dayText。\n日期：$dateText\n来自 MemoriaBox"
 }
 
 fun generateStatisticsBitmap(events: List<Event>): Bitmap {

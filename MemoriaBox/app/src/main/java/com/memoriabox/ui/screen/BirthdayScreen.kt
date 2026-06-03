@@ -46,12 +46,7 @@ fun BirthdayScreen(application: Application) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("生日管理") },
-                actions = {
-                    IconButton(onClick = { /* Add birthday */ }) {
-                        Icon(Icons.Default.Cake, contentDescription = "添加生日")
-                    }
-                }
+                title = { Text("生日管理") }
             )
         }
     ) { paddingValues ->

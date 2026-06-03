@@ -22,8 +22,8 @@ android {
         applicationId = "com.memoriabox"
         minSdk = 24
         targetSdk = 35
-        versionCode = 8
-        versionName = "3.0.4"
+        versionCode = 9
+        versionName = "3.0.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         

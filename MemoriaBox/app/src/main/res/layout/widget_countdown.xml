@@ -32,6 +32,16 @@
             android:gravity="center" />
 
         <TextView
+            android:id="@+id/widget_event_meta"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textSize="12sp"
+            android:textColor="#CCFFFFFF"
+            android:layout_marginTop="4dp"
+            android:gravity="center" />
+
+        <TextView
             android:id="@+id/widget_days_left"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -42,6 +52,7 @@
             android:layout_marginTop="12dp" />
 
         <TextView
+            android:id="@+id/widget_days_unit"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="天"

@@ -17,6 +17,7 @@ import com.memoriabox.utils.NotificationHelper
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 
 class MainViewModel(
@@ -109,6 +110,7 @@ class MainViewModel(
             if (targetEvent.reminderEnabled) {
                 notificationHelper.scheduleReminder(targetEvent)
             }
+            syncAnniversaryMilestones(targetEvent, eventRepository, notificationHelper)
             logRepository.logEventOperation("QUICK_CREATE", targetEvent.id, targetEvent.name)
             backupManager.onDataChanged()
         } catch (e: Exception) {
@@ -123,6 +125,7 @@ class MainViewModel(
             if (event.reminderEnabled) {
                 notificationHelper.scheduleReminder(event)
             }
+            syncAnniversaryMilestones(event, eventRepository, notificationHelper)
             logRepository.logEventOperation("QUICK_UPDATE", event.id, event.name)
             backupManager.onDataChanged()
         } catch (e: Exception) {
@@ -191,6 +194,7 @@ class BoxDetailViewModel(
             if (event.reminderEnabled) {
                 notificationHelper.scheduleReminder(event)
             }
+            syncAnniversaryMilestones(event, eventRepository, notificationHelper)
             logRepository.logEventOperation("CREATE", event.id, event.name)
             backupManager.onDataChanged()
         } catch (e: Exception) {
@@ -205,6 +209,7 @@ class BoxDetailViewModel(
             if (event.reminderEnabled) {
                 notificationHelper.scheduleReminder(event)
             }
+            syncAnniversaryMilestones(event, eventRepository, notificationHelper)
             logRepository.logEventOperation("UPDATE", event.id, event.name)
             backupManager.onDataChanged()
         } catch (e: Exception) {
@@ -330,7 +335,10 @@ class BackupViewModel(
 class FriendViewModel(
     application: Application,
     private val friendRepository: FriendRepository,
-    private val logRepository: LogRepository
+    private val eventRepository: EventRepository,
+    private val boxRepository: com.memoriabox.repository.BoxRepository,
+    private val logRepository: LogRepository,
+    private val notificationHelper: NotificationHelper
 ) : AndroidViewModel(application) {
 
     val friends = friendRepository.getAllFriends()
@@ -345,10 +353,12 @@ class FriendViewModel(
         labels.distinct().forEach { label ->
             friendRepository.addRelation(FriendRelation(friend.id, label))
         }
+        syncFriendBirthdayEvent(friend)
     }
 
     fun updateFriend(friend: Friend) = viewModelScope.launch {
         friendRepository.updateFriend(friend)
+        syncFriendBirthdayEvent(friend)
     }
 
     fun updateFriend(friend: Friend, labels: List<String>, previousLabels: List<String>) = viewModelScope.launch {
@@ -359,9 +369,11 @@ class FriendViewModel(
         labels.distinct().forEach { label ->
             friendRepository.addRelation(FriendRelation(friend.id, label))
         }
+        syncFriendBirthdayEvent(friend)
     }
 
     fun deleteFriend(friend: Friend) = viewModelScope.launch {
+        deleteFriendBirthdayEvent(friend)
         friendRepository.deleteFriend(friend)
     }
 
@@ -372,6 +384,63 @@ class FriendViewModel(
     fun removeLabel(friendId: String, label: String) = viewModelScope.launch {
         friendRepository.removeRelation(FriendRelation(friendId, label))
     }
+
+    private suspend fun syncFriendBirthdayEvent(friend: Friend) {
+        val birthdayEventId = friendBirthdayEventId(friend.id)
+        val birthdayDate = friend.birthdayDate
+        if (birthdayDate == null) {
+            deleteFriendBirthdayEvent(friend)
+            return
+        }
+
+        val defaultBox = boxRepository.getBoxById("default_1") ?: Box(
+            id = "default_1",
+            name = "我的日子",
+            icon = "*",
+            bgType = BgType.COLOR,
+            bgValue = "#1677FF"
+        ).also { boxRepository.insertBox(it) }
+
+        val existingEvent = eventRepository.getEventById(birthdayEventId)
+        val event = Event(
+            id = birthdayEventId,
+            boxId = existingEvent?.boxId ?: defaultBox.id,
+            name = "${friend.name}的生日",
+            date = birthdayDate,
+            type = EventType.BIRTHDAY,
+            note = "由好友资料自动生成",
+            reminderEnabled = true,
+            reminderDays = existingEvent?.reminderDays ?: 7,
+            alarmEnabled = existingEvent?.alarmEnabled ?: false,
+            alarmTime = existingEvent?.alarmTime ?: "09:00",
+            avatarUri = friend.avatarUri ?: existingEvent?.avatarUri,
+            pushPlusEnabled = existingEvent?.pushPlusEnabled ?: false,
+            repeatMode = RepeatMode.YEARLY,
+            repeatInterval = 1,
+            reminderOffsets = existingEvent?.reminderOffsets ?: "0,1,7",
+            gradientStart = existingEvent?.gradientStart ?: "#1677FF",
+            gradientEnd = existingEvent?.gradientEnd ?: "#13C2C2",
+            textColor = existingEvent?.textColor ?: "#FFFFFF",
+            cardTemplate = existingEvent?.cardTemplate ?: "HERO",
+            displayFields = existingEvent?.displayFields ?: "date,note,reminder",
+            isBirthday = true,
+            repeatYearly = true,
+            createdAt = existingEvent?.createdAt ?: System.currentTimeMillis()
+        )
+        eventRepository.insertEvent(event)
+        notificationHelper.cancelReminder(event)
+        notificationHelper.scheduleReminder(event)
+        logRepository.logEventOperation("FRIEND_BIRTHDAY_SYNC", event.id, event.name)
+    }
+
+    private suspend fun deleteFriendBirthdayEvent(friend: Friend) {
+        val existingEvent = eventRepository.getEventById(friendBirthdayEventId(friend.id)) ?: return
+        notificationHelper.cancelReminder(existingEvent)
+        eventRepository.deleteEvent(existingEvent)
+        logRepository.logEventOperation("FRIEND_BIRTHDAY_DELETE", existingEvent.id, existingEvent.name)
+    }
+
+    private fun friendBirthdayEventId(friendId: String): String = "friend_birthday_$friendId"
 }
 
 class LabelViewModel(
@@ -398,6 +467,82 @@ class LabelViewModel(
     fun removeEventLabel(eventId: String, label: String) = viewModelScope.launch {
         labelRepository.removeEventLabel(com.memoriabox.data.model.EventLabel(eventId, label))
     }
+}
+
+private suspend fun syncAnniversaryMilestones(
+    event: Event,
+    eventRepository: EventRepository,
+    notificationHelper: NotificationHelper
+) {
+    val milestoneSpecs = listOf(
+        "100d" to "100天",
+        "520d" to "520天",
+        "666d" to "666天",
+        "999d" to "999天",
+        "1y" to "1周年",
+        "2y" to "2周年",
+        "3y" to "3周年",
+        "5y" to "5周年",
+        "10y" to "10周年"
+    )
+    if (event.id.startsWith("milestone_")) return
+    if (event.type != EventType.ANNIVERSARY) {
+        milestoneSpecs.forEach { (key, _) ->
+            eventRepository.getEventById(milestoneEventId(event.id, key))?.let { milestone ->
+                notificationHelper.cancelReminder(milestone)
+                eventRepository.deleteEvent(milestone)
+            }
+        }
+        return
+    }
+
+    milestoneSpecs.forEach { (key, label) ->
+        val date = milestoneDate(event.date, key)
+        val existing = eventRepository.getEventById(milestoneEventId(event.id, key))
+        val milestone = Event(
+            id = milestoneEventId(event.id, key),
+            boxId = event.boxId,
+            name = "${event.name} $label",
+            date = date,
+            type = EventType.ANNIVERSARY,
+            note = "由“${event.name}”自动生成",
+            reminderEnabled = true,
+            reminderDays = existing?.reminderDays ?: 7,
+            alarmTime = existing?.alarmTime ?: event.alarmTime,
+            avatarUri = event.avatarUri,
+            pushPlusEnabled = existing?.pushPlusEnabled ?: event.pushPlusEnabled,
+            repeatMode = RepeatMode.NONE,
+            reminderOffsets = existing?.reminderOffsets ?: "0,7",
+            gradientStart = existing?.gradientStart ?: event.gradientStart,
+            gradientEnd = existing?.gradientEnd ?: event.gradientEnd,
+            textColor = existing?.textColor ?: event.textColor,
+            cardTemplate = existing?.cardTemplate ?: event.cardTemplate,
+            displayFields = existing?.displayFields ?: event.displayFields,
+            createdAt = existing?.createdAt ?: System.currentTimeMillis()
+        )
+        eventRepository.insertEvent(milestone)
+        notificationHelper.cancelReminder(milestone)
+        notificationHelper.scheduleReminder(milestone)
+    }
+}
+
+private fun milestoneEventId(sourceEventId: String, key: String): String = "milestone_${sourceEventId}_$key"
+
+private fun milestoneDate(sourceDate: Long, key: String): Long {
+    return Calendar.getInstance().apply {
+        timeInMillis = sourceDate
+        when (key) {
+            "100d" -> add(Calendar.DAY_OF_YEAR, 100)
+            "520d" -> add(Calendar.DAY_OF_YEAR, 520)
+            "666d" -> add(Calendar.DAY_OF_YEAR, 666)
+            "999d" -> add(Calendar.DAY_OF_YEAR, 999)
+            "1y" -> add(Calendar.YEAR, 1)
+            "2y" -> add(Calendar.YEAR, 2)
+            "3y" -> add(Calendar.YEAR, 3)
+            "5y" -> add(Calendar.YEAR, 5)
+            "10y" -> add(Calendar.YEAR, 10)
+        }
+    }.timeInMillis
 }
 
 fun createMainViewModel(application: Application): MainViewModel {
@@ -455,7 +600,10 @@ fun createFriendViewModel(application: Application): FriendViewModel {
     return FriendViewModel(
         application,
         FriendRepository(app.database.friendDao(), app.database.labelDao()),
-        LogRepository(app.database.logDao())
+        EventRepository(app.database.eventDao()),
+        com.memoriabox.repository.BoxRepository(app.database.boxDao()),
+        LogRepository(app.database.logDao()),
+        NotificationHelper(application)
     )
 }
 

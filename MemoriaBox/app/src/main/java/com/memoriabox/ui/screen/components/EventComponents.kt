@@ -279,9 +279,28 @@ fun CalendarViewScreen(
             set(parts[0], parts[1] - 1, 1)
         }
     }
+    val monthEvents = remember(events, currentMonthYear) {
+        events.filter { event ->
+            (1..cal.getActualMaximum(Calendar.DAY_OF_MONTH)).any { day ->
+                val dayCal = cal.clone() as Calendar
+                dayCal.set(Calendar.DAY_OF_MONTH, day)
+                occursOnDay(event, dayCal)
+            }
+        }
+    }
+    val today = Calendar.getInstance()
+    val nearestEvent = remember(monthEvents) {
+        monthEvents.minByOrNull { kotlin.math.abs(it.date - System.currentTimeMillis()) }
+    }
 
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(title = { Text("日历视图") })
+        CalendarBoardSummary(
+            totalCount = events.size,
+            monthCount = monthEvents.size,
+            todayCount = events.count { occursOnDay(it, today) },
+            nearestEvent = nearestEvent
+        )
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -304,7 +323,7 @@ fun CalendarViewScreen(
                 }) { Icon(Icons.Default.ChevronLeft, contentDescription = "上月", tint = Color.White) }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(text = monthFormat.format(cal.time), style = MaterialTheme.typography.titleLarge, color = Color.White, maxLines = 1)
-                    Text("把重要的小日子圈起来", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.82f))
+                    Text("看板/月历一体查看事件分布，本月 ${monthEvents.size} 个日子", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.82f))
                 }
                 IconButton(onClick = {
                     val updated = cal.clone() as Calendar
@@ -319,6 +338,48 @@ fun CalendarViewScreen(
             val heightCell = ((maxHeight - 36.dp).coerceAtLeast(240.dp)) / 6
             val cellSize = minOf(widthCell, heightCell).coerceAtLeast(36.dp)
             CalendarGrid(currentMonth = cal, events = events, cellSize = cellSize, horizontalPadding = horizontalPadding)
+        }
+    }
+}
+
+@Composable
+private fun CalendarBoardSummary(
+    totalCount: Int,
+    monthCount: Int,
+    todayCount: Int,
+    nearestEvent: Event?
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                CalendarBoardMetric("全部", totalCount.toString(), Modifier.weight(1f))
+                CalendarBoardMetric("本月", monthCount.toString(), Modifier.weight(1f))
+                CalendarBoardMetric("今天", todayCount.toString(), Modifier.weight(1f))
+            }
+            Text(
+                nearestEvent?.let { "最近日子：${it.name} · ${SimpleDateFormat("M月d日", Locale.getDefault()).format(Date(it.date))}" } ?: "最近日子：暂无",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+@Composable
+private fun CalendarBoardMetric(label: String, value: String, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.62f)
+    ) {
+        Column(modifier = Modifier.padding(vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(value, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
