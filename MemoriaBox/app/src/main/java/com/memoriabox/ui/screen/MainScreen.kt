@@ -553,8 +553,6 @@ fun HomeDashboard(
         selectedBoxId?.let { boxId -> sortedEvents.filter { it.boxId == boxId } } ?: sortedEvents
     }
     val selectedBoxName = selectedBoxId?.let { id -> boxes.firstOrNull { it.id == id }?.name } ?: "全部分组"
-    var showShortcuts by rememberSaveable { mutableStateOf(false) }
-
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -593,37 +591,6 @@ fun HomeDashboard(
         }
         Spacer(Modifier.height(8.dp))
         AllEventsTab(events = visibleEvents, onEventClick = onEventClick, onEventLongClick = onEventLongClick)
-        Spacer(Modifier.height(10.dp))
-        OutlinedCard(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { showShortcuts = !showShortcuts }
-                    .padding(14.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text("常用功能", style = MaterialTheme.typography.titleMedium)
-                    Text("日历、生日分组、照片墙等工具", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Icon(if (showShortcuts) Icons.Default.ExpandLess else Icons.Default.ExpandMore, contentDescription = null)
-            }
-            if (showShortcuts) {
-                Column(modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                        HomeShortcutCard(Icons.Default.CalendarToday, "日历", "按月查看所有提醒", onNavigateToCalendar, Modifier.weight(1f))
-                        HomeShortcutCard(Icons.Default.People, "生日分组", "生日和分组标签", onNavigateToFriends, Modifier.weight(1f))
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                        HomeShortcutCard(Icons.Default.PhotoLibrary, "照片墙", "查看照片回忆", onNavigateToPhotoWall, Modifier.weight(1f))
-                        HomeShortcutCard(Icons.Default.BarChart, "统计", "记录趋势总览", onNavigateToStatistics, Modifier.weight(1f))
-                    }
-                    HomeShortcutCard(Icons.Default.AutoAwesome, "智能建议", "提醒、生日、待办整理建议", onNavigateToAiSuggestions, Modifier.fillMaxWidth())
-                }
-            }
-        }
-
     }
 }
 
