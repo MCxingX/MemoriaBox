@@ -433,15 +433,18 @@ fun EventDialog(
                 ) {
                     listOf(
                         RepeatMode.NONE to "不重复",
-                        RepeatMode.YEARLY to "每年",
+                        RepeatMode.CUSTOM_DAYS to "每日/按天",
+                        RepeatMode.CUSTOM_WEEKS to "每周/按周",
                         RepeatMode.MONTHLY to "每月",
-                        RepeatMode.CUSTOM_DAYS to "按天",
-                        RepeatMode.CUSTOM_WEEKS to "按周",
+                        RepeatMode.YEARLY to "每年",
                         RepeatMode.CUSTOM_MONTHS to "按月数"
                     ).forEach { (mode, label) ->
                         FilterChip(
                             selected = repeatMode == mode,
-                            onClick = { repeatMode = mode },
+                            onClick = {
+                                repeatMode = mode
+                                if (mode == RepeatMode.CUSTOM_DAYS || mode == RepeatMode.CUSTOM_WEEKS) repeatInterval = 1
+                            },
                             label = { Text(label) }
                         )
                     }

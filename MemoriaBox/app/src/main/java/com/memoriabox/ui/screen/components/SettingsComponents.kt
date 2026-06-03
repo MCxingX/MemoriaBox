@@ -141,6 +141,7 @@ fun WebDavSettingsContent(
     var serverUrl by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var statusText by remember { mutableStateOf<String?>(null) }
     
     Column(
         modifier = modifier
@@ -171,8 +172,21 @@ fun WebDavSettingsContent(
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.height(16.dp))
-        Button(onClick = { /* TODO: Test connection */ }, modifier = Modifier.fillMaxWidth()) {
-            Text("保存并测试连接")
+        Button(
+            onClick = {
+                statusText = if (serverUrl.isBlank()) {
+                    "请先填写 WebDAV 服务器地址。"
+                } else {
+                    "配置已填写。请在同步页面执行同步检查。"
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("检查配置")
+        }
+        statusText?.let {
+            Spacer(Modifier.height(8.dp))
+            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

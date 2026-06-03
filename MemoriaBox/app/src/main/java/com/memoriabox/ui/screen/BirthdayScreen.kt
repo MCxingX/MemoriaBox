@@ -214,17 +214,24 @@ fun BirthdayCard(
                         )
                         if (isUrgent) {
                             Spacer(Modifier.width(8.dp))
-                            AssistChip(
-                                onClick = { },
-                                label = { Text("即将到期") },
-                                leadingIcon = {
+                            Surface(
+                                shape = MaterialTheme.shapes.small,
+                                color = MaterialTheme.colorScheme.errorContainer
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
                                     Icon(
                                         Icons.Default.Warning,
                                         null,
-                                        modifier = Modifier.size(16.dp)
+                                        modifier = Modifier.size(16.dp),
+                                        tint = MaterialTheme.colorScheme.onErrorContainer
                                     )
+                                    Text("即将到期", color = MaterialTheme.colorScheme.onErrorContainer, style = MaterialTheme.typography.labelSmall)
                                 }
-                            )
+                            }
                         }
                     }
                     Spacer(Modifier.height(4.dp))

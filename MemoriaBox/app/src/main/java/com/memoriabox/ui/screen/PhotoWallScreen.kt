@@ -140,7 +140,7 @@ fun PhotoWallScreen(application: Application) {
         ShareOptionsDialog(
             events = eventsWithImages,
             onDismiss = { showShareDialog = false },
-            onShare = { /* TODO: implement sharing */ }
+            onShare = { showShareDialog = false }
         )
     }
 }
@@ -153,6 +153,7 @@ fun ShareOptionsDialog(
 ) {
     val context = LocalContext.current
     var isGenerating by remember { mutableStateOf(false) }
+    var shareResult by remember { mutableStateOf<String?>(null) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -163,14 +164,23 @@ fun ShareOptionsDialog(
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
             ) {
-                Text("选择分享类型:", style = MaterialTheme.typography.titleMedium)
+                Text("请选择分享类型", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(16.dp))
 
                 // Share single event card
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { /* TODO */ }
+                        .clickable {
+                            val event = events.firstOrNull()
+                            if (event != null) {
+                                val daysLeft = ((event.date - System.currentTimeMillis()) / 86_400_000L).coerceAtLeast(0)
+                                shareBitmap(context, generateEventCardBitmap(context, event, daysLeft))
+                                shareResult = "已生成第一张事件卡片，请在系统分享面板中选择目标应用。"
+                            } else {
+                                shareResult = "当前没有可分享的带图事件。"
+                            }
+                        }
                 ) {
                     Row(
                         modifier = Modifier
@@ -200,7 +210,14 @@ fun ShareOptionsDialog(
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { /* TODO */ }
+                        .clickable {
+                            if (events.isNotEmpty()) {
+                                shareBitmap(context, generateStatisticsBitmap(events))
+                                shareResult = "已生成照片墙概览，请在系统分享面板中选择目标应用。"
+                            } else {
+                                shareResult = "当前没有可分享的照片墙内容。"
+                            }
+                        }
                 ) {
                     Row(
                         modifier = Modifier
@@ -230,7 +247,10 @@ fun ShareOptionsDialog(
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { /* TODO */ }
+                        .clickable {
+                            shareBitmap(context, generateStatisticsBitmap(events))
+                            shareResult = "已生成统计图片，请在系统分享面板中选择目标应用。"
+                        }
                 ) {
                     Row(
                         modifier = Modifier
@@ -262,6 +282,10 @@ fun ShareOptionsDialog(
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.align(Alignment.CenterHorizontally)
                     )
+                }
+                shareResult?.let { result ->
+                    Spacer(Modifier.height(12.dp))
+                    Text(result, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         },

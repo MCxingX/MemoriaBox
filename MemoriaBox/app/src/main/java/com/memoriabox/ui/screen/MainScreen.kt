@@ -40,6 +40,9 @@ import com.memoriabox.ui.screen.dialogs.MoveToBoxDialog
 import com.memoriabox.data.model.*
 import com.memoriabox.ui.theme.AppThemeMode
 import com.memoriabox.viewmodel.*
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 
 @Composable
 fun MainScreen(
@@ -468,7 +471,7 @@ fun BoxesScreen(
         AlertDialog(
             onDismissRequest = { eventForDelete = null },
             title = { Text("删除日子") },
-            text = { Text("确认删除“${event.name}”？") },
+            text = { Text("删除后无法在应用内恢复。确认删除“${event.name}”？") },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.deleteQuickEvent(event)
@@ -706,6 +709,13 @@ fun FriendGroupsTab(
     friends: List<com.memoriabox.data.model.Friend>,
     onNavigateToFriends: () -> Unit
 ) {
+    val sortedFriends = remember(friends) {
+        friends.sortedWith(
+            compareBy<com.memoriabox.data.model.Friend> { friend ->
+                friend.birthdayDate?.let { daysUntilNextBirthday(it) } ?: Int.MAX_VALUE
+            }.thenBy { it.name }
+        )
+    }
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -720,11 +730,12 @@ fun FriendGroupsTab(
             Column(modifier = Modifier.padding(16.dp)) {
                 Text("还没有好友组", style = MaterialTheme.typography.titleSmall)
                 Spacer(Modifier.height(4.dp))
-                Text("添加好友后，可以按 Bestie、Colleague 等标签整理生日和纪念日。", style = MaterialTheme.typography.bodyMedium)
+                Text("添加好友后，可以按标签管理生日、纪念日和重要联系人。", style = MaterialTheme.typography.bodyMedium)
             }
         }
     } else {
-        friends.take(8).forEach { friend ->
+        sortedFriends.take(8).forEach { friend ->
+            val birthdayDays = friend.birthdayDate?.let { daysUntilNextBirthday(it) }
             Card(modifier = Modifier.fillMaxWidth().clickable { onNavigateToFriends() }) {
                 Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                     Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(48.dp)) {
@@ -736,16 +747,55 @@ fun FriendGroupsTab(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(friend.name, style = MaterialTheme.typography.titleMedium)
                         Text(
-                            if (friend.birthdayDate == null) "未设置生日" else "生日已记录",
+                            friend.birthdayDate?.let { "生日 ${formatFriendBirthdayMonthDay(it)}" } ?: "未设置生日",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    }
+                    birthdayDays?.let { days ->
+                        Surface(
+                            shape = MaterialTheme.shapes.medium,
+                            color = MaterialTheme.colorScheme.primaryContainer
+                        ) {
+                            Text(
+                                text = if (days == 0) "今天生日" else "还有 ${days} 天",
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                maxLines = 1
+                            )
+                        }
                     }
                 }
             }
             Spacer(Modifier.height(8.dp))
         }
     }
+}
+
+private fun formatFriendBirthdayMonthDay(timestamp: Long): String {
+    return SimpleDateFormat("M月d日", Locale.getDefault()).format(timestamp)
+}
+
+private fun daysUntilNextBirthday(timestamp: Long): Int {
+    val today = Calendar.getInstance().apply {
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }
+    val birthday = Calendar.getInstance().apply { timeInMillis = timestamp }
+    val nextBirthday = Calendar.getInstance().apply {
+        set(Calendar.YEAR, today.get(Calendar.YEAR))
+        set(Calendar.MONTH, birthday.get(Calendar.MONTH))
+        set(Calendar.DAY_OF_MONTH, birthday.get(Calendar.DAY_OF_MONTH))
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+        if (before(today)) add(Calendar.YEAR, 1)
+    }
+    return ((nextBirthday.timeInMillis - today.timeInMillis) / (24L * 60L * 60L * 1000L)).toInt()
 }
 
 @Composable
@@ -957,7 +1007,7 @@ fun EventDetailDialog(
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 TextButton(onClick = {
                     shareBitmap(context, generateEventCardBitmap(context, event, days.coerceAtLeast(0)))
-                }) { Text("分享图") }
+                }) { Text("图片") }
                 TextButton(onClick = {
                     val shareText = "${event.name}\n${eventTypeLabel(event.type)}：${days} 天\n日期：${com.memoriabox.ui.screen.components.formatDate(event.date)}\n${event.note}"
                     context.startActivity(
@@ -969,7 +1019,7 @@ fun EventDetailDialog(
                             "分享日子"
                         )
                     )
-                }) { Text("分享") }
+                }) { Text("文本") }
                 TextButton(onClick = onEdit) { Text("编辑") }
             }
         },
@@ -986,8 +1036,8 @@ fun EventDetailDialog(
 fun repeatModeLabel(event: Event): String = when {
     event.repeatMode == RepeatMode.YEARLY || event.repeatYearly -> "每年重复"
     event.repeatMode == RepeatMode.MONTHLY -> "每月重复"
-    event.repeatMode == RepeatMode.CUSTOM_DAYS -> "每 ${event.repeatInterval} 天重复"
-    event.repeatMode == RepeatMode.CUSTOM_WEEKS -> "每 ${event.repeatInterval} 周重复"
+    event.repeatMode == RepeatMode.CUSTOM_DAYS -> if (event.repeatInterval <= 1) "每日重复" else "每 ${event.repeatInterval} 天重复"
+    event.repeatMode == RepeatMode.CUSTOM_WEEKS -> if (event.repeatInterval <= 1) "每周重复" else "每 ${event.repeatInterval} 周重复"
     event.repeatMode == RepeatMode.CUSTOM_MONTHS -> "每 ${event.repeatInterval} 个月重复"
     event.type == EventType.BIRTHDAY -> "每年重复"
     else -> "不重复"
@@ -1021,8 +1071,8 @@ fun EventActionDialog(
         title = { Text(event.name) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("选择要执行的操作", style = MaterialTheme.typography.bodyMedium)
-                Button(onClick = onEdit, modifier = Modifier.fillMaxWidth()) { Text("编辑") }
+                Text("请选择要执行的操作。", style = MaterialTheme.typography.bodyMedium)
+                Button(onClick = onEdit, modifier = Modifier.fillMaxWidth()) { Text("编辑资料") }
                 OutlinedButton(onClick = onTogglePin, modifier = Modifier.fillMaxWidth()) {
                     Text(if (event.isPinned) "取消置顶" else "置顶")
                 }
