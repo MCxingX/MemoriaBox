@@ -1,6 +1,7 @@
 package com.memoriabox.ui.screen.components
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -12,7 +13,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.memoriabox.data.model.Box
 import com.memoriabox.data.model.Event
 import com.memoriabox.data.model.CardLayoutMode
@@ -146,13 +150,26 @@ fun FriendListView(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(
-                        modifier = Modifier.size(48.dp),
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(MaterialTheme.shapes.large)
+                            .background(MaterialTheme.colorScheme.primaryContainer),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = friend.name.firstOrNull()?.toString() ?: "F",
-                            style = MaterialTheme.typography.headlineMedium
-                        )
+                        if (!friend.avatarUri.isNullOrBlank()) {
+                            AsyncImage(
+                                model = friend.avatarUri,
+                                contentDescription = friend.name,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Text(
+                                text = friend.name.firstOrNull()?.toString() ?: "F",
+                                style = MaterialTheme.typography.headlineMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
                     }
                     Spacer(Modifier.width(12.dp))
                     Column {

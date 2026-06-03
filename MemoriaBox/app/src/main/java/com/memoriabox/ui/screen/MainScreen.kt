@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -315,6 +316,8 @@ fun BoxesScreen(
     var eventForActions by remember { mutableStateOf<Event?>(null) }
     var eventForEdit by remember { mutableStateOf<Event?>(null) }
     var eventForDelete by remember { mutableStateOf<Event?>(null) }
+    var showQuickAdd by remember { mutableStateOf(false) }
+    var pendingQuickAddType by remember { mutableStateOf<EventType?>(null) }
 
     Scaffold(
         topBar = {
@@ -328,8 +331,11 @@ fun BoxesScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showCreateDialog = true }) {
-                Icon(Icons.Default.Add, contentDescription = "添加分类")
+            FloatingActionButton(onClick = {
+                showQuickAdd = true
+                pendingQuickAddType = null
+            }) {
+                Icon(Icons.Default.Add, contentDescription = "添加日子")
             }
         }
     ) { paddingValues ->
@@ -360,6 +366,31 @@ fun BoxesScreen(
                 showCreateDialog = false
             }
         )
+    }
+
+    if (showQuickAdd) {
+        val selectedType = pendingQuickAddType
+        if (selectedType == null) {
+            AddTypePickerDialog(
+                onDismiss = { showQuickAdd = false },
+                onTypeSelected = { type -> pendingQuickAddType = type }
+            )
+        } else {
+            QuickAddEventDialog(
+                boxes = boxes,
+                initialType = selectedType,
+                application = application,
+                onDismiss = {
+                    showQuickAdd = false
+                    pendingQuickAddType = null
+                },
+                onSave = { event ->
+                    viewModel.createQuickEvent(event)
+                    showQuickAdd = false
+                    pendingQuickAddType = null
+                }
+            )
+        }
     }
 
     selectedEvent?.let { event ->
@@ -458,25 +489,53 @@ fun HomeDashboard(
     val sortedEvents = remember(events) {
         events.sortedBy { kotlin.math.abs(it.date - System.currentTimeMillis()) }
     }
+    var showShortcuts by rememberSaveable { mutableStateOf(false) }
 
     Column(
         modifier = modifier
             .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.48f),
+                        MaterialTheme.colorScheme.background,
+                        MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.22f)
+                    )
+                )
+            )
             .verticalScroll(rememberScrollState())
             .padding(16.dp)
     ) {
-        Text("常用功能", style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(10.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                HomeShortcutCard(Icons.Default.CalendarToday, "日历", "按月查看所有提醒", onNavigateToCalendar, Modifier.weight(1f))
-                HomeShortcutCard(Icons.Default.People, "好友", "生日和好友标签", onNavigateToFriends, Modifier.weight(1f))
+        HomeHeroCard(events = events, friends = friends, boxes = boxes)
+        Spacer(Modifier.height(14.dp))
+        OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showShortcuts = !showShortcuts }
+                    .padding(14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text("常用功能", style = MaterialTheme.typography.titleMedium)
+                    Text("日历、好友、照片墙等工具", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Icon(if (showShortcuts) Icons.Default.ExpandLess else Icons.Default.ExpandMore, contentDescription = null)
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                HomeShortcutCard(Icons.Default.PhotoLibrary, "照片墙", "查看照片回忆", onNavigateToPhotoWall, Modifier.weight(1f))
-                HomeShortcutCard(Icons.Default.BarChart, "统计", "记录趋势总览", onNavigateToStatistics, Modifier.weight(1f))
+            if (showShortcuts) {
+                Column(modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                        HomeShortcutCard(Icons.Default.CalendarToday, "日历", "按月查看所有提醒", onNavigateToCalendar, Modifier.weight(1f))
+                        HomeShortcutCard(Icons.Default.People, "好友", "生日和好友标签", onNavigateToFriends, Modifier.weight(1f))
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                        HomeShortcutCard(Icons.Default.PhotoLibrary, "照片墙", "查看照片回忆", onNavigateToPhotoWall, Modifier.weight(1f))
+                        HomeShortcutCard(Icons.Default.BarChart, "统计", "记录趋势总览", onNavigateToStatistics, Modifier.weight(1f))
+                    }
+                    HomeShortcutCard(Icons.Default.AutoAwesome, "智能建议", "提醒、生日、待办整理建议", onNavigateToAiSuggestions, Modifier.fillMaxWidth())
+                }
             }
-            HomeShortcutCard(Icons.Default.AutoAwesome, "智能建议", "提醒、生日、待办整理建议", onNavigateToAiSuggestions, Modifier.fillMaxWidth())
         }
 
         Spacer(Modifier.height(20.dp))
@@ -495,6 +554,58 @@ fun HomeDashboard(
             0 -> AllEventsTab(events = sortedEvents, onEventClick = onEventClick, onEventLongClick = onEventLongClick)
             1 -> CategoryFoldersTab(boxes = boxes, onBoxClick = onBoxClick, onCreateBox = onCreateBox)
             2 -> FriendGroupsTab(friends = friends, onNavigateToFriends = onNavigateToFriends)
+        }
+    }
+}
+
+@Composable
+fun HomeHeroCard(
+    events: List<Event>,
+    friends: List<com.memoriabox.data.model.Friend>,
+    boxes: List<com.memoriabox.data.model.Box>
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            Color(0xFFFF6B6B),
+                            Color(0xFFFFB86C),
+                            Color(0xFF7C5CFF),
+                            Color(0xFF00B8D9)
+                        )
+                    )
+                )
+                .padding(20.dp)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Surface(color = Color.White.copy(alpha = 0.22f), shape = MaterialTheme.shapes.large) {
+                    Text("今天也要把小日子过漂亮", modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp), color = Color.White, style = MaterialTheme.typography.labelLarge)
+                }
+                Text("MemoriaBox", color = Color.White, style = MaterialTheme.typography.headlineMedium)
+                Text("倒数日、生日、待办和回忆都在这里，轻快一点，也认真一点。", color = Color.White.copy(alpha = 0.88f), style = MaterialTheme.typography.bodyMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    HeroStatPill("日子", events.size.toString(), Modifier.weight(1f))
+                    HeroStatPill("好友", friends.size.toString(), Modifier.weight(1f))
+                    HeroStatPill("分类", boxes.size.toString(), Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun HeroStatPill(label: String, value: String, modifier: Modifier = Modifier) {
+    Surface(color = Color.White.copy(alpha = 0.2f), shape = MaterialTheme.shapes.large, modifier = modifier) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(value, color = Color.White, style = MaterialTheme.typography.titleLarge)
+            Text(label, color = Color.White.copy(alpha = 0.82f), style = MaterialTheme.typography.labelSmall)
         }
     }
 }
@@ -605,15 +716,24 @@ fun HomeShortcutCard(
 ) {
     Card(
         modifier = modifier.clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
             modifier = Modifier.padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.primaryContainer) {
-                Icon(icon, contentDescription = null, modifier = Modifier.padding(8.dp).size(20.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
+            Surface(
+                shape = MaterialTheme.shapes.medium,
+                color = Color.Transparent,
+                modifier = Modifier.background(
+                    Brush.linearGradient(listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary)),
+                    shape = MaterialTheme.shapes.medium
+                )
+            ) {
+                Icon(icon, contentDescription = null, modifier = Modifier.padding(8.dp).size(20.dp), tint = Color.White)
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.titleSmall, maxLines = 1)
@@ -653,12 +773,22 @@ fun HomeEventRow(event: Event, onClick: () -> Unit, onLongClick: () -> Unit) {
                 .background(
                     Brush.linearGradient(
                         listOf(
-                            MaterialTheme.colorScheme.primaryContainer,
-                            MaterialTheme.colorScheme.secondaryContainer
+                            Color(0xFFFFE1E4),
+                            Color(0xFFE7E0FF),
+                            Color(0xFFC6F6FF)
                         )
                     )
                 )
         ) {
+            if (!event.avatarUri.isNullOrBlank()) {
+                AsyncImage(
+                    model = event.avatarUri,
+                    contentDescription = event.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.matchParentSize()
+                )
+                Box(modifier = Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.38f)))
+            }
             Row(
                 modifier = Modifier
                     .fillMaxSize()
@@ -668,16 +798,17 @@ fun HomeEventRow(event: Event, onClick: () -> Unit, onLongClick: () -> Unit) {
             ) {
                 Surface(
                     shape = MaterialTheme.shapes.large,
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f),
+                    color = if (event.avatarUri.isNullOrBlank()) Color.White.copy(alpha = 0.72f) else Color.White.copy(alpha = 0.18f),
                     modifier = Modifier.size(64.dp)
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                        Text(days.toString(), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
-                        Text("天", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                        Text(days.toString(), style = MaterialTheme.typography.titleLarge, color = if (event.avatarUri.isNullOrBlank()) MaterialTheme.colorScheme.primary else Color.White)
+                        Text("天", style = MaterialTheme.typography.labelSmall, color = if (event.avatarUri.isNullOrBlank()) MaterialTheme.colorScheme.primary else Color.White)
                     }
                 }
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(event.name, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                    val foreground = if (event.avatarUri.isNullOrBlank()) MaterialTheme.colorScheme.onSurface else Color.White
+                    Text(event.name, style = MaterialTheme.typography.titleMedium, color = foreground, maxLines = 1)
                     Text(
                         text = listOfNotNull(
                             if (event.isPinned) "置顶" else null,
@@ -685,7 +816,7 @@ fun HomeEventRow(event: Event, onClick: () -> Unit, onLongClick: () -> Unit) {
                             com.memoriabox.ui.screen.components.formatDate(event.date)
                         ).joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = foreground.copy(alpha = 0.82f)
                     )
                     if (event.reminderEnabled) {
                         Text(
@@ -1068,9 +1199,20 @@ fun SettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f),
+                        MaterialTheme.colorScheme.background,
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.24f)
+                    )
+                )
+            )
             .verticalScroll(rememberScrollState())
+            .padding(top = 12.dp, bottom = 20.dp)
     ) {
-        // Data section
+        SettingsHeroCard()
+        SettingsSectionTitle("常用工具", "高频功能放前面，少找一步")
         SettingsItem(
             icon = Icons.Default.BarChart,
             title = "数据统计",
@@ -1114,7 +1256,7 @@ fun SettingsScreen(
             onClick = onNavigateToSyncStatus
         )
         
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        SettingsSectionTitle("数据和同步", "备份、WebDAV 和跨设备管理")
         
         SettingsItem(
             icon = Icons.Default.Backup,
@@ -1129,13 +1271,17 @@ fun SettingsScreen(
             onClick = onWebDavSettingsClick
         )
         
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        SettingsSectionTitle("推送提醒", "生日、纪念日和待办都能乖乖提醒")
         
         // PushPlus settings inline
         Card(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp)
+                .background(Color.Transparent),
+            shape = MaterialTheme.shapes.extraLarge,
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text("PushPlus 推送", style = MaterialTheme.typography.titleMedium)
@@ -1182,13 +1328,42 @@ fun SettingsScreen(
             }
         }
         
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        SettingsSectionTitle("关于", "版本和应用信息")
         
         SettingsItem(
             icon = Icons.Default.Info,
             title = "关于",
             description = "版本 1.0.0"
         )
+    }
+}
+
+@Composable
+fun SettingsHeroCard() {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Brush.linearGradient(listOf(Color(0xFF7C5CFF), Color(0xFFFF6B6B), Color(0xFFFFB86C))))
+                .padding(20.dp)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("我的设置", color = Color.White, style = MaterialTheme.typography.headlineSmall)
+                Text("功能收纳清楚，颜色轻快一点，操作更顺手。", color = Color.White.copy(alpha = 0.88f), style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+    }
+}
+
+@Composable
+fun SettingsSectionTitle(title: String, description: String) {
+    Column(modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 6.dp)) {
+        Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+        Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

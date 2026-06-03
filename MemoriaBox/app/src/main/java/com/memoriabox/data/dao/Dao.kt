@@ -123,6 +123,9 @@ interface LabelDao {
     @Query("SELECT friend_id FROM friend_relations WHERE label = :label")
     fun getFriendsByLabel(label: String): Flow<List<String>>
 
+    @Query("SELECT * FROM friend_relations")
+    fun getAllFriendRelations(): Flow<List<FriendRelation>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun addEventLabel(eventLabel: EventLabel)
 

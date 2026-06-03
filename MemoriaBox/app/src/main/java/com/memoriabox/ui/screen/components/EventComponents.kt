@@ -282,24 +282,36 @@ fun CalendarViewScreen(
 
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(title = { Text("日历视图") })
-        Row(
+        Card(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            shape = MaterialTheme.shapes.extraLarge,
+            colors = CardDefaults.cardColors(containerColor = Color.Transparent)
         ) {
-            IconButton(onClick = {
-                val updated = cal.clone() as Calendar
-                updated.add(Calendar.MONTH, -1)
-                currentMonthYear = "${updated.get(Calendar.YEAR)}-${updated.get(Calendar.MONTH) + 1}"
-            }) { Icon(Icons.Default.ChevronLeft, contentDescription = "上月") }
-            Text(text = monthFormat.format(cal.time), style = MaterialTheme.typography.titleLarge, maxLines = 1)
-            IconButton(onClick = {
-                val updated = cal.clone() as Calendar
-                updated.add(Calendar.MONTH, 1)
-                currentMonthYear = "${updated.get(Calendar.YEAR)}-${updated.get(Calendar.MONTH) + 1}"
-            }) { Icon(Icons.Default.ChevronRight, contentDescription = "下月") }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Brush.linearGradient(listOf(Color(0xFFFF6B6B), Color(0xFF7C5CFF), Color(0xFF00B8D9))))
+                    .padding(horizontal = 10.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = {
+                    val updated = cal.clone() as Calendar
+                    updated.add(Calendar.MONTH, -1)
+                    currentMonthYear = "${updated.get(Calendar.YEAR)}-${updated.get(Calendar.MONTH) + 1}"
+                }) { Icon(Icons.Default.ChevronLeft, contentDescription = "上月", tint = Color.White) }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(text = monthFormat.format(cal.time), style = MaterialTheme.typography.titleLarge, color = Color.White, maxLines = 1)
+                    Text("把重要的小日子圈起来", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.82f))
+                }
+                IconButton(onClick = {
+                    val updated = cal.clone() as Calendar
+                    updated.add(Calendar.MONTH, 1)
+                    currentMonthYear = "${updated.get(Calendar.YEAR)}-${updated.get(Calendar.MONTH) + 1}"
+                }) { Icon(Icons.Default.ChevronRight, contentDescription = "下月", tint = Color.White) }
+            }
         }
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val horizontalPadding = 12.dp
@@ -326,7 +338,9 @@ fun CalendarGrid(currentMonth: Calendar, events: List<Event>, cellSize: androidx
     Column(modifier = Modifier.padding(horizontal = horizontalPadding)) {
         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
             daysOfWeek.forEach { day ->
-                Text(text = day, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
+                Surface(color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.56f), shape = MaterialTheme.shapes.large, modifier = Modifier.weight(1f).padding(horizontal = 2.dp)) {
+                    Text(text = day, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(vertical = 5.dp), textAlign = TextAlign.Center)
+                }
             }
         }
 
@@ -363,8 +377,13 @@ fun CalendarDayCell(
     modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = modifier.clip(RoundedCornerShape(8.dp))
-            .then(if (isToday) Modifier.background(Color(0xFF7C4DFF).copy(0.2f)) else Modifier)
+        modifier = modifier
+            .padding(2.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(
+                if (isToday) Brush.linearGradient(listOf(Color(0xFFFF6B6B).copy(alpha = 0.22f), Color(0xFF7C5CFF).copy(alpha = 0.18f)))
+                else Brush.linearGradient(listOf(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.52f)))
+            )
             .padding(horizontal = 2.dp, vertical = 3.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
@@ -372,13 +391,14 @@ fun CalendarDayCell(
         Text(
             text = day.toString(),
             style = MaterialTheme.typography.bodyMedium,
-            color = if (isToday) Color(0xFF7C4DFF) else Color.Black
+            color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
         )
         if (events.isNotEmpty()) {
             Spacer(modifier = Modifier.height(2.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                 repeat(minOf(events.size, 3)) {
-                    Box(modifier = Modifier.size(4.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFF7C4DFF)))
+                    val dotColor = listOf(Color(0xFFFF6B6B), Color(0xFF7C5CFF), Color(0xFF00B8D9))[it]
+                    Box(modifier = Modifier.size(5.dp).clip(RoundedCornerShape(3.dp)).background(dotColor))
                 }
             }
         }

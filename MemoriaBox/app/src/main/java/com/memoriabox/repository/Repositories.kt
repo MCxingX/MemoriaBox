@@ -86,6 +86,7 @@ class FriendRepository(private val friendDao: FriendDao, private val labelDao: L
     suspend fun addRelation(relation: FriendRelation) = labelDao.addFriendRelation(relation)
     suspend fun removeRelation(relation: FriendRelation) = labelDao.removeFriendRelation(relation)
     fun getFriendsByLabel(label: String): Flow<List<String>> = labelDao.getFriendsByLabel(label)
+    fun getAllFriendRelations(): Flow<List<FriendRelation>> = labelDao.getAllFriendRelations()
 }
 
 class LabelRepository(private val labelDao: LabelDao) {

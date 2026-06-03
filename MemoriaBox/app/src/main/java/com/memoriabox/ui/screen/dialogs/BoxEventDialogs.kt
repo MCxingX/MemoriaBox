@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
@@ -328,7 +329,12 @@ fun EventDialog(
                         onClick = { showLunarCalendar = true },
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text(selectedLunar ?: "选择农历")
+                        Text(
+                            selectedLunar ?: "选择农历",
+                            maxLines = 1,
+                            softWrap = false,
+                            style = MaterialTheme.typography.bodySmall
+                        )
                     }
                 }
 
@@ -344,7 +350,10 @@ fun EventDialog(
                         EventType.entries.forEach { type ->
                             FilterChip(
                                 selected = selectedType == type,
-                                onClick = { selectedType = type },
+                                onClick = {
+                                    selectedType = type
+                                    if (type == EventType.BIRTHDAY) repeatMode = RepeatMode.YEARLY
+                                },
                                 label = {
                                     Text(
                                         when (type) {
@@ -401,6 +410,7 @@ fun EventDialog(
                             AsyncImage(
                                 model = backgroundUri,
                                 contentDescription = "卡片背景",
+                                contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize()
                             )
                         } else {
@@ -480,6 +490,16 @@ fun EventDialog(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text("卡片样式", style = MaterialTheme.typography.labelLarge)
+                CardTemplatePreview(
+                    template = cardTemplate,
+                    name = name.ifBlank { "纪念日预览" },
+                    dateText = selectedDate?.let { formatDate(it) } ?: "选择日期",
+                    backgroundUri = backgroundUri,
+                    gradientStart = gradientStart,
+                    gradientEnd = gradientEnd,
+                    textColor = textColor
+                )
+                Spacer(modifier = Modifier.height(8.dp))
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -497,7 +517,7 @@ fun EventDialog(
                                         .clip(RoundedCornerShape(4.dp))
                                         .background(
                                             Brush.linearGradient(
-                                                listOf(ColorUtils.hexToColor(gradientStart), ColorUtils.hexToColor(gradientEnd))
+                                                listOf(safeDialogColor(gradientStart), safeDialogColor(gradientEnd))
                                             )
                                         )
                                 )
@@ -656,8 +676,10 @@ fun EventDialog(
     if (showLunarCalendar) {
         LunarCalendarDialog(
             onDismiss = { showLunarCalendar = false },
-            onSelected = { lunar ->
+            onSelected = { lunar, gregorianDate ->
                 selectedLunar = lunar
+                selectedDate = gregorianDate
+                if (selectedType == EventType.BIRTHDAY) repeatMode = RepeatMode.YEARLY
                 showLunarCalendar = false
             }
         )
@@ -690,12 +712,69 @@ fun ColorSelectButton(label: String, color: String, onClick: () -> Unit, modifie
             modifier = Modifier
                 .size(22.dp)
                 .clip(CircleShape)
-                .background(ColorUtils.hexToColor(color))
+                .background(safeDialogColor(color))
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text("$label $color", maxLines = 1)
     }
 }
+
+@Composable
+private fun CardTemplatePreview(
+    template: String,
+    name: String,
+    dateText: String,
+    backgroundUri: String?,
+    gradientStart: String,
+    gradientEnd: String,
+    textColor: String
+) {
+    val shape = RoundedCornerShape(if (template == "POSTER") 22.dp else 18.dp)
+    val foreground = safeDialogColor(textColor)
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(if (template == "POSTER") 156.dp else 112.dp),
+        shape = shape
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Brush.linearGradient(listOf(safeDialogColor(gradientStart), safeDialogColor(gradientEnd))))
+        ) {
+            if (!backgroundUri.isNullOrBlank()) {
+                AsyncImage(
+                    model = backgroundUri,
+                    contentDescription = "样式预览",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.matchParentSize()
+                )
+                Box(modifier = Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.32f)))
+            }
+            when (template) {
+                "SPLIT" -> Row(modifier = Modifier.fillMaxSize().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Surface(shape = RoundedCornerShape(16.dp), color = Color.White.copy(alpha = 0.24f), modifier = Modifier.size(58.dp)) {
+                        Box(contentAlignment = Alignment.Center) { Text("99", color = foreground, style = MaterialTheme.typography.titleLarge) }
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column { Text(name, color = foreground, style = MaterialTheme.typography.titleMedium, maxLines = 1); Text(dateText, color = foreground.copy(alpha = 0.82f), style = MaterialTheme.typography.bodySmall) }
+                }
+                "GLASS" -> Surface(color = Color.White.copy(alpha = 0.18f), shape = RoundedCornerShape(18.dp), modifier = Modifier.align(Alignment.BottomStart).padding(14.dp)) {
+                    Column(modifier = Modifier.padding(12.dp)) { Text(name, color = foreground, style = MaterialTheme.typography.titleMedium, maxLines = 1); Text("99 天 · $dateText", color = foreground.copy(alpha = 0.82f), style = MaterialTheme.typography.bodySmall) }
+                }
+                else -> Column(modifier = Modifier.align(Alignment.BottomStart).padding(16.dp)) {
+                    Text("99", color = foreground, style = if (template == "POSTER") MaterialTheme.typography.displayMedium else MaterialTheme.typography.headlineMedium)
+                    Text(name, color = foreground, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                    Text(dateText, color = foreground.copy(alpha = 0.82f), style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+    }
+}
+
+private fun safeDialogColor(value: String): Color = runCatching {
+    ColorUtils.hexToColor(value)
+}.getOrElse { Color(0xFF7C4DFF) }
 
 private fun copyImageToPrivateStorage(context: Context, uri: Uri): String? {
     return runCatching {
@@ -747,7 +826,7 @@ fun DatePickerDialog(
 @Composable
 fun LunarCalendarDialog(
     onDismiss: () -> Unit,
-    onSelected: (String) -> Unit
+    onSelected: (String, Long) -> Unit
 ) {
     val currentYear = Calendar.getInstance().get(Calendar.YEAR)
     var selectedYear by remember { mutableIntStateOf(currentYear) }
@@ -811,7 +890,7 @@ fun LunarCalendarDialog(
             Button(
                 onClick = {
                     val lunar = "${selectedYear}年农历${lunarMonths[selectedMonth - 1]}${selectedDay}日"
-                    onSelected(lunar)
+                    onSelected(lunar, approximateLunarSelectionDate(selectedYear, selectedMonth, selectedDay))
                 }
             ) {
                 Text("确定")
@@ -823,6 +902,18 @@ fun LunarCalendarDialog(
             }
         }
     )
+}
+
+private fun approximateLunarSelectionDate(year: Int, month: Int, day: Int): Long {
+    return Calendar.getInstance().apply {
+        set(Calendar.YEAR, year)
+        set(Calendar.MONTH, (month - 1).coerceIn(0, 11))
+        set(Calendar.DAY_OF_MONTH, day.coerceIn(1, 28))
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
 }
 
 private fun formatDate(timestamp: Long): String {

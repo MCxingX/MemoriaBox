@@ -2,6 +2,7 @@ package com.memoriabox.ui.screen
 
 import android.app.DatePickerDialog
 import android.app.Application
+import android.content.Context
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -21,6 +22,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
@@ -28,6 +30,9 @@ import com.memoriabox.data.model.*
 import com.memoriabox.ui.screen.components.FriendListView
 import com.memoriabox.ui.screen.dialogs.ColorPickerDialog
 import com.memoriabox.viewmodel.*
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,10 +40,12 @@ fun FriendsScreen(application: Application) {
     val friendVM = remember { createFriendViewModel(application) }
     val labelVM = remember { createLabelViewModel(application) }
     val friends by friendVM.friends.collectAsState(initial = emptyList())
+    val friendRelations by friendVM.friendRelations.collectAsState(initial = emptyList())
     val labels by labelVM.labels.collectAsState(initial = emptyList())
     
     var showAddFriend by remember { mutableStateOf(false) }
     var showManageLabels by remember { mutableStateOf(false) }
+    var friendForEdit by remember { mutableStateOf<Friend?>(null) }
     var selectedFilterLabel by remember { mutableStateOf<String?>(null) }
 
     // Load friends with labels from database
@@ -103,11 +110,14 @@ fun FriendsScreen(application: Application) {
                     }
                 }
             } else {
+                val friendsWithLabels = friends.map { friend ->
+                    friend to friendRelations.filter { it.friendId == friend.id }.map { it.label }
+                }.filter { (_, friendLabels) ->
+                    selectedFilterLabel == null || friendLabels.contains(selectedFilterLabel)
+                }
                 FriendListView(
-                    friends = friends.map { friend -> 
-                        friend to labels.map { it.name }
-                    },
-                    onFriendClick = { /* TODO: show friend detail */ },
+                    friends = friendsWithLabels,
+                    onFriendClick = { friendForEdit = it },
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -116,15 +126,36 @@ fun FriendsScreen(application: Application) {
 
     if (showAddFriend) {
         AddFriendDialog(
+            title = "添加好友",
             onDismiss = { showAddFriend = false },
-            onSave = { name, birthdayDate, avatarUri ->
-                friendVM.createFriend(name, avatarUri, birthdayDate)
+            onSave = { name, birthdayDate, avatarUri, selectedLabels ->
+                friendVM.createFriend(name, avatarUri, birthdayDate, selectedLabels)
                 showAddFriend = false
             },
             availableLabels = labels,
             onAddLabel = { name, color ->
                 labelVM.createLabel(name, color)
             }
+        )
+    }
+
+    friendForEdit?.let { friend ->
+        val existingLabels = friendRelations.filter { it.friendId == friend.id }.map { it.label }
+        AddFriendDialog(
+            title = "编辑好友",
+            existingFriend = friend,
+            existingLabels = existingLabels,
+            onDismiss = { friendForEdit = null },
+            onSave = { name, birthdayDate, avatarUri, selectedLabels ->
+                friendVM.updateFriend(
+                    friend.copy(name = name, birthdayDate = birthdayDate, avatarUri = avatarUri),
+                    selectedLabels,
+                    existingLabels
+                )
+                friendForEdit = null
+            },
+            availableLabels = labels,
+            onAddLabel = { name, color -> labelVM.createLabel(name, color) }
         )
     }
 
@@ -140,15 +171,19 @@ fun FriendsScreen(application: Application) {
 
 @Composable
 fun AddFriendDialog(
+    title: String = "添加好友",
+    existingFriend: Friend? = null,
+    existingLabels: List<String> = emptyList(),
     onDismiss: () -> Unit,
-    onSave: (String, Long?, String?) -> Unit,
+    onSave: (String, Long?, String?, List<String>) -> Unit,
     availableLabels: List<Label>,
     onAddLabel: (String, String) -> Unit
 ) {
-    var name by remember { mutableStateOf("") }
-    var birthdayDate by remember { mutableStateOf<Long?>(null) }
-    var avatarUri by remember { mutableStateOf<String?>(null) }
-    var selectedLabels by remember { mutableStateOf<List<String>>(emptyList()) }
+    var name by remember(existingFriend?.id) { mutableStateOf(existingFriend?.name.orEmpty()) }
+    var birthdayDate by remember(existingFriend?.id) { mutableStateOf(existingFriend?.birthdayDate) }
+    var birthdayInput by remember(existingFriend?.id) { mutableStateOf(existingFriend?.birthdayDate?.let { formatFriendDate(it) }.orEmpty()) }
+    var avatarUri by remember(existingFriend?.id) { mutableStateOf<String?>(existingFriend?.avatarUri) }
+    var selectedLabels by remember(existingFriend?.id, existingLabels) { mutableStateOf(existingLabels) }
     var showDatePicker by remember { mutableStateOf(false) }
     var showColorPicker by remember { mutableStateOf(false) }
     var newLabelName by remember { mutableStateOf("") }
@@ -164,7 +199,7 @@ fun AddFriendDialog(
                     it,
                     android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
                 )
-                avatarUri = it.toString()
+                avatarUri = copyFriendImageToPrivateStorage(context, it) ?: it.toString()
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -173,7 +208,7 @@ fun AddFriendDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("添加好友") },
+        title = { Text(title) },
         text = {
             Column(
                 modifier = Modifier
@@ -193,6 +228,7 @@ fun AddFriendDialog(
                         AsyncImage(
                             model = avatarUri,
                             contentDescription = "头像",
+                            contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()
                         )
                     } else {
@@ -218,10 +254,14 @@ fun AddFriendDialog(
                 
                 // Birthday picker
                 OutlinedTextField(
-                    value = birthdayDate?.let { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date(it)) } ?: "",
-                    onValueChange = {},
-                    readOnly = true,
+                    value = birthdayInput,
+                    onValueChange = {
+                        birthdayInput = it
+                        parseFriendDate(it)?.let { parsed -> birthdayDate = parsed }
+                    },
                     label = { Text("生日 (可选)") },
+                    placeholder = { Text("例如 1998-05-20 或 5/20") },
+                    singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     trailingIcon = {
                         IconButton(onClick = { showDatePicker = true }) {
@@ -235,10 +275,7 @@ fun AddFriendDialog(
                 // Label selection
                 Text("标签", style = MaterialTheme.typography.labelLarge)
                 Spacer(Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     availableLabels.forEach { label ->
                         val isSelected = selectedLabels.contains(label.name)
                         FilterChip(
@@ -251,6 +288,7 @@ fun AddFriendDialog(
                                 }
                             },
                             label = { Text(label.name) },
+                            modifier = Modifier.fillMaxWidth(),
                             border = if (isSelected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null
                         )
                     }
@@ -279,7 +317,7 @@ fun AddFriendDialog(
         },
         confirmButton = {
             Button(
-                onClick = { onSave(name, birthdayDate, avatarUri) },
+                onClick = { onSave(name, birthdayDate, avatarUri, selectedLabels) },
                 enabled = name.isNotBlank()
             ) {
                 Text("保存")
@@ -297,6 +335,7 @@ fun AddFriendDialog(
                 val cal = java.util.Calendar.getInstance()
                 cal.set(year, month, dayOfMonth)
                 birthdayDate = cal.timeInMillis
+                birthdayInput = formatFriendDate(cal.timeInMillis)
                 showDatePicker = false
             },
             java.util.Calendar.getInstance().get(java.util.Calendar.YEAR),
@@ -315,6 +354,37 @@ fun AddFriendDialog(
             }
         )
     }
+}
+
+private fun formatFriendDate(timeMillis: Long): String =
+    SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(java.util.Date(timeMillis))
+
+private fun parseFriendDate(input: String): Long? {
+    val trimmed = input.trim()
+    if (trimmed.isBlank()) return null
+    val patterns = listOf("yyyy-MM-dd", "yyyy/M/d", "yyyy.M.d", "M-d", "M/d", "M.d")
+    return patterns.firstNotNullOfOrNull { pattern ->
+        runCatching {
+            val normalizedInput = if (pattern.startsWith("M")) "2000-$trimmed" else trimmed
+            val normalizedPattern = if (pattern.startsWith("M")) "yyyy-$pattern" else pattern
+            SimpleDateFormat(normalizedPattern, Locale.getDefault()).apply { isLenient = false }.parse(normalizedInput)?.time
+        }.getOrNull()
+    }
+}
+
+private fun safeComposeColor(value: String) = runCatching {
+    com.memoriabox.utils.ColorUtils.hexToColor(value)
+}.getOrElse { androidx.compose.ui.graphics.Color(0xFF7C4DFF) }
+
+private fun copyFriendImageToPrivateStorage(context: Context, uri: Uri): String? {
+    return runCatching {
+        val dir = File(context.filesDir, "friend_images").apply { mkdirs() }
+        val target = File(dir, "friend_${System.currentTimeMillis()}.jpg")
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            target.outputStream().use { output -> input.copyTo(output) }
+        }
+        Uri.fromFile(target).toString()
+    }.getOrNull()
 }
 
 @Composable
@@ -338,14 +408,14 @@ fun ManageLabelsDialog(
                     .verticalScroll(rememberScrollState())
             ) {
                 // Existing labels
-                LazyColumn {
-                    items(labels) { label ->
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    labels.forEach { label ->
+                        val labelColor = safeComposeColor(label.color)
                         Card(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
+                                .fillMaxWidth(),
                             colors = CardDefaults.cardColors(
-                                containerColor = com.memoriabox.utils.ColorUtils.hexToColor(label.color).copy(alpha = 0.15f)
+                                containerColor = labelColor.copy(alpha = 0.15f)
                             )
                         ) {
                             Row(
@@ -360,7 +430,7 @@ fun ManageLabelsDialog(
                                         modifier = Modifier
                                             .size(24.dp)
                                             .clip(CircleShape)
-                                            .background(com.memoriabox.utils.ColorUtils.hexToColor(label.color))
+                                            .background(labelColor)
                                     )
                                     Spacer(Modifier.width(12.dp))
                                     Text(label.name, style = MaterialTheme.typography.bodyLarge)
@@ -388,7 +458,7 @@ fun ManageLabelsDialog(
                             .size(48.dp)
                             .clip(CircleShape)
                             .clickable { showColorPicker = true }
-                            .background(com.memoriabox.utils.ColorUtils.hexToColor(newLabelColor))
+                            .background(safeComposeColor(newLabelColor))
                     )
                     OutlinedTextField(
                         value = newLabelName,

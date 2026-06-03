@@ -336,13 +336,29 @@ class FriendViewModel(
     val friends = friendRepository.getAllFriends()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    fun createFriend(name: String, avatarUri: String? = null, birthdayDate: Long? = null) = viewModelScope.launch {
+    val friendRelations = friendRepository.getAllFriendRelations()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun createFriend(name: String, avatarUri: String? = null, birthdayDate: Long? = null, labels: List<String> = emptyList()) = viewModelScope.launch {
         val friend = Friend(name = name, avatarUri = avatarUri, birthdayDate = birthdayDate)
         friendRepository.insertFriend(friend)
+        labels.distinct().forEach { label ->
+            friendRepository.addRelation(FriendRelation(friend.id, label))
+        }
     }
 
     fun updateFriend(friend: Friend) = viewModelScope.launch {
         friendRepository.updateFriend(friend)
+    }
+
+    fun updateFriend(friend: Friend, labels: List<String>, previousLabels: List<String>) = viewModelScope.launch {
+        friendRepository.updateFriend(friend)
+        previousLabels.distinct().forEach { label ->
+            friendRepository.removeRelation(FriendRelation(friend.id, label))
+        }
+        labels.distinct().forEach { label ->
+            friendRepository.addRelation(FriendRelation(friend.id, label))
+        }
     }
 
     fun deleteFriend(friend: Friend) = viewModelScope.launch {

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CloudSync
@@ -21,6 +22,8 @@ import androidx.compose.material.icons.filled.LocalOffer
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.TaskAlt
 import androidx.compose.material3.Card
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -30,7 +33,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -70,6 +75,7 @@ fun AchievementsScreen(application: Application) {
     val vm = remember { createCalendarViewModel(application) }
     val events by vm.allEvents.collectAsState(initial = emptyList())
     val achievements = remember(events) { buildAchievements(events) }
+    var selectedAchievement by remember { mutableStateOf<AchievementItem?>(null) }
 
     Scaffold(topBar = { TopAppBar(title = { Text("成就系统") }) }) { paddingValues ->
         LazyColumn(
@@ -81,7 +87,7 @@ fun AchievementsScreen(application: Application) {
         ) {
             items(achievements.size) { index ->
                 val item = achievements[index]
-                Card(modifier = Modifier.fillMaxWidth()) {
+                Card(modifier = Modifier.fillMaxWidth().clickable { selectedAchievement = item }) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(item.icon, null, tint = MaterialTheme.colorScheme.primary)
@@ -99,6 +105,27 @@ fun AchievementsScreen(application: Application) {
                 }
             }
         }
+    }
+
+    selectedAchievement?.let { item ->
+        AlertDialog(
+            onDismissRequest = { selectedAchievement = null },
+            title = { Text(item.title) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(item.icon, null, tint = MaterialTheme.colorScheme.primary)
+                        Text("进度 ${(item.progress.coerceIn(0f, 1f) * 100).toInt()}%", modifier = Modifier.padding(start = 12.dp), fontWeight = FontWeight.Bold)
+                    }
+                    LinearProgressIndicator(progress = { item.progress.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
+                    Text(item.description, style = MaterialTheme.typography.bodyMedium)
+                    Text("继续记录日子、生日、照片和待办，可以解锁更多成就展示。", style = MaterialTheme.typography.bodySmall)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { selectedAchievement = null }) { Text("知道了") }
+            }
+        )
     }
 }
 
