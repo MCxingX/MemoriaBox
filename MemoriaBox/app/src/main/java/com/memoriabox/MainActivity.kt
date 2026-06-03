@@ -11,8 +11,13 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
+import com.memoriabox.ui.theme.AppThemeMode
 import com.memoriabox.ui.theme.MemoriaBoxTheme
 import com.memoriabox.ui.screen.MainScreen
 
@@ -33,12 +38,25 @@ class MainActivity : ComponentActivity() {
         
         try {
             setContent {
-                MemoriaBoxTheme {
+                val prefs = remember { getSharedPreferences("ui_settings", MODE_PRIVATE) }
+                var themeMode by remember {
+                    mutableStateOf(
+                        AppThemeMode.entries.firstOrNull { it.id == prefs.getString("theme_mode", AppThemeMode.BLUE_WHITE.id) } ?: AppThemeMode.BLUE_WHITE
+                    )
+                }
+                MemoriaBoxTheme(themeMode = themeMode) {
                     Surface(
                         modifier = Modifier.fillMaxSize(),
                         color = MaterialTheme.colorScheme.background
                     ) {
-                        MainScreen(application)
+                        MainScreen(
+                            application = application,
+                            currentThemeMode = themeMode,
+                            onThemeModeChange = { mode ->
+                                themeMode = mode
+                                prefs.edit().putString("theme_mode", mode.id).apply()
+                            }
+                        )
                     }
                 }
             }

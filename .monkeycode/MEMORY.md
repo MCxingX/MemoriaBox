@@ -38,3 +38,5 @@ MemoriaBox Android Debug 构建环境
 - Instructions:
   - 构建 MemoriaBox Debug APK 使用 OpenJDK 17、Android SDK `/usr/lib/android-sdk` 和 Gradle 8.7。
   - 推荐命令：`export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 ANDROID_HOME=/usr/lib/android-sdk && /tmp/gradle-8.7/bin/gradle :app:assembleDebug --no-daemon`。
+  - 构建 MemoriaBox Release APK 使用命令：`export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 ANDROID_HOME=/usr/lib/android-sdk && /tmp/gradle-8.7/bin/gradle :app:assembleRelease --no-daemon`。
+  - Release APK 签名验证使用命令：`/usr/lib/android-sdk/build-tools/34.0.0/apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk`。

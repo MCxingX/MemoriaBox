@@ -38,11 +38,14 @@ import com.memoriabox.ui.screen.dialogs.BoxDialog
 import com.memoriabox.ui.screen.dialogs.EventDialog
 import com.memoriabox.ui.screen.dialogs.MoveToBoxDialog
 import com.memoriabox.data.model.*
+import com.memoriabox.ui.theme.AppThemeMode
 import com.memoriabox.viewmodel.*
 
 @Composable
 fun MainScreen(
     application: Application,
+    currentThemeMode: AppThemeMode = AppThemeMode.BLUE_WHITE,
+    onThemeModeChange: (AppThemeMode) -> Unit = {},
     navController: NavHostController = rememberNavController()
 ) {
     var selectedTab by remember { mutableStateOf(0) }
@@ -50,8 +53,16 @@ fun MainScreen(
     val boxes by mainViewModel.boxes.collectAsState(initial = emptyList())
     var showQuickAdd by remember { mutableStateOf(false) }
     var pendingQuickAddType by remember { mutableStateOf<EventType?>(null) }
+    val cuteTexts = remember {
+        listOf("(=^.^=)", "(˶ᵔ ᵕ ᵔ˶)", "ฅ^•ﻌ•^ฅ", "(｡•̀ᴗ-)✧", "(≧▽≦)", "(๑˃̵ᴗ˂̵)", "(｡･ω･｡)", "(ง •̀_•́)ง")
+    }
+    var cuteTextIndex by rememberSaveable { mutableIntStateOf(0) }
+    fun nextCuteText() {
+        cuteTextIndex = (cuteTextIndex + 1) % cuteTexts.size
+    }
     fun navigateToRootTab(index: Int, route: String) {
         selectedTab = index
+        nextCuteText()
         navController.navigate(route) {
             popUpTo(Screen.Boxes.route) {
                 saveState = false
@@ -77,6 +88,7 @@ fun MainScreen(
                 NavigationBarItem(
                     selected = false,
                     onClick = {
+                        nextCuteText()
                         showQuickAdd = true
                         pendingQuickAddType = null
                     },
@@ -90,7 +102,7 @@ fun MainScreen(
                         ) {
                             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 10.dp)) {
                                 Text(
-                                    "(=^.^=)",
+                                    cuteTexts[cuteTextIndex],
                                     style = MaterialTheme.typography.labelLarge,
                                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                                     maxLines = 1
@@ -152,6 +164,8 @@ fun MainScreen(
             composable(Screen.Settings.route) {
                 SettingsScreen(
                     application = application,
+                    currentThemeMode = currentThemeMode,
+                    onThemeModeChange = onThemeModeChange,
                     onNavigateToStatistics = { navController.navigate(Screen.Statistics.route) },
                     onNavigateToFriends = { navController.navigate(Screen.Friends.route) },
                     onNavigateToPhotoWall = { navController.navigate(Screen.PhotoWall.route) },
@@ -487,7 +501,10 @@ fun HomeDashboard(
     modifier: Modifier = Modifier
 ) {
     val sortedEvents = remember(events) {
-        events.sortedBy { kotlin.math.abs(it.date - System.currentTimeMillis()) }
+        events.sortedWith(
+            compareByDescending<Event> { it.isPinned }
+                .thenBy { kotlin.math.abs(it.date - System.currentTimeMillis()) }
+        )
     }
     var showShortcuts by rememberSaveable { mutableStateOf(false) }
 
@@ -497,17 +514,48 @@ fun HomeDashboard(
             .background(
                 Brush.verticalGradient(
                     listOf(
-                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.48f),
-                        MaterialTheme.colorScheme.background,
-                        MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.22f)
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+                        MaterialTheme.colorScheme.background
                     )
                 )
             )
             .verticalScroll(rememberScrollState())
-            .padding(16.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        HomeHeroCard(events = events, friends = friends, boxes = boxes)
-        Spacer(Modifier.height(14.dp))
+        HomeHeroCard(
+            events = events,
+            friends = friends,
+            boxes = boxes,
+            onEventsClick = { onTabSelected(0) },
+            onFriendsClick = onNavigateToFriends,
+            onBoxesClick = { onTabSelected(1) }
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("全部日子", style = MaterialTheme.typography.titleMedium)
+            Text("${events.size} 个", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Spacer(Modifier.height(8.dp))
+        when (selectedTab) {
+            0 -> AllEventsTab(events = sortedEvents, onEventClick = onEventClick, onEventLongClick = onEventLongClick)
+            1 -> CategoryFoldersTab(boxes = boxes, onBoxClick = onBoxClick, onCreateBox = onCreateBox)
+            2 -> FriendGroupsTab(friends = friends, onNavigateToFriends = onNavigateToFriends)
+        }
+        Spacer(Modifier.height(12.dp))
+        TabRow(selectedTabIndex = selectedTab) {
+            listOf("全部", "我的分类", "好友组").forEachIndexed { index, title ->
+                Tab(
+                    selected = selectedTab == index,
+                    onClick = { onTabSelected(index) },
+                    text = { Text(title) }
+                )
+            }
+        }
+        Spacer(Modifier.height(10.dp))
         OutlinedCard(modifier = Modifier.fillMaxWidth()) {
             Row(
                 modifier = Modifier
@@ -538,23 +586,6 @@ fun HomeDashboard(
             }
         }
 
-        Spacer(Modifier.height(20.dp))
-        TabRow(selectedTabIndex = selectedTab) {
-            listOf("全部", "我的分类", "好友组").forEachIndexed { index, title ->
-                Tab(
-                    selected = selectedTab == index,
-                    onClick = { onTabSelected(index) },
-                    text = { Text(title) }
-                )
-            }
-        }
-
-        Spacer(Modifier.height(24.dp))
-        when (selectedTab) {
-            0 -> AllEventsTab(events = sortedEvents, onEventClick = onEventClick, onEventLongClick = onEventLongClick)
-            1 -> CategoryFoldersTab(boxes = boxes, onBoxClick = onBoxClick, onCreateBox = onCreateBox)
-            2 -> FriendGroupsTab(friends = friends, onNavigateToFriends = onNavigateToFriends)
-        }
     }
 }
 
@@ -562,7 +593,10 @@ fun HomeDashboard(
 fun HomeHeroCard(
     events: List<Event>,
     friends: List<com.memoriabox.data.model.Friend>,
-    boxes: List<com.memoriabox.data.model.Box>
+    boxes: List<com.memoriabox.data.model.Box>,
+    onEventsClick: () -> Unit = {},
+    onFriendsClick: () -> Unit = {},
+    onBoxesClick: () -> Unit = {}
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -575,25 +609,23 @@ fun HomeHeroCard(
                 .background(
                     Brush.linearGradient(
                         listOf(
-                            Color(0xFFFF6B6B),
-                            Color(0xFFFFB86C),
-                            Color(0xFF7C5CFF),
-                            Color(0xFF00B8D9)
+                            MaterialTheme.colorScheme.primary,
+                            MaterialTheme.colorScheme.secondary,
+                            MaterialTheme.colorScheme.tertiary
                         )
                     )
                 )
-                .padding(20.dp)
+                .padding(14.dp)
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Surface(color = Color.White.copy(alpha = 0.22f), shape = MaterialTheme.shapes.large) {
-                    Text("今天也要把小日子过漂亮", modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp), color = Color.White, style = MaterialTheme.typography.labelLarge)
+                    Text("今天也要把小日子过漂亮", modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp), color = Color.White, style = MaterialTheme.typography.labelSmall)
                 }
-                Text("MemoriaBox", color = Color.White, style = MaterialTheme.typography.headlineMedium)
-                Text("倒数日、生日、待办和回忆都在这里，轻快一点，也认真一点。", color = Color.White.copy(alpha = 0.88f), style = MaterialTheme.typography.bodyMedium)
+                Text("MemoriaBox", color = Color.White, style = MaterialTheme.typography.titleLarge)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    HeroStatPill("日子", events.size.toString(), Modifier.weight(1f))
-                    HeroStatPill("好友", friends.size.toString(), Modifier.weight(1f))
-                    HeroStatPill("分类", boxes.size.toString(), Modifier.weight(1f))
+                    HeroStatPill("日子", events.size.toString(), Modifier.weight(1f), onClick = onEventsClick)
+                    HeroStatPill("好友", friends.size.toString(), Modifier.weight(1f), onClick = onFriendsClick)
+                    HeroStatPill("分类", boxes.size.toString(), Modifier.weight(1f), onClick = onBoxesClick)
                 }
             }
         }
@@ -601,10 +633,17 @@ fun HomeHeroCard(
 }
 
 @Composable
-fun HeroStatPill(label: String, value: String, modifier: Modifier = Modifier) {
-    Surface(color = Color.White.copy(alpha = 0.2f), shape = MaterialTheme.shapes.large, modifier = modifier) {
-        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(value, color = Color.White, style = MaterialTheme.typography.titleLarge)
+fun HeroStatPill(label: String, value: String, modifier: Modifier = Modifier, onClick: () -> Unit = {}) {
+    Surface(
+        color = Color.White.copy(alpha = 0.2f),
+        shape = MaterialTheme.shapes.large,
+        modifier = modifier.clickable(onClick = onClick)
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(value, color = Color.White, style = MaterialTheme.typography.titleMedium)
             Text(label, color = Color.White.copy(alpha = 0.82f), style = MaterialTheme.typography.labelSmall)
         }
     }
@@ -612,21 +651,24 @@ fun HeroStatPill(label: String, value: String, modifier: Modifier = Modifier) {
 
 @Composable
 fun AllEventsTab(events: List<Event>, onEventClick: (Event) -> Unit, onEventLongClick: (Event) -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text("全部日子", style = MaterialTheme.typography.titleMedium)
-        Text("${events.size} 个", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-    Spacer(Modifier.height(8.dp))
+    val pinnedEvents = events.filter { it.isPinned }
+    val normalEvents = events.filter { !it.isPinned }
+    
     if (events.isEmpty()) {
         EmptyEventListHint()
-    } else {
-        events.take(12).forEach { event ->
+    } else if (pinnedEvents.isNotEmpty()) {
+        Text("置顶", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+        Spacer(Modifier.height(6.dp))
+        pinnedEvents.forEach { event ->
             HomeEventRow(event = event, onClick = { onEventClick(event) }, onLongClick = { onEventLongClick(event) })
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(6.dp))
+        }
+        Spacer(Modifier.height(12.dp))
+    }
+    if (events.isNotEmpty()) {
+        normalEvents.take(10).forEach { event ->
+            HomeEventRow(event = event, onClick = { onEventClick(event) }, onLongClick = { onEventLongClick(event) })
+            Spacer(Modifier.height(6.dp))
         }
     }
 }
@@ -1181,6 +1223,8 @@ fun LogsScreen(application: Application) {
 @Composable
 fun SettingsScreen(
     application: Application,
+    currentThemeMode: AppThemeMode,
+    onThemeModeChange: (AppThemeMode) -> Unit,
     onNavigateToStatistics: () -> Unit,
     onNavigateToFriends: () -> Unit,
     onNavigateToPhotoWall: () -> Unit,
@@ -1212,6 +1256,8 @@ fun SettingsScreen(
             .padding(top = 12.dp, bottom = 20.dp)
     ) {
         SettingsHeroCard()
+        SettingsSectionTitle("主题设置", "默认蓝白，也可以切换深色、护眼和彩色")
+        ThemeModeCard(currentThemeMode = currentThemeMode, onThemeModeChange = onThemeModeChange)
         SettingsSectionTitle("常用工具", "高频功能放前面，少找一步")
         SettingsItem(
             icon = Icons.Default.BarChart,
@@ -1348,7 +1394,7 @@ fun SettingsHeroCard() {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Brush.linearGradient(listOf(Color(0xFF7C5CFF), Color(0xFFFF6B6B), Color(0xFFFFB86C))))
+                .background(Brush.linearGradient(listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary, MaterialTheme.colorScheme.tertiary)))
                 .padding(20.dp)
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1356,6 +1402,48 @@ fun SettingsHeroCard() {
                 Text("功能收纳清楚，颜色轻快一点，操作更顺手。", color = Color.White.copy(alpha = 0.88f), style = MaterialTheme.typography.bodyMedium)
             }
         }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun ThemeModeCard(currentThemeMode: AppThemeMode, onThemeModeChange: (AppThemeMode) -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("当前主题：${currentThemeMode.label}", style = MaterialTheme.typography.titleMedium)
+            Text(currentThemeMode.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                AppThemeMode.entries.forEach { mode ->
+                    FilterChip(
+                        selected = currentThemeMode == mode,
+                        onClick = { onThemeModeChange(mode) },
+                        label = { Text(mode.label) },
+                        leadingIcon = {
+                            Box(
+                                modifier = Modifier
+                                    .size(14.dp)
+                                    .background(themePreviewBrush(mode), shape = MaterialTheme.shapes.small)
+                            )
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun themePreviewBrush(mode: AppThemeMode): Brush {
+    return when (mode) {
+        AppThemeMode.BLUE_WHITE -> Brush.linearGradient(listOf(Color(0xFF1677FF), Color(0xFFFFFFFF)))
+        AppThemeMode.DARK -> Brush.linearGradient(listOf(Color(0xFF17121A), Color(0xFFB8A6FF)))
+        AppThemeMode.EYE_CARE -> Brush.linearGradient(listOf(Color(0xFF2E7D32), Color(0xFFFAFCF4)))
+        AppThemeMode.PLAYFUL -> Brush.linearGradient(listOf(Color(0xFFFF6B6B), Color(0xFF7C5CFF)))
+        AppThemeMode.WARM -> Brush.linearGradient(listOf(Color(0xFFFF7A00), Color(0xFFFFF6D8)))
     }
 }
 

@@ -18,7 +18,54 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.core.view.WindowCompat
 import androidx.compose.ui.unit.dp
 
-private val LightColorScheme = lightColorScheme(
+enum class AppThemeMode(val id: String, val label: String, val description: String) {
+    BLUE_WHITE("blue_white", "蓝白默认", "干净、克制、适合长期使用"),
+    DARK("dark", "深色模式", "夜间使用更舒服"),
+    EYE_CARE("eye_care", "护眼绿", "柔和低刺激"),
+    PLAYFUL("playful", "活泼彩色", "更明亮、更调皮"),
+    WARM("warm", "暖橙小米感", "温暖、轻快、有活力")
+}
+
+private val BlueWhiteColorScheme = lightColorScheme(
+    primary = androidx.compose.ui.graphics.Color(0xFF1677FF),
+    onPrimary = androidx.compose.ui.graphics.Color.White,
+    primaryContainer = androidx.compose.ui.graphics.Color(0xFFE8F2FF),
+    onPrimaryContainer = androidx.compose.ui.graphics.Color(0xFF062A5C),
+    secondary = androidx.compose.ui.graphics.Color(0xFF4A90E2),
+    onSecondary = androidx.compose.ui.graphics.Color.White,
+    secondaryContainer = androidx.compose.ui.graphics.Color(0xFFEAF4FF),
+    onSecondaryContainer = androidx.compose.ui.graphics.Color(0xFF0B3058),
+    tertiary = androidx.compose.ui.graphics.Color(0xFF13C2C2),
+    onTertiary = androidx.compose.ui.graphics.Color.White,
+    tertiaryContainer = androidx.compose.ui.graphics.Color(0xFFE6FFFB),
+    onTertiaryContainer = androidx.compose.ui.graphics.Color(0xFF003A3A),
+    background = androidx.compose.ui.graphics.Color(0xFFF6FAFF),
+    surface = androidx.compose.ui.graphics.Color(0xFFFFFFFF),
+    surfaceVariant = androidx.compose.ui.graphics.Color(0xFFEFF6FF),
+    outline = androidx.compose.ui.graphics.Color(0xFFB7C9DD),
+    onBackground = androidx.compose.ui.graphics.Color(0xFF111827),
+    onSurface = androidx.compose.ui.graphics.Color(0xFF111827),
+    onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFF52677D),
+)
+
+private val EyeCareColorScheme = lightColorScheme(
+    primary = androidx.compose.ui.graphics.Color(0xFF2E7D32),
+    onPrimary = androidx.compose.ui.graphics.Color.White,
+    primaryContainer = androidx.compose.ui.graphics.Color(0xFFE7F5E8),
+    onPrimaryContainer = androidx.compose.ui.graphics.Color(0xFF0B3D12),
+    secondary = androidx.compose.ui.graphics.Color(0xFF6B8E23),
+    onSecondary = androidx.compose.ui.graphics.Color.White,
+    secondaryContainer = androidx.compose.ui.graphics.Color(0xFFF2F8E5),
+    tertiary = androidx.compose.ui.graphics.Color(0xFF4DB6AC),
+    background = androidx.compose.ui.graphics.Color(0xFFFAFCF4),
+    surface = androidx.compose.ui.graphics.Color(0xFFFFFFFF),
+    surfaceVariant = androidx.compose.ui.graphics.Color(0xFFF0F7EA),
+    onBackground = androidx.compose.ui.graphics.Color(0xFF172117),
+    onSurface = androidx.compose.ui.graphics.Color(0xFF172117),
+    onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFF536352),
+)
+
+private val PlayfulColorScheme = lightColorScheme(
     primary = androidx.compose.ui.graphics.Color(0xFFFF6B6B),
     onPrimary = androidx.compose.ui.graphics.Color.White,
     primaryContainer = androidx.compose.ui.graphics.Color(0xFFFFE1E4),
@@ -26,18 +73,30 @@ private val LightColorScheme = lightColorScheme(
     secondary = androidx.compose.ui.graphics.Color(0xFF7C5CFF),
     onSecondary = androidx.compose.ui.graphics.Color.White,
     secondaryContainer = androidx.compose.ui.graphics.Color(0xFFE7E0FF),
-    onSecondaryContainer = androidx.compose.ui.graphics.Color(0xFF241258),
     tertiary = androidx.compose.ui.graphics.Color(0xFF00B8D9),
-    onTertiary = androidx.compose.ui.graphics.Color.White,
-    tertiaryContainer = androidx.compose.ui.graphics.Color(0xFFC6F6FF),
-    onTertiaryContainer = androidx.compose.ui.graphics.Color(0xFF00363F),
     background = androidx.compose.ui.graphics.Color(0xFFFFFBF7),
     surface = androidx.compose.ui.graphics.Color(0xFFFFFFFF),
     surfaceVariant = androidx.compose.ui.graphics.Color(0xFFFFF0F5),
-    outline = androidx.compose.ui.graphics.Color(0xFFD8C6D0),
     onBackground = androidx.compose.ui.graphics.Color(0xFF221A22),
     onSurface = androidx.compose.ui.graphics.Color(0xFF221A22),
     onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFF6F5965),
+)
+
+private val WarmColorScheme = lightColorScheme(
+    primary = androidx.compose.ui.graphics.Color(0xFFFF7A00),
+    onPrimary = androidx.compose.ui.graphics.Color.White,
+    primaryContainer = androidx.compose.ui.graphics.Color(0xFFFFF0E0),
+    onPrimaryContainer = androidx.compose.ui.graphics.Color(0xFF5A2800),
+    secondary = androidx.compose.ui.graphics.Color(0xFFFFB020),
+    onSecondary = androidx.compose.ui.graphics.Color(0xFF3F2400),
+    secondaryContainer = androidx.compose.ui.graphics.Color(0xFFFFF6D8),
+    tertiary = androidx.compose.ui.graphics.Color(0xFF1677FF),
+    background = androidx.compose.ui.graphics.Color(0xFFFFFBF6),
+    surface = androidx.compose.ui.graphics.Color(0xFFFFFFFF),
+    surfaceVariant = androidx.compose.ui.graphics.Color(0xFFFFF3E8),
+    onBackground = androidx.compose.ui.graphics.Color(0xFF241A10),
+    onSurface = androidx.compose.ui.graphics.Color(0xFF241A10),
+    onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFF6E5A47),
 )
 
 private val DarkColorScheme = darkColorScheme(
@@ -64,6 +123,7 @@ private val MemoriaShapes = Shapes(
 
 @Composable
 fun MemoriaBoxTheme(
+    themeMode: AppThemeMode = AppThemeMode.BLUE_WHITE,
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit
@@ -73,8 +133,11 @@ fun MemoriaBoxTheme(
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
+        themeMode == AppThemeMode.DARK -> DarkColorScheme
+        themeMode == AppThemeMode.EYE_CARE -> EyeCareColorScheme
+        themeMode == AppThemeMode.PLAYFUL -> PlayfulColorScheme
+        themeMode == AppThemeMode.WARM -> WarmColorScheme
+        else -> BlueWhiteColorScheme
     }
 
     val view = LocalView.current
