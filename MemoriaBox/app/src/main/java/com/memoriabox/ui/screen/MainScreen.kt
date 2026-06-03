@@ -57,7 +57,15 @@ fun MainScreen(
     var showQuickAdd by remember { mutableStateOf(false) }
     var pendingQuickAddType by remember { mutableStateOf<EventType?>(null) }
     val cuteTexts = remember {
-        listOf("(=^.^=)", "(˶ᵔ ᵕ ᵔ˶)", "ฅ^•ﻌ•^ฅ", "(｡•̀ᴗ-)✧", "(≧▽≦)", "(๑˃̵ᴗ˂̵)", "(｡･ω･｡)", "(ง •̀_•́)ง")
+        listOf(
+            "(=^.^=)", "(˶ᵔ ᵕ ᵔ˶)", "ฅ^•ﻌ•^ฅ", "(｡•̀ᴗ-)✧",
+            "(≧▽≦)", "(๑˃̵ᴗ˂̵)", "(｡･ω･｡)", "(ง •̀_•́)ง",
+            "(づ｡◕‿‿◕｡)づ", "(๑•̀ㅂ•́)و✧", "(＾▽＾)", "(｡♥‿♥｡)",
+            "(っ˘ω˘ς )", "(ﾉ◕ヮ◕)ﾉ*:･ﾟ", "(๑>◡<๑)", "(๑˘︶˘๑)",
+            "(´｡• ᵕ •｡`)", "(ฅ'ω'ฅ)", "(๑• . •๑)", "(｡･∀･)ﾉﾞ",
+            "(ง˙∇˙)ว", "(ﾉ´ヮ`)ﾉ*:･ﾟ", "(๑¯ω¯๑)", "(＾ω＾)",
+            "(◍•ᴗ•◍)", "(๑´ㅂ`๑)", "(｡･ω･｡)ﾉ", "(｀・ω・´)"
+        )
     }
     var cuteTextIndex by rememberSaveable { mutableIntStateOf(0) }
     fun nextCuteText() {
@@ -600,6 +608,32 @@ fun HomeHeroCard(
     onFriendsClick: () -> Unit = {},
     onBoxesClick: () -> Unit = {}
 ) {
+    val dailyQuote = remember {
+        val quotes = listOf(
+            DailyQuote("晨光收藏家", "把今天第一束光，放进值得纪念的小盒子。"),
+            DailyQuote("小日子巡航", "慢慢走，也能抵达很多闪闪发亮的时刻。"),
+            DailyQuote("温柔提醒员", "重要的日子会来，温柔的准备也会来。"),
+            DailyQuote("今天有糖", "给平凡的一天加一点甜，再记下一点心动。"),
+            DailyQuote("好运存档中", "每一次认真记录，都是给未来留一枚彩蛋。"),
+            DailyQuote("心愿打卡日", "愿望有了日期，就开始悄悄靠近现实。"),
+            DailyQuote("月光备忘录", "今晚也把在意的人和事，轻轻放在心上。"),
+            DailyQuote("生活发光体", "把小事过好，日子就会自己亮起来。"),
+            DailyQuote("倒数也可爱", "期待会让时间变软，等待也变得有形状。"),
+            DailyQuote("纪念日小船", "一起经过的日子，会在记忆里慢慢靠岸。"),
+            DailyQuote("今日元气格", "先照顾好自己，再拥抱今天安排的小惊喜。"),
+            DailyQuote("灵感小邮差", "有些想念需要提醒，有些喜欢值得准时送达。"),
+            DailyQuote("清爽计划表", "把复杂收起来，留一条清清楚楚的今天。"),
+            DailyQuote("甜梦导航", "梦里有方向，醒来也能把日子过得稳稳当当。"),
+            DailyQuote("星星排班表", "重要的时刻已经排好队，等你一一遇见。"),
+            DailyQuote("心动保鲜盒", "喜欢要记录，快乐要保鲜，今天也要认真生活。"),
+            DailyQuote("晴天收藏夹", "天气会变，值得期待的事情一直在路上。"),
+            DailyQuote("温暖续航中", "把一点耐心留给自己，把一点期待留给明天。"),
+            DailyQuote("今天很有盼头", "一个提醒，一次准备，一份靠近未来的安心。"),
+            DailyQuote("小确幸雷达", "今天也去发现一件轻轻发光的小事。")
+        )
+        val dayOfYear = Calendar.getInstance().get(Calendar.DAY_OF_YEAR)
+        quotes[dayOfYear % quotes.size]
+    }
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.extraLarge,
@@ -621,13 +655,15 @@ fun HomeHeroCard(
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Surface(color = Color.White.copy(alpha = 0.22f), shape = MaterialTheme.shapes.large) {
-                    Text("每日一言", modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp), color = Color.White, style = MaterialTheme.typography.labelSmall)
+                    Text(dailyQuote.title, modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp), color = Color.White, style = MaterialTheme.typography.labelSmall)
                 }
-                Text("今天也要把小日子过漂亮", color = Color.White, style = MaterialTheme.typography.titleMedium)
+                Text(dailyQuote.content, color = Color.White, style = MaterialTheme.typography.titleMedium)
             }
         }
     }
 }
+
+private data class DailyQuote(val title: String, val content: String)
 
 @Composable
 fun HomeBoxFilter(
