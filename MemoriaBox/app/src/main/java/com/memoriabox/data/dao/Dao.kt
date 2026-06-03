@@ -39,10 +39,10 @@ interface BoxDao {
 
 @Dao
 interface EventDao {
-    @Query("SELECT * FROM events WHERE box_id = :boxId ORDER BY date ASC")
+    @Query("SELECT * FROM events WHERE box_id = :boxId ORDER BY is_pinned DESC, date ASC")
     fun getEventsByBoxId(boxId: String): Flow<List<Event>>
 
-    @Query("SELECT * FROM events ORDER BY date ASC")
+    @Query("SELECT * FROM events ORDER BY is_pinned DESC, date ASC")
     fun getAllEvents(): Flow<List<Event>>
 
     @Query("SELECT * FROM events WHERE type = 'TODO' ORDER BY due_date ASC")
@@ -74,6 +74,9 @@ interface EventDao {
 
     @Query("SELECT * FROM events WHERE id IN (:ids)")
     suspend fun getEventsByIds(ids: List<String>): List<Event>
+
+    @Query("UPDATE events SET is_pinned = :isPinned WHERE id = :id")
+    suspend fun updatePinned(id: String, isPinned: Boolean)
 
     @Query("SELECT * FROM events WHERE date >= :now ORDER BY date ASC LIMIT 1")
     suspend fun getNextUpcomingEvent(now: Long): Event?

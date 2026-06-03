@@ -107,10 +107,18 @@ fun EnhancedEventGrid(
 fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit) {
     val daysRemaining = calculateDays(event.date, event.type)
     val styleOptions = remember { listOf(CardVisualStyle.HeroWide, CardVisualStyle.PosterTall, CardVisualStyle.GlassCompact, CardVisualStyle.SplitPanel) }
-    var styleIndex by remember(event.id) { mutableIntStateOf(kotlin.math.abs(event.id.hashCode()) % styleOptions.size) }
+    val initialStyle = when (event.cardTemplate) {
+        "POSTER" -> CardVisualStyle.PosterTall
+        "GLASS" -> CardVisualStyle.GlassCompact
+        "SPLIT" -> CardVisualStyle.SplitPanel
+        else -> CardVisualStyle.HeroWide
+    }
+    var styleIndex by remember(event.id, event.cardTemplate) { mutableIntStateOf(styleOptions.indexOf(initialStyle).coerceAtLeast(0)) }
     var isDragging by remember { mutableStateOf(false) }
     val style = styleOptions[styleIndex]
     val hasImage = event.avatarUri != null
+    val displayFields = event.displayFields.split(",").map { it.trim() }.toSet()
+    val eventTextColor = ColorUtils.hexToColor(event.textColor)
     val cardHeight = when (style) {
         CardVisualStyle.HeroWide -> 172.dp
         CardVisualStyle.PosterTall -> 236.dp
@@ -167,8 +175,8 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
                         .background(
                             Brush.linearGradient(
                                 listOf(
-                                    MaterialTheme.colorScheme.primaryContainer,
-                                    MaterialTheme.colorScheme.secondaryContainer,
+                                    ColorUtils.hexToColor(event.gradientStart),
+                                    ColorUtils.hexToColor(event.gradientEnd),
                                     MaterialTheme.colorScheme.tertiaryContainer
                                 )
                             )
@@ -220,18 +228,29 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
                     Text(
                         text = eventTypeText(event.type),
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        color = Color.White,
+                        color = eventTextColor,
                         style = MaterialTheme.typography.labelSmall
                     )
                 }
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(text = event.name, style = MaterialTheme.typography.titleLarge, color = Color.White, maxLines = 2)
+                Text(text = event.name, style = MaterialTheme.typography.titleLarge, color = eventTextColor, maxLines = 2)
                 Text(
                     text = "${daysRemaining} 天",
                     style = if (style == CardVisualStyle.PosterTall) MaterialTheme.typography.displaySmall else MaterialTheme.typography.headlineMedium,
-                    color = Color.White
+                    color = eventTextColor
                 )
-                Text(text = formatDate(event.date), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.86f))
+                if ("date" in displayFields) {
+                    Text(text = formatDate(event.date), style = MaterialTheme.typography.bodySmall, color = eventTextColor.copy(alpha = 0.86f))
+                }
+                if ("lunar" in displayFields && event.lunar != null) {
+                    Text(text = event.lunar, style = MaterialTheme.typography.labelSmall, color = eventTextColor.copy(alpha = 0.82f), maxLines = 1)
+                }
+                if ("note" in displayFields && event.note.isNotBlank()) {
+                    Text(text = event.note, style = MaterialTheme.typography.labelSmall, color = eventTextColor.copy(alpha = 0.82f), maxLines = 1)
+                }
+                if ("reminder" in displayFields && event.reminderEnabled) {
+                    Text(text = "提前 ${event.reminderDays} 天提醒", style = MaterialTheme.typography.labelSmall, color = eventTextColor.copy(alpha = 0.82f), maxLines = 1)
+                }
             }
         }
     }
@@ -314,12 +333,7 @@ fun CalendarGrid(currentMonth: Calendar, events: List<Event>) {
                         dayCal.set(Calendar.DAY_OF_MONTH, dayNumber)
                         val isToday = dayNumber == todayDay && currentMonth.get(Calendar.MONTH) == todayMonth && currentMonth.get(Calendar.YEAR) == todayYear
 
-                        val dayEvents = events.filter { event ->
-                            val eventCal = Calendar.getInstance().apply { timeInMillis = event.date }
-                            eventCal.get(Calendar.YEAR) == dayCal.get(Calendar.YEAR) &&
-                            eventCal.get(Calendar.MONTH) == dayCal.get(Calendar.MONTH) &&
-                            eventCal.get(Calendar.DAY_OF_MONTH) == dayCal.get(Calendar.DAY_OF_MONTH)
-                        }
+                        val dayEvents = events.filter { event -> occursOnDay(event, dayCal) }
                         CalendarDayCell(day = dayNumber, isToday = isToday, events = dayEvents, modifier = Modifier.weight(1f))
                     } else {
                         Box(modifier = Modifier.weight(1f))
@@ -406,4 +420,31 @@ fun calculateDays(dateMillis: Long, type: EventType): Long {
 fun formatDate(timestamp: Long): String {
     val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
     return sdf.format(Date(timestamp))
+}
+
+private fun occursOnDay(event: Event, dayCal: Calendar): Boolean {
+    val eventCal = Calendar.getInstance().apply { timeInMillis = event.date }
+    fun sameDay(left: Calendar, right: Calendar): Boolean {
+        return left.get(Calendar.YEAR) == right.get(Calendar.YEAR) &&
+            left.get(Calendar.MONTH) == right.get(Calendar.MONTH) &&
+            left.get(Calendar.DAY_OF_MONTH) == right.get(Calendar.DAY_OF_MONTH)
+    }
+    if (sameDay(eventCal, dayCal)) return true
+    if (dayCal.timeInMillis < event.date) return false
+    val mode = when {
+        event.repeatMode != RepeatMode.NONE -> event.repeatMode
+        event.repeatYearly || event.type == EventType.BIRTHDAY -> RepeatMode.YEARLY
+        else -> RepeatMode.NONE
+    }
+    return when (mode) {
+        RepeatMode.YEARLY -> eventCal.get(Calendar.MONTH) == dayCal.get(Calendar.MONTH) && eventCal.get(Calendar.DAY_OF_MONTH) == dayCal.get(Calendar.DAY_OF_MONTH)
+        RepeatMode.MONTHLY -> eventCal.get(Calendar.DAY_OF_MONTH) == dayCal.get(Calendar.DAY_OF_MONTH)
+        RepeatMode.CUSTOM_DAYS -> ((dayCal.timeInMillis - event.date) / 86_400_000L) % event.repeatInterval.coerceAtLeast(1) == 0L
+        RepeatMode.CUSTOM_WEEKS -> ((dayCal.timeInMillis - event.date) / 86_400_000L) % (7L * event.repeatInterval.coerceAtLeast(1)) == 0L
+        RepeatMode.CUSTOM_MONTHS -> {
+            val months = (dayCal.get(Calendar.YEAR) - eventCal.get(Calendar.YEAR)) * 12 + dayCal.get(Calendar.MONTH) - eventCal.get(Calendar.MONTH)
+            eventCal.get(Calendar.DAY_OF_MONTH) == dayCal.get(Calendar.DAY_OF_MONTH) && months % event.repeatInterval.coerceAtLeast(1) == 0
+        }
+        RepeatMode.NONE -> false
+    }
 }

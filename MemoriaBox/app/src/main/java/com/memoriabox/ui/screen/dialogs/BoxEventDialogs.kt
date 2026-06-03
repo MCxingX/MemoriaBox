@@ -1,5 +1,7 @@
 package com.memoriabox.ui.screen.dialogs
 
+import android.content.Context
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -11,6 +13,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.FlowRow
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -19,13 +23,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import com.memoriabox.data.model.BgType
 import com.memoriabox.data.model.Box
 import com.memoriabox.data.model.Event
 import com.memoriabox.data.model.EventType
+import com.memoriabox.data.model.RepeatMode
 import com.memoriabox.utils.ColorUtils
+import coil.compose.AsyncImage
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -236,12 +245,45 @@ fun EventDialog(
     var selectedType by remember { mutableStateOf(existingEvent?.type ?: defaultType) }
     var note by remember { mutableStateOf(existingEvent?.note ?: "") }
     var reminderEnabled by remember { mutableStateOf(existingEvent?.reminderEnabled ?: defaultReminderEnabled) }
-    var pushPlusEnabled by remember { mutableStateOf(defaultPushPlusEnabled) }
+    var pushPlusEnabled by remember { mutableStateOf(existingEvent?.pushPlusEnabled ?: defaultPushPlusEnabled) }
+    var backgroundUri by remember { mutableStateOf(existingEvent?.avatarUri) }
+    var repeatMode by remember {
+        mutableStateOf(
+            when {
+                existingEvent?.repeatMode != null && existingEvent.repeatMode != RepeatMode.NONE -> existingEvent.repeatMode
+                existingEvent?.repeatYearly == true -> RepeatMode.YEARLY
+                existingEvent?.type == EventType.BIRTHDAY -> RepeatMode.YEARLY
+                else -> RepeatMode.NONE
+            }
+        )
+    }
+    var repeatInterval by remember { mutableIntStateOf(existingEvent?.repeatInterval ?: 1) }
+    var gradientStart by remember { mutableStateOf(existingEvent?.gradientStart ?: "#7C4DFF") }
+    var gradientEnd by remember { mutableStateOf(existingEvent?.gradientEnd ?: "#FF8A80") }
+    var textColor by remember { mutableStateOf(existingEvent?.textColor ?: "#FFFFFF") }
+    var cardTemplate by remember { mutableStateOf(existingEvent?.cardTemplate ?: "HERO") }
+    val displayFieldSet = remember(existingEvent?.id) {
+        mutableStateMapOf(
+            "date" to (existingEvent?.displayFields?.contains("date") ?: true),
+            "note" to (existingEvent?.displayFields?.contains("note") ?: true),
+            "lunar" to (existingEvent?.displayFields?.contains("lunar") ?: true),
+            "reminder" to (existingEvent?.displayFields?.contains("reminder") ?: true)
+        )
+    }
     var reminderDays by remember { mutableIntStateOf(existingEvent?.reminderDays ?: 1) }
     var showDatePicker by remember { mutableStateOf(false) }
     var showLunarCalendar by remember { mutableStateOf(false) }
     var selectedLunar by remember { mutableStateOf(existingEvent?.lunar) }
     var selectedBoxId by remember { mutableStateOf(existingEvent?.boxId ?: defaultBoxId ?: (availableBoxes.firstOrNull()?.id ?: "")) }
+    var showColorPickerFor by remember { mutableStateOf<String?>(null) }
+    var reminderOffsetsText by remember { mutableStateOf(existingEvent?.reminderOffsets ?: (existingEvent?.reminderDays ?: 1).toString()) }
+    var repeatCountText by remember { mutableStateOf(existingEvent?.repeatCount?.takeIf { it > 0 }?.toString() ?: "") }
+    var repeatEndDate by remember { mutableStateOf(existingEvent?.repeatEndDate) }
+    var showRepeatEndPicker by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        backgroundUri = uri?.let { copyImageToPrivateStorage(context, it) } ?: backgroundUri
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -346,6 +388,144 @@ fun EventDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
+                Text("卡片背景", style = MaterialTheme.typography.labelLarge)
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(128.dp)
+                        .clickable { imagePicker.launch("image/*") },
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        if (backgroundUri != null) {
+                            AsyncImage(
+                                model = backgroundUri,
+                                contentDescription = "卡片背景",
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(Icons.Default.Image, contentDescription = null)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text("选择背景图", style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text("重复规则", style = MaterialTheme.typography.labelLarge)
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(
+                        RepeatMode.NONE to "不重复",
+                        RepeatMode.YEARLY to "每年",
+                        RepeatMode.MONTHLY to "每月",
+                        RepeatMode.CUSTOM_DAYS to "按天",
+                        RepeatMode.CUSTOM_WEEKS to "按周",
+                        RepeatMode.CUSTOM_MONTHS to "按月数"
+                    ).forEach { (mode, label) ->
+                        FilterChip(
+                            selected = repeatMode == mode,
+                            onClick = { repeatMode = mode },
+                            label = { Text(label) }
+                        )
+                    }
+                }
+                if (repeatMode in listOf(RepeatMode.CUSTOM_DAYS, RepeatMode.CUSTOM_WEEKS, RepeatMode.CUSTOM_MONTHS)) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("每", style = MaterialTheme.typography.bodySmall)
+                        OutlinedTextField(
+                            value = repeatInterval.toString(),
+                            onValueChange = { repeatInterval = it.toIntOrNull()?.coerceIn(1, 365) ?: 1 },
+                            modifier = Modifier.width(88.dp),
+                            singleLine = true,
+                            textStyle = MaterialTheme.typography.bodySmall
+                        )
+                        Text(
+                            when (repeatMode) {
+                                RepeatMode.CUSTOM_DAYS -> "天重复"
+                                RepeatMode.CUSTOM_WEEKS -> "周重复"
+                                else -> "个月重复"
+                            },
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+                if (repeatMode != RepeatMode.NONE) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = repeatCountText,
+                            onValueChange = { repeatCountText = it.filter { char -> char.isDigit() } },
+                            label = { Text("重复次数") },
+                            placeholder = { Text("留空为不限") },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
+                        OutlinedButton(
+                            onClick = { showRepeatEndPicker = true },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(repeatEndDate?.let { formatDate(it) } ?: "结束日期")
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text("卡片样式", style = MaterialTheme.typography.labelLarge)
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf("HERO" to "大图", "POSTER" to "海报", "GLASS" to "玻璃", "SPLIT" to "分栏").forEach { (template, label) ->
+                        ElevatedFilterChip(
+                            selected = cardTemplate == template,
+                            onClick = { cardTemplate = template },
+                            label = { Text(label) },
+                            leadingIcon = {
+                                Box(
+                                    modifier = Modifier
+                                        .size(18.dp)
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(
+                                            Brush.linearGradient(
+                                                listOf(ColorUtils.hexToColor(gradientStart), ColorUtils.hexToColor(gradientEnd))
+                                            )
+                                        )
+                                )
+                            }
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    ColorSelectButton("起色", gradientStart, { showColorPickerFor = "start" }, Modifier.weight(1f))
+                    ColorSelectButton("止色", gradientEnd, { showColorPickerFor = "end" }, Modifier.weight(1f))
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                ColorSelectButton("字体颜色", textColor, { showColorPickerFor = "text" }, Modifier.fillMaxWidth())
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("展示字段", style = MaterialTheme.typography.labelMedium)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("date" to "日期", "note" to "备注", "lunar" to "农历", "reminder" to "提醒").forEach { (key, label) ->
+                        FilterChip(
+                            selected = displayFieldSet[key] == true,
+                            onClick = { displayFieldSet[key] = displayFieldSet[key] != true },
+                            label = { Text(label) }
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
@@ -374,6 +554,20 @@ fun EventDialog(
                             )
                             Text("天提醒", style = MaterialTheme.typography.bodySmall)
                         }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = reminderOffsetsText,
+                            onValueChange = { reminderOffsetsText = it.filter { char -> char.isDigit() || char == ',' } },
+                            label = { Text("多提醒点") },
+                            placeholder = { Text("例如 0,1,3,7") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                        Text(
+                            "0 表示当天提醒，多个提醒点用英文逗号分隔",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                         Spacer(modifier = Modifier.height(8.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Checkbox(
@@ -406,6 +600,20 @@ fun EventDialog(
                         note = note,
                         reminderEnabled = reminderEnabled,
                         reminderDays = reminderDays,
+                        reminderOffsets = reminderOffsetsText.split(",").mapNotNull { it.trim().toIntOrNull() }.filter { it in 0..365 }.distinct().joinToString(",").ifBlank { reminderDays.toString() },
+                        avatarUri = backgroundUri,
+                        isPinned = existingEvent?.isPinned ?: false,
+                        pushPlusEnabled = pushPlusEnabled && reminderEnabled,
+                        repeatMode = repeatMode,
+                        repeatInterval = repeatInterval.coerceAtLeast(1),
+                        repeatEndDate = repeatEndDate,
+                        repeatCount = repeatCountText.toIntOrNull()?.coerceAtLeast(0) ?: 0,
+                        gradientStart = gradientStart,
+                        gradientEnd = gradientEnd,
+                        textColor = textColor,
+                        cardTemplate = cardTemplate,
+                        displayFields = displayFieldSet.filterValues { it }.keys.joinToString(","),
+                        repeatYearly = repeatMode == RepeatMode.YEARLY,
                         createdAt = existingEvent?.createdAt ?: System.currentTimeMillis()
                     )
                     if (pushPlusEnabled && reminderEnabled) {
@@ -435,6 +643,16 @@ fun EventDialog(
         )
     }
 
+    if (showRepeatEndPicker) {
+        DatePickerDialog(
+            onDismiss = { showRepeatEndPicker = false },
+            onDateSelected = {
+                repeatEndDate = it
+                showRepeatEndPicker = false
+            }
+        )
+    }
+
     if (showLunarCalendar) {
         LunarCalendarDialog(
             onDismiss = { showLunarCalendar = false },
@@ -444,6 +662,50 @@ fun EventDialog(
             }
         )
     }
+
+    showColorPickerFor?.let { target ->
+        ColorPickerDialog(
+            initialColor = when (target) {
+                "start" -> gradientStart
+                "end" -> gradientEnd
+                else -> textColor
+            },
+            onDismiss = { showColorPickerFor = null },
+            onSelected = { color ->
+                when (target) {
+                    "start" -> gradientStart = color
+                    "end" -> gradientEnd = color
+                    else -> textColor = color
+                }
+                showColorPickerFor = null
+            }
+        )
+    }
+}
+
+@Composable
+fun ColorSelectButton(label: String, color: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    OutlinedButton(onClick = onClick, modifier = modifier.height(56.dp)) {
+        Box(
+            modifier = Modifier
+                .size(22.dp)
+                .clip(CircleShape)
+                .background(ColorUtils.hexToColor(color))
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text("$label $color", maxLines = 1)
+    }
+}
+
+private fun copyImageToPrivateStorage(context: Context, uri: Uri): String? {
+    return runCatching {
+        val dir = File(context.filesDir, "event_images").apply { mkdirs() }
+        val target = File(dir, "event_${System.currentTimeMillis()}.jpg")
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            target.outputStream().use { output -> input.copyTo(output) }
+        }
+        Uri.fromFile(target).toString()
+    }.getOrNull()
 }
 
 @Composable

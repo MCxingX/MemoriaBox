@@ -10,6 +10,7 @@ import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.memoriabox.data.model.Event
+import com.memoriabox.data.model.RepeatMode
 import com.memoriabox.receiver.ReminderReceiver
 import kotlinx.coroutines.*
 import java.io.OutputStreamWriter
@@ -71,9 +72,21 @@ class NotificationHelper(private val context: Context) {
         }
         
         try {
+            val occurrenceDate = nextOccurrenceDate(event) ?: return
+            reminderOffsets(event).forEach { offsetDays ->
+                scheduleSingleReminder(event, occurrenceDate, offsetDays)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in scheduleReminder", e)
+        }
+    }
+
+    private fun scheduleSingleReminder(event: Event, occurrenceDate: Long, offsetDays: Int) {
+        val alarmMgr = alarmManager ?: return
+        try {
             val calendar = Calendar.getInstance().apply {
-                timeInMillis = event.date
-                add(Calendar.DAY_OF_YEAR, -event.reminderDays)
+                timeInMillis = occurrenceDate
+                add(Calendar.DAY_OF_YEAR, -offsetDays)
                 set(Calendar.HOUR_OF_DAY, event.alarmTime.substring(0, 2).toInt())
                 set(Calendar.MINUTE, event.alarmTime.substring(3, 5).toInt())
                 set(Calendar.SECOND, 0)
@@ -89,11 +102,21 @@ class NotificationHelper(private val context: Context) {
                 putExtra("event_id", event.id)
                 putExtra("event_title", event.name)
                 putExtra("event_note", event.note)
+                putExtra("event_date", event.date)
+                putExtra("event_type", event.type.name)
+                putExtra("reminder_days", offsetDays)
+                putExtra("reminder_offsets", event.reminderOffsets)
+                putExtra("alarm_time", event.alarmTime)
+                putExtra("pushplus_enabled", event.pushPlusEnabled)
+                putExtra("repeat_mode", effectiveRepeatMode(event).name)
+                putExtra("repeat_interval", event.repeatInterval.coerceAtLeast(1))
+                putExtra("repeat_end_date", event.repeatEndDate ?: 0L)
+                putExtra("repeat_count", event.repeatCount)
             }
 
             val pendingIntent = PendingIntent.getBroadcast(
                 context,
-                event.id.hashCode(),
+                event.id.hashCode() + offsetDays,
                 intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
@@ -101,8 +124,8 @@ class NotificationHelper(private val context: Context) {
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        if (alarmManager.canScheduleExactAlarms()) {
-                            alarmManager.setExactAndAllowWhileIdle(
+                        if (alarmMgr.canScheduleExactAlarms()) {
+                            alarmMgr.setExactAndAllowWhileIdle(
                                 AlarmManager.RTC_WAKEUP,
                                 triggerTime,
                                 pendingIntent
@@ -110,21 +133,21 @@ class NotificationHelper(private val context: Context) {
                             Log.d(TAG, "Exact alarm scheduled: ${event.name}")
                         } else {
                             Log.w(TAG, "Exact alarm permission not granted, using inexact")
-                            alarmManager.setAndAllowWhileIdle(
+                            alarmMgr.setAndAllowWhileIdle(
                                 AlarmManager.RTC_WAKEUP,
                                 triggerTime,
                                 pendingIntent
                             )
                         }
                     } else {
-                        alarmManager.setExactAndAllowWhileIdle(
+                        alarmMgr.setExactAndAllowWhileIdle(
                             AlarmManager.RTC_WAKEUP,
                             triggerTime,
                             pendingIntent
                         )
                     }
                 } else {
-                    alarmManager.set(
+                    alarmMgr.set(
                         AlarmManager.RTC_WAKEUP,
                         triggerTime,
                         pendingIntent
@@ -136,21 +159,70 @@ class NotificationHelper(private val context: Context) {
                 Log.e(TAG, "Failed to schedule reminder", e)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error in scheduleReminder", e)
+            Log.e(TAG, "Error in scheduleSingleReminder", e)
         }
+    }
+
+    private fun nextOccurrenceDate(event: Event): Long? {
+        val mode = effectiveRepeatMode(event)
+        if (mode == RepeatMode.NONE) return event.date
+
+        val now = System.currentTimeMillis()
+        val candidate = Calendar.getInstance().apply { timeInMillis = event.date }
+        var occurrenceIndex = 1
+        while (reminderTriggerTime(candidate.timeInMillis, event) <= now) {
+            occurrenceIndex++
+            when (mode) {
+                RepeatMode.YEARLY -> candidate.add(Calendar.YEAR, event.repeatInterval.coerceAtLeast(1))
+                RepeatMode.MONTHLY -> candidate.add(Calendar.MONTH, event.repeatInterval.coerceAtLeast(1))
+                RepeatMode.CUSTOM_DAYS -> candidate.add(Calendar.DAY_OF_YEAR, event.repeatInterval.coerceAtLeast(1))
+                RepeatMode.CUSTOM_WEEKS -> candidate.add(Calendar.WEEK_OF_YEAR, event.repeatInterval.coerceAtLeast(1))
+                RepeatMode.CUSTOM_MONTHS -> candidate.add(Calendar.MONTH, event.repeatInterval.coerceAtLeast(1))
+                RepeatMode.NONE -> return event.date
+            }
+            if (event.repeatEndDate != null && candidate.timeInMillis > event.repeatEndDate) return null
+            if (event.repeatCount > 0 && occurrenceIndex > event.repeatCount) return null
+        }
+        return candidate.timeInMillis
+    }
+
+    private fun reminderTriggerTime(date: Long, event: Event): Long {
+        return Calendar.getInstance().apply {
+            timeInMillis = date
+            add(Calendar.DAY_OF_YEAR, -event.reminderDays)
+            set(Calendar.HOUR_OF_DAY, event.alarmTime.substring(0, 2).toInt())
+            set(Calendar.MINUTE, event.alarmTime.substring(3, 5).toInt())
+            set(Calendar.SECOND, 0)
+        }.timeInMillis
+    }
+
+    private fun effectiveRepeatMode(event: Event): RepeatMode {
+        return when {
+            event.repeatMode != RepeatMode.NONE -> event.repeatMode
+            event.repeatYearly -> RepeatMode.YEARLY
+            event.type == com.memoriabox.data.model.EventType.BIRTHDAY -> RepeatMode.YEARLY
+            else -> RepeatMode.NONE
+        }
+    }
+
+    private fun reminderOffsets(event: Event): List<Int> {
+        val offsets = event.reminderOffsets.split(",").mapNotNull { it.trim().toIntOrNull() }.filter { it in 0..365 }.distinct()
+        return offsets.ifEmpty { listOf(event.reminderDays.coerceIn(0, 365)) }
     }
 
     fun cancelReminder(event: Event) {
         val alarmMgr = alarmManager ?: return
         try {
-            val intent = Intent(context, ReminderReceiver::class.java)
-            val pendingIntent = PendingIntent.getBroadcast(
-                context,
-                event.id.hashCode(),
-                intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            alarmMgr.cancel(pendingIntent)
+            reminderOffsets(event).forEach { offsetDays ->
+                val intent = Intent(context, ReminderReceiver::class.java)
+                val pendingIntent = PendingIntent.getBroadcast(
+                    context,
+                    event.id.hashCode() + offsetDays,
+                    intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                alarmMgr.cancel(pendingIntent)
+            }
             Log.d(TAG, "Reminder cancelled: ${event.name}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to cancel reminder", e)

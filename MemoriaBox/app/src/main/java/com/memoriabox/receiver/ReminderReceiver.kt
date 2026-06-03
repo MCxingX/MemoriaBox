@@ -9,6 +9,9 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.memoriabox.MainActivity
 import com.memoriabox.R
+import com.memoriabox.data.model.Event
+import com.memoriabox.data.model.EventType
+import com.memoriabox.data.model.RepeatMode
 import com.memoriabox.utils.NotificationHelper
 
 class ReminderReceiver : BroadcastReceiver() {
@@ -16,6 +19,8 @@ class ReminderReceiver : BroadcastReceiver() {
         val eventId = intent.getStringExtra("event_id") ?: return
         val eventTitle = intent.getStringExtra("event_title") ?: "纪念日提醒"
         val eventNote = intent.getStringExtra("event_note") ?: ""
+        val pushPlusEnabled = intent.getBooleanExtra("pushplus_enabled", false)
+        val repeatMode = runCatching { RepeatMode.valueOf(intent.getStringExtra("repeat_mode") ?: "NONE") }.getOrDefault(RepeatMode.NONE)
 
         val notificationManager = NotificationManagerCompat.from(context)
         
@@ -43,9 +48,34 @@ class ReminderReceiver : BroadcastReceiver() {
 
         notificationManager.notify(eventId.hashCode(), notification)
 
-        NotificationHelper(context).sendPushPlusNotification(
-            title = eventTitle,
-            content = eventNote.takeIf { it.isNotEmpty() } ?: "您的纪念日即将到来！"
-        )
+        if (pushPlusEnabled) {
+            NotificationHelper(context).sendPushPlusNotification(
+                title = eventTitle,
+                content = eventNote.takeIf { it.isNotEmpty() } ?: "您的纪念日即将到来！"
+            )
+        }
+
+        if (repeatMode != RepeatMode.NONE) {
+            val helper = NotificationHelper(context)
+            helper.scheduleReminder(
+                Event(
+                    id = eventId,
+                    boxId = "",
+                    name = eventTitle,
+                    date = intent.getLongExtra("event_date", System.currentTimeMillis()),
+                    type = runCatching { EventType.valueOf(intent.getStringExtra("event_type") ?: "COUNTDOWN") }.getOrDefault(EventType.COUNTDOWN),
+                    note = eventNote,
+                    reminderEnabled = true,
+                    reminderDays = intent.getIntExtra("reminder_days", 1),
+                    reminderOffsets = intent.getStringExtra("reminder_offsets") ?: intent.getIntExtra("reminder_days", 1).toString(),
+                    alarmTime = intent.getStringExtra("alarm_time") ?: "09:00",
+                    pushPlusEnabled = pushPlusEnabled,
+                    repeatMode = repeatMode,
+                    repeatInterval = intent.getIntExtra("repeat_interval", 1).coerceAtLeast(1),
+                    repeatEndDate = intent.getLongExtra("repeat_end_date", 0L).takeIf { it > 0L },
+                    repeatCount = intent.getIntExtra("repeat_count", 0)
+                )
+            )
+        }
     }
 }

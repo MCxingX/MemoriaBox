@@ -12,6 +12,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.memoriabox.data.model.Box
 import com.memoriabox.data.model.Event
+import com.memoriabox.data.model.EventType
+import com.memoriabox.data.model.RepeatMode
 import com.memoriabox.viewmodel.createCalendarViewModel
 import com.memoriabox.viewmodel.createMainViewModel
 import androidx.compose.ui.text.style.TextOverflow
@@ -27,6 +29,7 @@ fun SearchScreen(application: Application) {
     
     var searchQuery by remember { mutableStateOf("") }
     var searchType by remember { mutableStateOf(SearchType.ALL) }
+    var eventFilter by remember { mutableStateOf(EventFilter.ALL) }
     
     val filteredBoxes = remember(searchQuery, searchType) {
         if (searchType == SearchType.ALL || searchType == SearchType.BOXES) {
@@ -34,11 +37,11 @@ fun SearchScreen(application: Application) {
         } else emptyList()
     }
     
-    val filteredEvents = remember(searchQuery, searchType) {
+    val filteredEvents = remember(searchQuery, searchType, eventFilter, events) {
         if (searchType == SearchType.ALL || searchType == SearchType.EVENTS) {
             events.filter { 
-                it.name.contains(searchQuery, ignoreCase = true) ||
-                it.note.contains(searchQuery, ignoreCase = true)
+                (it.name.contains(searchQuery, ignoreCase = true) ||
+                it.note.contains(searchQuery, ignoreCase = true)) && matchesEventFilter(it, eventFilter)
             }
         } else emptyList()
     }
@@ -90,7 +93,40 @@ fun SearchScreen(application: Application) {
                     )
                 }
             }
-            
+
+            if (searchType == SearchType.ALL || searchType == SearchType.EVENTS) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    EventFilter.entries.take(4).forEach { filter ->
+                        FilterChip(
+                            selected = eventFilter == filter,
+                            onClick = { eventFilter = filter },
+                            label = { Text(filter.label) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    EventFilter.entries.drop(4).forEach { filter ->
+                        FilterChip(
+                            selected = eventFilter == filter,
+                            onClick = { eventFilter = filter },
+                            label = { Text(filter.label) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+             
             HorizontalDivider()
             
             if (searchQuery.isEmpty()) {
@@ -221,6 +257,26 @@ enum class SearchType(val label: String) {
     ALL("全部"),
     BOXES("分类"),
     EVENTS("事件")
+}
+
+enum class EventFilter(val label: String) {
+    ALL("全部"),
+    PINNED("置顶"),
+    REPEATING("重复"),
+    WITH_IMAGE("有图"),
+    REMINDER("提醒"),
+    BIRTHDAY("生日"),
+    TODO("待办")
+}
+
+fun matchesEventFilter(event: Event, filter: EventFilter): Boolean = when (filter) {
+    EventFilter.ALL -> true
+    EventFilter.PINNED -> event.isPinned
+    EventFilter.REPEATING -> event.repeatMode != RepeatMode.NONE || event.repeatYearly || event.type == EventType.BIRTHDAY
+    EventFilter.WITH_IMAGE -> event.avatarUri != null
+    EventFilter.REMINDER -> event.reminderEnabled
+    EventFilter.BIRTHDAY -> event.type == EventType.BIRTHDAY
+    EventFilter.TODO -> event.type == EventType.TODO
 }
 
 fun buildEventSubtitle(event: Event): String {

@@ -24,6 +24,10 @@ enum class TodoStatus {
     PENDING, COMPLETED, CANCELLED
 }
 
+enum class RepeatMode {
+    NONE, YEARLY, MONTHLY, CUSTOM_DAYS, CUSTOM_WEEKS, CUSTOM_MONTHS
+}
+
 @Entity(tableName = "boxes")
 data class Box(
     @PrimaryKey
@@ -65,6 +69,30 @@ data class Event(
     val cardStyleJson: String? = null,
     @ColumnInfo(name = "avatar_uri")
     val avatarUri: String? = null,
+    @ColumnInfo(name = "is_pinned")
+    val isPinned: Boolean = false,
+    @ColumnInfo(name = "pushplus_enabled")
+    val pushPlusEnabled: Boolean = false,
+    @ColumnInfo(name = "repeat_mode")
+    val repeatMode: RepeatMode = RepeatMode.NONE,
+    @ColumnInfo(name = "repeat_interval")
+    val repeatInterval: Int = 1,
+    @ColumnInfo(name = "repeat_end_date")
+    val repeatEndDate: Long? = null,
+    @ColumnInfo(name = "repeat_count")
+    val repeatCount: Int = 0,
+    @ColumnInfo(name = "reminder_offsets")
+    val reminderOffsets: String = "1",
+    @ColumnInfo(name = "gradient_start")
+    val gradientStart: String = "#7C4DFF",
+    @ColumnInfo(name = "gradient_end")
+    val gradientEnd: String = "#FF8A80",
+    @ColumnInfo(name = "text_color")
+    val textColor: String = "#FFFFFF",
+    @ColumnInfo(name = "card_template")
+    val cardTemplate: String = "HERO",
+    @ColumnInfo(name = "display_fields")
+    val displayFields: String = "date,note,lunar,reminder",
     @ColumnInfo(name = "is_birthday")
     val isBirthday: Boolean = false,
     @ColumnInfo(name = "repeat_yearly")

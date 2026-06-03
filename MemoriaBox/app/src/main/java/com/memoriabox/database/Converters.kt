@@ -27,4 +27,12 @@ class Converters {
     fun toTodoStatus(value: String): TodoStatus = runCatching {
         TodoStatus.valueOf(value)
     }.getOrDefault(TodoStatus.PENDING)
+
+    @TypeConverter
+    fun fromRepeatMode(value: RepeatMode): String = value.name
+
+    @TypeConverter
+    fun toRepeatMode(value: String): RepeatMode = runCatching {
+        RepeatMode.valueOf(value)
+    }.getOrDefault(RepeatMode.NONE)
 }

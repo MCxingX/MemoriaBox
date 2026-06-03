@@ -37,6 +37,9 @@ class MainViewModel(
     val allEvents = eventRepository.getAllEvents()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val recentLogs = logRepository.getRecentLogs(200)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     fun createBox(name: String, icon: String, bgType: BgType, bgValue: String) = viewModelScope.launch {
         try {
             val box = Box(name = name, icon = icon, bgType = bgType, bgValue = bgValue)
@@ -110,6 +113,41 @@ class MainViewModel(
             backupManager.onDataChanged()
         } catch (e: Exception) {
             Log.e("MainViewModel", "Quick create event failed", e)
+        }
+    }
+
+    fun updateQuickEvent(event: Event) = viewModelScope.launch {
+        try {
+            eventRepository.updateEvent(event)
+            notificationHelper.cancelReminder(event)
+            if (event.reminderEnabled) {
+                notificationHelper.scheduleReminder(event)
+            }
+            logRepository.logEventOperation("QUICK_UPDATE", event.id, event.name)
+            backupManager.onDataChanged()
+        } catch (e: Exception) {
+            Log.e("MainViewModel", "Quick update event failed", e)
+        }
+    }
+
+    fun deleteQuickEvent(event: Event) = viewModelScope.launch {
+        try {
+            notificationHelper.cancelReminder(event)
+            eventRepository.deleteEvent(event)
+            logRepository.logEventOperation("QUICK_DELETE", event.id, event.name)
+            backupManager.onDataChanged()
+        } catch (e: Exception) {
+            Log.e("MainViewModel", "Quick delete event failed", e)
+        }
+    }
+
+    fun togglePinned(event: Event) = viewModelScope.launch {
+        try {
+            eventRepository.updatePinned(event.id, !event.isPinned)
+            logRepository.logEventOperation("PIN", event.id, event.name)
+            backupManager.onDataChanged()
+        } catch (e: Exception) {
+            Log.e("MainViewModel", "Toggle pin failed", e)
         }
     }
 }

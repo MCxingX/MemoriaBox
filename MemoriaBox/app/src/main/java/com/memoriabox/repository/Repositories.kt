@@ -35,6 +35,7 @@ class EventRepository(private val eventDao: EventDao) {
     suspend fun moveEventsToBox(ids: List<String>, newBoxId: String) = eventDao.moveEventsToBox(ids, newBoxId)
     suspend fun deleteEventsByIds(ids: List<String>) = eventDao.deleteEventsByIds(ids)
     suspend fun getEventsByIds(ids: List<String>): List<Event> = eventDao.getEventsByIds(ids)
+    suspend fun updatePinned(id: String, isPinned: Boolean) = eventDao.updatePinned(id, isPinned)
 }
 
 class LogRepository(private val logDao: LogDao) {
