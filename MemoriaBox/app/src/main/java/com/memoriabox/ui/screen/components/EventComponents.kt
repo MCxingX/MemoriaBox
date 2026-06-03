@@ -273,35 +273,46 @@ fun CalendarViewScreen(
 ) {
     var currentMonthYear by remember { mutableStateOf("${Calendar.getInstance().get(Calendar.YEAR)}-${Calendar.getInstance().get(Calendar.MONTH) + 1}") }
     val monthFormat = SimpleDateFormat("yyyy年MM月", Locale.getDefault())
+    val cal = remember(currentMonthYear) {
+        Calendar.getInstance().apply {
+            val parts = currentMonthYear.split("-").map { it.toInt() }
+            set(parts[0], parts[1] - 1, 1)
+        }
+    }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        TopAppBar(
-            title = { Text("日历视图") },
-            actions = {
-                val cal = Calendar.getInstance()
-                val parts = currentMonthYear.split("-").map { it.toInt() }
-                cal.set(parts[0], parts[1] - 1, 1)
-                IconButton(onClick = {
-                    cal.add(Calendar.MONTH, -1)
-                    currentMonthYear = "${cal.get(Calendar.YEAR)}-${cal.get(Calendar.MONTH) + 1}"
-                }) { Icon(Icons.Default.ChevronLeft, contentDescription = "上月") }
-                Text(text = monthFormat.format(cal.time), style = MaterialTheme.typography.titleLarge)
-                IconButton(onClick = {
-                    cal.add(Calendar.MONTH, 1)
-                    currentMonthYear = "${cal.get(Calendar.YEAR)}-${cal.get(Calendar.MONTH) + 1}"
-                }) { Icon(Icons.Default.ChevronRight, contentDescription = "下月") }
-            }
-        )
-
-        val parts = currentMonthYear.split("-").map { it.toInt() }
-        val calendar = Calendar.getInstance()
-        calendar.set(parts[0], parts[1] - 1, 1)
-        CalendarGrid(currentMonth = calendar, events = events)
+    Column(modifier = modifier.fillMaxSize()) {
+        TopAppBar(title = { Text("日历视图") })
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = {
+                val updated = cal.clone() as Calendar
+                updated.add(Calendar.MONTH, -1)
+                currentMonthYear = "${updated.get(Calendar.YEAR)}-${updated.get(Calendar.MONTH) + 1}"
+            }) { Icon(Icons.Default.ChevronLeft, contentDescription = "上月") }
+            Text(text = monthFormat.format(cal.time), style = MaterialTheme.typography.titleLarge, maxLines = 1)
+            IconButton(onClick = {
+                val updated = cal.clone() as Calendar
+                updated.add(Calendar.MONTH, 1)
+                currentMonthYear = "${updated.get(Calendar.YEAR)}-${updated.get(Calendar.MONTH) + 1}"
+            }) { Icon(Icons.Default.ChevronRight, contentDescription = "下月") }
+        }
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val horizontalPadding = 12.dp
+            val widthCell = (maxWidth - horizontalPadding * 2) / 7
+            val heightCell = ((maxHeight - 36.dp).coerceAtLeast(240.dp)) / 6
+            val cellSize = minOf(widthCell, heightCell).coerceAtLeast(36.dp)
+            CalendarGrid(currentMonth = cal, events = events, cellSize = cellSize, horizontalPadding = horizontalPadding)
+        }
     }
 }
 
 @Composable
-fun CalendarGrid(currentMonth: Calendar, events: List<Event>) {
+fun CalendarGrid(currentMonth: Calendar, events: List<Event>, cellSize: androidx.compose.ui.unit.Dp, horizontalPadding: androidx.compose.ui.unit.Dp) {
     val daysOfWeek = listOf("日", "一", "二", "三", "四", "五", "六")
     val calendar = currentMonth.clone() as Calendar
     calendar.set(Calendar.DAY_OF_MONTH, 1)
@@ -312,8 +323,8 @@ fun CalendarGrid(currentMonth: Calendar, events: List<Event>) {
     val todayMonth = today.get(Calendar.MONTH)
     val todayYear = today.get(Calendar.YEAR)
 
-    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+    Column(modifier = Modifier.padding(horizontal = horizontalPadding)) {
+        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
             daysOfWeek.forEach { day ->
                 Text(text = day, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
             }
@@ -324,7 +335,7 @@ fun CalendarGrid(currentMonth: Calendar, events: List<Event>) {
         val rows = (totalCells + 6) / 7
 
         for (row in 0 until rows) {
-            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 for (col in 0 until 7) {
                     val cellIndex = row * 7 + col
                     val dayNumber = cellIndex - daysToFirst + 1
@@ -334,9 +345,9 @@ fun CalendarGrid(currentMonth: Calendar, events: List<Event>) {
                         val isToday = dayNumber == todayDay && currentMonth.get(Calendar.MONTH) == todayMonth && currentMonth.get(Calendar.YEAR) == todayYear
 
                         val dayEvents = events.filter { event -> occursOnDay(event, dayCal) }
-                        CalendarDayCell(day = dayNumber, isToday = isToday, events = dayEvents, modifier = Modifier.weight(1f))
+                        CalendarDayCell(day = dayNumber, isToday = isToday, events = dayEvents, modifier = Modifier.weight(1f).height(cellSize))
                     } else {
-                        Box(modifier = Modifier.weight(1f))
+                        Box(modifier = Modifier.weight(1f).height(cellSize))
                     }
                 }
             }
@@ -352,9 +363,9 @@ fun CalendarDayCell(
     modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = modifier.aspectRatio(1f).clip(RoundedCornerShape(8.dp))
+        modifier = modifier.clip(RoundedCornerShape(8.dp))
             .then(if (isToday) Modifier.background(Color(0xFF7C4DFF).copy(0.2f)) else Modifier)
-            .padding(4.dp),
+            .padding(horizontal = 2.dp, vertical = 3.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
