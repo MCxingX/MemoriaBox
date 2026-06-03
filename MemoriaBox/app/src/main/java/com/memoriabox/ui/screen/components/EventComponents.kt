@@ -3,6 +3,7 @@ package com.memoriabox.ui.screen.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -15,11 +16,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.pointer.pointerInput
+import coil.compose.AsyncImage
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.memoriabox.data.model.*
@@ -38,9 +42,9 @@ fun LayoutModeSelector(
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         listOf(
-            CardLayoutMode.SINGLE_COLUMN to "1×1",
-            CardLayoutMode.GRID_2X4 to "2×4",
-            CardLayoutMode.GRID_3X3 to "3×3"
+            CardLayoutMode.SINGLE_COLUMN to "单列",
+            CardLayoutMode.GRID_2X4 to "双列",
+            CardLayoutMode.GRID_3X3 to "海报"
         ).forEach { (mode, label) ->
             FilterChip(
                 selected = currentMode == mode,
@@ -82,12 +86,18 @@ fun EnhancedEventGrid(
             }
         } else {
             LazyVerticalGrid(
-                columns = GridCells.Fixed(columns),
+                columns = GridCells.Fixed(2),
                 contentPadding = PaddingValues(16.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(events) { event -> EnhancedEventCard(event = event, onClick = { onEventClick(event) }, onLongPress = { onEventEdit(event) }) }
+                items(events) { event ->
+                    EnhancedEventCard(
+                        event = event,
+                        onClick = { onEventClick(event) },
+                        onLongPress = { onEventEdit(event) }
+                    )
+                }
             }
         }
     }
@@ -96,46 +106,145 @@ fun EnhancedEventGrid(
 @Composable
 fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit) {
     val daysRemaining = calculateDays(event.date, event.type)
+    val styleOptions = remember { listOf(CardVisualStyle.HeroWide, CardVisualStyle.PosterTall, CardVisualStyle.GlassCompact, CardVisualStyle.SplitPanel) }
+    var styleIndex by remember(event.id) { mutableIntStateOf(kotlin.math.abs(event.id.hashCode()) % styleOptions.size) }
+    var isDragging by remember { mutableStateOf(false) }
+    val style = styleOptions[styleIndex]
+    val hasImage = event.avatarUri != null
+    val cardHeight = when (style) {
+        CardVisualStyle.HeroWide -> 172.dp
+        CardVisualStyle.PosterTall -> 236.dp
+        CardVisualStyle.GlassCompact -> 138.dp
+        CardVisualStyle.SplitPanel -> 196.dp
+    }
+
     Card(
-        modifier = Modifier.fillMaxWidth().shadow(elevation = 4.dp, shape = RoundedCornerShape(12.dp)).combinedClickable(onClick = onClick, onLongClick = onLongPress),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFFFF))
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(cardHeight)
+            .shadow(elevation = if (isDragging) 12.dp else 4.dp, shape = RoundedCornerShape(22.dp))
+            .pointerInput(event.id) {
+                detectDragGestures(
+                    onDragStart = { isDragging = true },
+                    onDragCancel = { isDragging = false },
+                    onDragEnd = {
+                        isDragging = false
+                        styleIndex = (styleIndex + 1) % styleOptions.size
+                    },
+                    onDrag = { change, _ -> change.consume() }
+                )
+            }
+            .combinedClickable(onClick = onClick, onLongClick = onLongPress),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-                Text(text = event.name, style = MaterialTheme.typography.titleLarge)
-                IconButton(onClick = { }, modifier = Modifier.size(24.dp)) {
-                    Icon(Icons.Default.MoreVert, contentDescription = null, tint = Color.Gray)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(RoundedCornerShape(22.dp))
+        ) {
+            if (hasImage) {
+                if (style == CardVisualStyle.HeroWide) {
+                    AsyncImage(
+                        model = event.avatarUri,
+                        contentDescription = event.name,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .matchParentSize()
+                            .blur(18.dp)
+                    )
+                }
+                AsyncImage(
+                    model = event.avatarUri,
+                    contentDescription = event.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.matchParentSize()
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .background(
+                            Brush.linearGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.primaryContainer,
+                                    MaterialTheme.colorScheme.secondaryContainer,
+                                    MaterialTheme.colorScheme.tertiaryContainer
+                                )
+                            )
+                        )
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color.Black.copy(alpha = 0.06f), Color.Black.copy(alpha = 0.58f))
+                        )
+                    )
+            )
+
+            if (isDragging) {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                )
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(10.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    shape = RoundedCornerShape(999.dp)
+                ) {
+                    Text(
+                        "松手应用新排版",
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        style = MaterialTheme.typography.labelSmall
+                    )
                 }
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = when (event.type) {
-                    EventType.COUNTDOWN -> "还剩"
-                    EventType.ANNIVERSARY -> "已过"
-                    EventType.ELAPSED -> "已过"
-                    EventType.BIRTHDAY -> "生日"
-                    EventType.TODO -> "待办"
-                },
-                style = MaterialTheme.typography.labelMedium,
-                color = Color.Gray
-            )
-            Text(
-                text = "${daysRemaining}天",
-                style = MaterialTheme.typography.displaySmall,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Text(text = formatDate(event.date), style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
-            if (event.lunar != null) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(text = event.lunar, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-            }
-            if (event.note.isNotEmpty()) {
+
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(16.dp)
+            ) {
+                Surface(
+                    color = Color.White.copy(alpha = 0.22f),
+                    shape = RoundedCornerShape(999.dp)
+                ) {
+                    Text(
+                        text = eventTypeText(event.type),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(text = event.note, style = MaterialTheme.typography.bodySmall, color = Color.Gray, maxLines = 2)
+                Text(text = event.name, style = MaterialTheme.typography.titleLarge, color = Color.White, maxLines = 2)
+                Text(
+                    text = "${daysRemaining} 天",
+                    style = if (style == CardVisualStyle.PosterTall) MaterialTheme.typography.displaySmall else MaterialTheme.typography.headlineMedium,
+                    color = Color.White
+                )
+                Text(text = formatDate(event.date), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.86f))
             }
         }
     }
+}
+
+private enum class CardVisualStyle { HeroWide, PosterTall, GlassCompact, SplitPanel }
+
+private fun eventTypeText(type: EventType): String = when (type) {
+    EventType.COUNTDOWN -> "还剩"
+    EventType.ANNIVERSARY -> "纪念日"
+    EventType.ELAPSED -> "已过"
+    EventType.BIRTHDAY -> "生日"
+    EventType.TODO -> "待办"
 }
 
 @Composable

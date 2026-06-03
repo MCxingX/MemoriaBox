@@ -32,8 +32,8 @@ sealed class BottomNavigationItem(
 ) {
     object Boxes : BottomNavigationItem(
         Screen.Boxes.route,
-        "盒子",
-        androidx.compose.material.icons.Icons.Filled.Folder
+        "日子",
+        androidx.compose.material.icons.Icons.Filled.Event
     )
     object Calendar : BottomNavigationItem(
         Screen.Calendar.route,

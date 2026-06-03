@@ -56,7 +56,7 @@ fun StatisticsScreen(application: Application) {
                     modifier = Modifier.weight(1f)
                 )
                 StatCard(
-                    title = "盒子数",
+                    title = "分类数",
                     value = stats.totalBoxes.toString(),
                     icon = Icons.Default.Folder,
                     modifier = Modifier.weight(1f)

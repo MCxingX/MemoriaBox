@@ -54,7 +54,7 @@ abstract class AppDatabase : RoomDatabase() {
                         // Use execSQL directly since INSTANCE is not yet available
                         db.execSQL("""
                             INSERT INTO boxes (id, name, icon, bg_type, bg_value, sort_order, is_archived, created_at)
-                            VALUES ('default_1', '我的盒子', '📦', 'COLOR', '#7C4DFF', 0, 0, strftime('%s', 'now') * 1000)
+                            VALUES ('default_1', '我的日子', '*', 'COLOR', '#7C4DFF', 0, 0, strftime('%s', 'now') * 1000)
                         """.trimIndent())
                     }
 
@@ -102,7 +102,7 @@ abstract class AppDatabase : RoomDatabase() {
             db.execSQL("UPDATE boxes SET is_archived = 0 WHERE is_archived IS NULL")
             db.execSQL("""
                 INSERT OR IGNORE INTO boxes (id, name, icon, bg_type, bg_value, sort_order, is_archived, created_at)
-                VALUES ('default_1', '我的盒子', '📦', 'COLOR', '#7C4DFF', 0, 0, strftime('%s', 'now') * 1000)
+                VALUES ('default_1', '我的日子', '*', 'COLOR', '#7C4DFF', 0, 0, strftime('%s', 'now') * 1000)
             """.trimIndent())
         }
     }

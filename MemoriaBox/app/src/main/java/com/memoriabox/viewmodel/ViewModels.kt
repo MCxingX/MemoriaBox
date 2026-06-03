@@ -22,14 +22,19 @@ import java.util.Date
 class MainViewModel(
     application: Application,
     private val boxRepository: com.memoriabox.repository.BoxRepository,
+    private val eventRepository: EventRepository,
     private val logRepository: LogRepository,
-    private val backupManager: BackupManager
+    private val backupManager: BackupManager,
+    private val notificationHelper: NotificationHelper
 ) : AndroidViewModel(application) {
 
     val boxes = boxRepository.getAllActiveBoxes()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val archivedBoxes = boxRepository.getArchivedBoxes()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val allEvents = eventRepository.getAllEvents()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun createBox(name: String, icon: String, bgType: BgType, bgValue: String) = viewModelScope.launch {
@@ -78,6 +83,33 @@ class MainViewModel(
             logRepository.logBoxOperation("RESTORE", id, name)
         } catch (e: Exception) {
             logRepository.logBoxOperation("RESTORE", id, name, "failed: ${e.message}")
+        }
+    }
+
+    fun createQuickEvent(event: Event) = viewModelScope.launch {
+        try {
+            val targetEvent = if (event.boxId.isBlank()) {
+                val defaultBox = Box(
+                    id = "default_1",
+                    name = "我的日子",
+                    icon = "*",
+                    bgType = BgType.COLOR,
+                    bgValue = "#7C4DFF"
+                )
+                boxRepository.insertBox(defaultBox)
+                event.copy(boxId = defaultBox.id)
+            } else {
+                event
+            }
+
+            eventRepository.insertEvent(targetEvent)
+            if (targetEvent.reminderEnabled) {
+                notificationHelper.scheduleReminder(targetEvent)
+            }
+            logRepository.logEventOperation("QUICK_CREATE", targetEvent.id, targetEvent.name)
+            backupManager.onDataChanged()
+        } catch (e: Exception) {
+            Log.e("MainViewModel", "Quick create event failed", e)
         }
     }
 }
@@ -319,8 +351,10 @@ fun createMainViewModel(application: Application): MainViewModel {
     return MainViewModel(
         application,
         com.memoriabox.repository.BoxRepository(app.database.boxDao()),
+        EventRepository(app.database.eventDao()),
         LogRepository(app.database.logDao()),
-        app.backupManager
+        app.backupManager,
+        NotificationHelper(application)
     )
 }
 

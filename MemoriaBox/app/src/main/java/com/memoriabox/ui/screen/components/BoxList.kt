@@ -28,18 +28,19 @@ fun BoxList(
     boxes: List<Box>,
     onBoxClick: (String) -> Unit,
     onCreateBox: () -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showCreateButton: Boolean = true
 ) {
-    LazyColumn(modifier = modifier.padding(horizontal = 16.dp)) {
-        items(boxes) { box ->
+    Column(modifier = modifier.padding(horizontal = 16.dp)) {
+        boxes.forEach { box ->
             BoxCard(box = box, onClick = { onBoxClick(box.id) })
             Spacer(Modifier.height(8.dp))
         }
-        item {
+        if (showCreateButton) {
             Button(onClick = onCreateBox, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Default.Add, null)
                 Spacer(Modifier.width(8.dp))
-                Text("新建盒子")
+                Text("新建分类")
             }
         }
     }
@@ -63,7 +64,7 @@ fun BoxCard(box: Box, onClick: () -> Unit) {
             Spacer(Modifier.width(12.dp))
             Column {
                 Text(box.name, style = MaterialTheme.typography.titleLarge)
-                Text("点击查看详情", style = MaterialTheme.typography.bodySmall)
+                Text("查看这一类日子", style = MaterialTheme.typography.bodySmall)
             }
         }
     }

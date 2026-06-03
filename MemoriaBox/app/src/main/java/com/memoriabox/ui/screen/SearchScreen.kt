@@ -54,7 +54,7 @@ fun SearchScreen(application: Application) {
                 onSearch = { },
                 active = false,
                 onActiveChange = {},
-                placeholder = { Text("搜索事件、盒子、备注...") },
+                placeholder = { Text("搜索事件、分类、备注...") },
                 leadingIcon = { Icon(Icons.Default.Search, null) },
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
@@ -91,7 +91,7 @@ fun SearchScreen(application: Application) {
                 }
             }
             
-            Divider()
+            HorizontalDivider()
             
             if (searchQuery.isEmpty()) {
                 // Show recent searches or trending
@@ -126,7 +126,7 @@ fun SearchScreen(application: Application) {
                         items(filteredBoxes) { box ->
                             SearchResultCard(
                                 title = box.name,
-                                subtitle = "盒子 · ${box.icon}",
+                                subtitle = "分类 · ${box.icon}",
                                 icon = Icons.Default.Folder,
                                 onClick = { /* Navigate to box */ }
                             )
@@ -219,7 +219,7 @@ fun SearchResultCard(
 
 enum class SearchType(val label: String) {
     ALL("全部"),
-    BOXES("盒子"),
+    BOXES("分类"),
     EVENTS("事件")
 }
 
@@ -241,4 +241,3 @@ fun getEventIcon(event: Event) = when (event.type) {
     com.memoriabox.data.model.EventType.BIRTHDAY -> Icons.Default.Cake
     com.memoriabox.data.model.EventType.TODO -> Icons.Default.CheckCircle
 }
-

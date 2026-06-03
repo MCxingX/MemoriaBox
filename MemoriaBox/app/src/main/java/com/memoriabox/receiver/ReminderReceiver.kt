@@ -9,6 +9,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.memoriabox.MainActivity
 import com.memoriabox.R
+import com.memoriabox.utils.NotificationHelper
 
 class ReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -41,5 +42,10 @@ class ReminderReceiver : BroadcastReceiver() {
             .build()
 
         notificationManager.notify(eventId.hashCode(), notification)
+
+        NotificationHelper(context).sendPushPlusNotification(
+            title = eventTitle,
+            content = eventNote.takeIf { it.isNotEmpty() } ?: "您的纪念日即将到来！"
+        )
     }
 }

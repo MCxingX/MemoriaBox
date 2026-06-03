@@ -1,18 +1,18 @@
 <resources>
     <string name="app_name">MemoriaBox</string>
-    <string name="tab_boxes">盒子</string>
+    <string name="tab_boxes">日子</string>
     <string name="tab_calendar">日历</string>
     <string name="tab_logs">日志</string>
     <string name="tab_settings">我的</string>
-    <string name="add_box">添加盒子</string>
+    <string name="add_box">添加分类</string>
     <string name="add_event">添加日子</string>
-    <string name="edit_box">编辑盒子</string>
+    <string name="edit_box">编辑分类</string>
     <string name="edit_event">编辑日子</string>
     <string name="delete">删除</string>
     <string name="cancel">取消</string>
     <string name="confirm">确认</string>
     <string name="save">保存</string>
-    <string name="box_name">盒子名称</string>
+    <string name="box_name">分类名称</string>
     <string name="event_name">事件名称</string>
     <string name="event_date">日期</string>
     <string name="countdown">倒数日</string>

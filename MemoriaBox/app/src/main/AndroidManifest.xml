@@ -24,7 +24,7 @@
     
     <!-- 媒体 (Android 13+) -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
     
     <!-- 前台服务 (Android 9+) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />

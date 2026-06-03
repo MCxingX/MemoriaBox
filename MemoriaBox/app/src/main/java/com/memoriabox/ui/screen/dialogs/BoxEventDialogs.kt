@@ -10,6 +10,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -53,7 +54,7 @@ fun BoxDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (existingBox == null) "创建盒子" else "编辑盒子") },
+        title = { Text(if (existingBox == null) "创建分类" else "编辑分类") },
         text = {
             Column(
                 modifier = Modifier
@@ -63,7 +64,7 @@ fun BoxDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("盒子名称") },
+                    label = { Text("分类名称") },
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -216,22 +217,31 @@ fun EmojiPickerDialog(
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 fun EventDialog(
     existingEvent: Event? = null,
     availableBoxes: List<Box>,
+    defaultBoxId: String? = null,
+    defaultType: EventType = EventType.COUNTDOWN,
+    defaultDate: Long? = null,
+    defaultReminderEnabled: Boolean = false,
+    defaultPushPlusEnabled: Boolean = false,
+    allowTypeChange: Boolean = true,
+    onPushPlusEnabledChange: (Boolean) -> Unit = {},
     onDismiss: () -> Unit,
     onSave: (Event) -> Unit
 ) {
     var name by remember { mutableStateOf(existingEvent?.name ?: "") }
-    var selectedDate by remember { mutableStateOf<Long?>(existingEvent?.date) }
-    var selectedType by remember { mutableStateOf(existingEvent?.type ?: EventType.COUNTDOWN) }
+    var selectedDate by remember { mutableStateOf(existingEvent?.date ?: defaultDate) }
+    var selectedType by remember { mutableStateOf(existingEvent?.type ?: defaultType) }
     var note by remember { mutableStateOf(existingEvent?.note ?: "") }
-    var reminderEnabled by remember { mutableStateOf(existingEvent?.reminderEnabled ?: false) }
+    var reminderEnabled by remember { mutableStateOf(existingEvent?.reminderEnabled ?: defaultReminderEnabled) }
+    var pushPlusEnabled by remember { mutableStateOf(defaultPushPlusEnabled) }
     var reminderDays by remember { mutableIntStateOf(existingEvent?.reminderDays ?: 1) }
     var showDatePicker by remember { mutableStateOf(false) }
     var showLunarCalendar by remember { mutableStateOf(false) }
     var selectedLunar by remember { mutableStateOf(existingEvent?.lunar) }
-    var selectedBoxId by remember { mutableStateOf(existingEvent?.boxId ?: (availableBoxes.firstOrNull()?.id ?: "")) }
+    var selectedBoxId by remember { mutableStateOf(existingEvent?.boxId ?: defaultBoxId ?: (availableBoxes.firstOrNull()?.id ?: "")) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -282,29 +292,46 @@ fun EventDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                Text("事件类型", style = MaterialTheme.typography.labelLarge)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    EventType.entries.forEach { type ->
-                        FilterChip(
-                            selected = selectedType == type,
-                            onClick = { selectedType = type },
-                            label = {
-                                Text(
-                                    when (type) {
-                                        EventType.COUNTDOWN -> "倒数日"
-                                        EventType.ANNIVERSARY -> "纪念日"
-                                        EventType.ELAPSED -> "正计时"
-                                        EventType.BIRTHDAY -> "生日"
-                                        EventType.TODO -> "待办"
-                                    }
-                                )
-                            },
-                            modifier = Modifier.weight(1f)
-                        )
+                if (allowTypeChange) {
+                    Text("事件类型", style = MaterialTheme.typography.labelLarge)
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        EventType.entries.forEach { type ->
+                            FilterChip(
+                                selected = selectedType == type,
+                                onClick = { selectedType = type },
+                                label = {
+                                    Text(
+                                        when (type) {
+                                            EventType.COUNTDOWN -> "倒数日"
+                                            EventType.ANNIVERSARY -> "纪念日"
+                                            EventType.ELAPSED -> "正计时"
+                                            EventType.BIRTHDAY -> "生日"
+                                            EventType.TODO -> "待办"
+                                        }
+                                    )
+                                }
+                            )
+                        }
                     }
+                } else {
+                    AssistChip(
+                        onClick = {},
+                        label = {
+                            Text(
+                                when (selectedType) {
+                                    EventType.COUNTDOWN -> "正在添加：倒数日"
+                                    EventType.ANNIVERSARY -> "正在添加：纪念日"
+                                    EventType.ELAPSED -> "正在添加：正计时"
+                                    EventType.BIRTHDAY -> "正在添加：生日"
+                                    EventType.TODO -> "正在添加：待办"
+                                }
+                            )
+                        }
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -319,28 +346,49 @@ fun EventDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                Row(
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Checkbox(
-                        checked = reminderEnabled,
-                        onCheckedChange = { reminderEnabled = it }
-                    )
-                    Text("开启提醒", modifier = Modifier.clickable { reminderEnabled = !reminderEnabled })
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = reminderEnabled,
+                            onCheckedChange = { reminderEnabled = it }
+                        )
+                        Text("开启提醒", modifier = Modifier.clickable { reminderEnabled = !reminderEnabled })
+                    }
 
                     if (reminderEnabled) {
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("提前", style = MaterialTheme.typography.bodySmall)
-                        OutlinedTextField(
-                            value = reminderDays.toString(),
-                            onValueChange = { 
-                                reminderDays = it.toIntOrNull() ?: 1
-                            },
-                            modifier = Modifier.width(64.dp),
-                            textStyle = MaterialTheme.typography.bodySmall
-                        )
-                        Text("天", style = MaterialTheme.typography.bodySmall)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text("提前", style = MaterialTheme.typography.bodySmall)
+                            OutlinedTextField(
+                                value = reminderDays.toString(),
+                                onValueChange = {
+                                    reminderDays = it.toIntOrNull()?.coerceIn(0, 365) ?: 1
+                                },
+                                modifier = Modifier.width(88.dp),
+                                singleLine = true,
+                                textStyle = MaterialTheme.typography.bodySmall
+                            )
+                            Text("天提醒", style = MaterialTheme.typography.bodySmall)
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(
+                                checked = pushPlusEnabled,
+                                onCheckedChange = { pushPlusEnabled = it }
+                            )
+                            Column(modifier = Modifier.clickable { pushPlusEnabled = !pushPlusEnabled }) {
+                                Text("同步 PushPlus 推送")
+                                Text(
+                                    "需要在我的页面填写 PushPlus Token",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -360,6 +408,9 @@ fun EventDialog(
                         reminderDays = reminderDays,
                         createdAt = existingEvent?.createdAt ?: System.currentTimeMillis()
                     )
+                    if (pushPlusEnabled && reminderEnabled) {
+                        onPushPlusEnabledChange(true)
+                    }
                     onSave(event)
                 },
                 enabled = name.isNotBlank() && selectedDate != null

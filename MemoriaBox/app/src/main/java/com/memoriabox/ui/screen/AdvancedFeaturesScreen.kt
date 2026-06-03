@@ -177,7 +177,7 @@ private fun buildAchievements(events: List<Event>): List<AchievementItem> {
     val photoProgress = events.count { it.avatarUri != null } / 8f
     return listOf(
         AchievementItem(Icons.Default.Event, "事件收藏家", "记录 20 个事件", eventProgress),
-        AchievementItem(Icons.Default.Folder, "盒子规划师", "使用 3 个盒子整理生活", boxesProgress),
+        AchievementItem(Icons.Default.Folder, "分类规划师", "使用 3 个分类整理生活", boxesProgress),
         AchievementItem(Icons.Default.LocalOffer, "生日守护者", "记录 10 个生日", birthdayProgress),
         AchievementItem(Icons.Default.TaskAlt, "行动派", "创建 10 个待办", todoProgress),
         AchievementItem(Icons.Default.PhotoLibrary, "回忆摄影师", "为 8 个事件添加照片", photoProgress),

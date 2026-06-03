@@ -150,7 +150,7 @@ fun MoveToBoxDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("移动到盒子") },
+        title = { Text("移动到分类") },
         text = {
             LazyColumn {
                 items(boxes) { box ->

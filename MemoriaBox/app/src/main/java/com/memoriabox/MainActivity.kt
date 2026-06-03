@@ -62,16 +62,6 @@ class MainActivity : ComponentActivity() {
             }
         }
         
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            if (ContextCompat.checkSelfPermission(
-                    this,
-                    Manifest.permission.READ_MEDIA_IMAGES
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                permissionsToRequest.add(Manifest.permission.READ_MEDIA_IMAGES)
-            }
-        }
-        
         if (permissionsToRequest.isNotEmpty()) {
             try {
                 permissionLauncher.launch(permissionsToRequest.toTypedArray())
