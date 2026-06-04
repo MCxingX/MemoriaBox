@@ -67,6 +67,7 @@ fun MainScreen(
     val logs by mainViewModel.recentLogs.collectAsState(initial = emptyList())
     var showQuickAdd by remember { mutableStateOf(false) }
     var pendingQuickAddType by remember { mutableStateOf<EventType?>(null) }
+    var showDiaryEditor by remember { mutableStateOf(false) }
     val cuteTexts = remember {
         listOf(
             "(=^.^=)", "(˶ᵔ ᵕ ᵔ˶)", "ฅ^•ﻌ•^ฅ", "(｡•̀ᴗ-)✧",
@@ -336,7 +337,11 @@ fun MainScreen(
         if (selectedType == null) {
             AddTypePickerDialog(
                 onDismiss = { showQuickAdd = false },
-                onTypeSelected = { type -> pendingQuickAddType = type }
+                onTypeSelected = { type -> pendingQuickAddType = type },
+                onAddDiary = {
+                    showQuickAdd = false
+                    showDiaryEditor = true
+                }
             )
         } else {
             QuickAddEventDialog(
@@ -354,6 +359,18 @@ fun MainScreen(
                 }
             )
         }
+    }
+
+    if (showDiaryEditor) {
+        val calendarVM = remember { createCalendarViewModel(application) }
+        DiaryEditorDialog(
+            dateStart = System.currentTimeMillis(),
+            onDismiss = { showDiaryEditor = false },
+            onSave = { content, mediaUris, bgUri ->
+                calendarVM.saveDiary(System.currentTimeMillis(), content, mediaUris, bgUri)
+                showDiaryEditor = false
+            }
+        )
     }
 }
 
@@ -384,24 +401,28 @@ private fun CustomBottomNavIcon(item: BottomNavigationItem, context: Context, ve
 fun AddTypePickerDialog(
     onDismiss: () -> Unit,
     onTypeSelected: (EventType) -> Unit,
+    onAddDiary: (() -> Unit)? = null,
     onCreateBox: (() -> Unit)? = null
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("选择要新增的类型") },
+        title = { Text("新增") },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                onCreateBox?.let { createBox ->
-                    AddActionOption(Icons.Default.CreateNewFolder, "新增分类分组", "用来收纳不同类型的小日子", onClick = createBox)
+                onAddDiary?.let { addDiary ->
+                    AddActionOption(Icons.Default.Edit, "写日记", "记录今天发生了什么", onClick = addDiary)
                 }
-                AddTypeOption(Icons.Default.Timer, "倒数日", "适合考试、旅行、纪念节点", EventType.COUNTDOWN, onTypeSelected)
-                AddTypeOption(Icons.Default.Favorite, "纪念日", "记录恋爱、结婚、相识等重要日子", EventType.ANNIVERSARY, onTypeSelected)
-                AddTypeOption(Icons.Default.History, "正计时", "记录已经坚持了多久", EventType.ELAPSED, onTypeSelected)
-                AddTypeOption(Icons.Default.Cake, "生日", "支持提前提醒和 PushPlus 推送", EventType.BIRTHDAY, onTypeSelected)
-                AddTypeOption(Icons.Default.CheckCircle, "待办", "把重要事项放进时间轴", EventType.TODO, onTypeSelected)
+                AddTypeOption(Icons.Default.Timer, "倒数日", "考试、旅行、纪念日", EventType.COUNTDOWN, onTypeSelected)
+                AddTypeOption(Icons.Default.Favorite, "纪念日", "恋爱、结婚、相识", EventType.ANNIVERSARY, onTypeSelected)
+                AddTypeOption(Icons.Default.History, "正计时", "记录已坚持多久", EventType.ELAPSED, onTypeSelected)
+                AddTypeOption(Icons.Default.Cake, "生日", "支持提前提醒", EventType.BIRTHDAY, onTypeSelected)
+                AddTypeOption(Icons.Default.CheckCircle, "待办", "把事项放进时间轴", EventType.TODO, onTypeSelected)
+                onCreateBox?.let { createBox ->
+                    AddActionOption(Icons.Default.CreateNewFolder, "新建分组", "收纳不同类型日子", onClick = createBox)
+                }
             }
         },
         confirmButton = {},
@@ -506,6 +527,7 @@ fun BoxesScreen(
     var eventForDelete by remember { mutableStateOf<Event?>(null) }
     var showQuickAdd by remember { mutableStateOf(false) }
     var pendingQuickAddType by remember { mutableStateOf<EventType?>(null) }
+    var showDiaryEditor by remember { mutableStateOf(false) }
     var selectedBoxId by rememberSaveable { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val adaptiveUi = rememberAdaptiveUiSize()
@@ -591,7 +613,11 @@ fun BoxesScreen(
         if (selectedType == null) {
             AddTypePickerDialog(
                 onDismiss = { showQuickAdd = false },
-                onTypeSelected = { type -> pendingQuickAddType = type }
+                onTypeSelected = { type -> pendingQuickAddType = type },
+                onAddDiary = {
+                    showQuickAdd = false
+                    showDiaryEditor = true
+                }
             )
         } else {
             QuickAddEventDialog(
@@ -610,6 +636,18 @@ fun BoxesScreen(
                 }
             )
         }
+    }
+
+    if (showDiaryEditor) {
+        val calendarVM = remember { createCalendarViewModel(application) }
+        DiaryEditorDialog(
+            dateStart = System.currentTimeMillis(),
+            onDismiss = { showDiaryEditor = false },
+            onSave = { content, mediaUris, bgUri ->
+                calendarVM.saveDiary(System.currentTimeMillis(), content, mediaUris, bgUri)
+                showDiaryEditor = false
+            }
+        )
     }
 
     selectedEvent?.let { event ->
@@ -1107,9 +1145,8 @@ fun HomeEventRow(event: Event, onClick: () -> Unit, onLongClick: () -> Unit) {
                 .background(
                     Brush.linearGradient(
                         listOf(
-                            Color(0xFFFFE1E4),
-                            Color(0xFFE7E0FF),
-                            Color(0xFFC6F6FF)
+                            com.memoriabox.utils.ColorUtils.hexToColor(event.gradientStart),
+                            com.memoriabox.utils.ColorUtils.hexToColor(event.gradientEnd)
                         )
                     )
                 )
@@ -1132,16 +1169,16 @@ fun HomeEventRow(event: Event, onClick: () -> Unit, onLongClick: () -> Unit) {
             ) {
                 Surface(
                     shape = MaterialTheme.shapes.large,
-                    color = if (event.avatarUri.isNullOrBlank()) Color.White.copy(alpha = 0.72f) else Color.White.copy(alpha = 0.18f),
+                    color = Color.White.copy(alpha = 0.22f),
                     modifier = Modifier.size(64.dp)
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                        Text(days.toString(), style = MaterialTheme.typography.titleLarge, color = if (event.avatarUri.isNullOrBlank()) MaterialTheme.colorScheme.primary else Color.White)
-                        Text("天", style = MaterialTheme.typography.labelSmall, color = if (event.avatarUri.isNullOrBlank()) MaterialTheme.colorScheme.primary else Color.White)
+                        Text(days.toString(), style = MaterialTheme.typography.titleLarge, color = com.memoriabox.utils.ColorUtils.hexToColor(event.textColor))
+                        Text("天", style = MaterialTheme.typography.labelSmall, color = com.memoriabox.utils.ColorUtils.hexToColor(event.textColor))
                     }
                 }
                 Column(modifier = Modifier.weight(1f)) {
-                    val foreground = if (event.avatarUri.isNullOrBlank()) MaterialTheme.colorScheme.onSurface else Color.White
+                    val foreground = com.memoriabox.utils.ColorUtils.hexToColor(event.textColor)
                     Text(event.name, style = MaterialTheme.typography.titleMedium, color = foreground, maxLines = 1)
                     Text(
                         text = listOfNotNull(
@@ -1154,7 +1191,7 @@ fun HomeEventRow(event: Event, onClick: () -> Unit, onLongClick: () -> Unit) {
                     )
                     if (event.reminderEnabled) {
                         Text(
-                            text = "提前 ${event.reminderDays} 天提醒，PushPlus 按设置同步推送",
+                            text = "提前 ${event.reminderDays} 天提醒",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -1231,7 +1268,7 @@ fun EventDetailDialog(
                 if (event.note.isNotBlank()) DetailLine("备注", event.note)
                 DetailLine("提醒", if (event.reminderEnabled) "提前 ${event.reminderDays} 天" else "关闭")
                 DetailLine("重复", repeatModeLabel(event))
-                DetailLine("PushPlus", if (event.pushPlusEnabled) "开启" else "关闭")
+                if (event.pushPlusEnabled) DetailLine("PushPlus", "开启")
                 if (event.isPinned) DetailLine("状态", "已置顶")
                 DetailLine("模板", cardTemplateLabel(event.cardTemplate))
                 DetailLine("心情标签", eventMoodLabel(event))
@@ -1980,7 +2017,7 @@ fun SettingsScreen(
         SettingsItem(
             icon = Icons.Default.Info,
             title = "关于",
-            description = "版本 3.2.1 · MemoriaBox",
+            description = "版本 3.2.2 · MemoriaBox",
             onClick = { showAboutDialog = true }
         )
     }
@@ -1991,7 +2028,7 @@ fun SettingsScreen(
             title = { Text("关于 MemoriaBox") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("版本：3.2.1", style = MaterialTheme.typography.bodyMedium)
+                    Text("版本：3.2.2", style = MaterialTheme.typography.bodyMedium)
                     Text("MemoriaBox 是一个本地优先的日子、纪念日、待办和照片记录工具。", style = MaterialTheme.typography.bodyMedium)
                     Text("数据默认保存在本机，可通过备份和 WebDAV 功能进行迁移或同步。", style = MaterialTheme.typography.bodyMedium)
                     Text("著名木羽制作", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)

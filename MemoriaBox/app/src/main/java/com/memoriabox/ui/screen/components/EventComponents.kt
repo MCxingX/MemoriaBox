@@ -671,7 +671,7 @@ fun CalendarGrid(
     diaryMap: Map<Long, List<DiaryEntry>> = emptyMap(),
     onDayClick: (Calendar, List<Event>) -> Unit = { _, _ -> }
 ) {
-    val daysOfWeek = listOf("日", "一", "二", "三", "四", "五", "六")
+    val daysOfWeek = listOf("一", "二", "三", "四", "五", "六", "日")
     val calendar = currentMonth.clone() as Calendar
     calendar.set(Calendar.DAY_OF_MONTH, 1)
     val firstDayOfWeek = calendar.get(Calendar.DAY_OF_WEEK)
@@ -688,8 +688,8 @@ fun CalendarGrid(
     ) {
         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
             daysOfWeek.forEach { day ->
-                Surface(color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.56f), shape = MaterialTheme.shapes.large, modifier = Modifier.weight(1f).padding(horizontal = 2.dp)) {
-                    Text(text = day, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(vertical = 5.dp), textAlign = TextAlign.Center)
+                Box(modifier = Modifier.weight(1f).padding(horizontal = 2.dp), contentAlignment = Alignment.Center) {
+                    Text(text = day, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(vertical = 5.dp))
                 }
             }
         }
@@ -754,24 +754,19 @@ fun CalendarDayCell(
             style = MaterialTheme.typography.bodyMedium,
             color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
         )
-        if (events.isNotEmpty()) {
+        if (events.isNotEmpty() || diaries.isNotEmpty()) {
             Spacer(modifier = Modifier.height(2.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                repeat(minOf(events.size, 3)) {
-                    val dotColor = listOf(Color(0xFFFF6B6B), Color(0xFF7C5CFF), Color(0xFF00B8D9))[it]
-                    Box(modifier = Modifier.size(5.dp).clip(RoundedCornerShape(3.dp)).background(dotColor))
+            Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                if (events.isNotEmpty()) {
+                    repeat(minOf(events.size, 3)) {
+                        val dotColor = listOf(Color(0xFFFF6B6B), Color(0xFF7C5CFF), Color(0xFF00B8D9))[it]
+                        Box(modifier = Modifier.size(5.dp).clip(RoundedCornerShape(3.dp)).background(dotColor))
+                    }
+                }
+                if (diaries.isNotEmpty()) {
+                    Box(modifier = Modifier.size(5.dp).clip(RoundedCornerShape(3.dp)).background(Color(0xFF42A5F5)))
                 }
             }
-        }
-        if (diaries.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(1.dp))
-            DiaryIndicator(
-                hasDiary = true,
-                hasImage = diaries.any { it.backgroundMediaType == DiaryMediaType.IMAGE },
-                hasVideo = diaries.any { it.backgroundMediaType == DiaryMediaType.VIDEO },
-                count = diaries.size,
-                modifier = Modifier.padding(horizontal = 4.dp)
-            )
         }
     }
 }
