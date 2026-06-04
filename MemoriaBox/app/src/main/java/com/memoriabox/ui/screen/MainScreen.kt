@@ -1609,6 +1609,7 @@ fun BoxDetailScreen(
     var showBatchDialog by remember { mutableStateOf(false) }
     var showMoveDialog by remember { mutableStateOf(false) }
     var selectedEvents by remember { mutableStateOf<Set<String>>(emptySet()) }
+    val adaptiveUi = rememberAdaptiveUiSize()
 
     LaunchedEffect(boxId) {
         viewModel.loadBox(boxId)
@@ -1617,6 +1618,8 @@ fun BoxDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
+                modifier = Modifier.height(adaptiveUi.topBarHeight),
+                windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
                 title = { Text(box?.name ?: "日子详情") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
@@ -1639,7 +1642,7 @@ fun BoxDetailScreen(
         Column(modifier = Modifier.padding(paddingValues)) {
             Text(
                 text = "拖拽卡片可切换展示样式，松手后自动应用",
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                modifier = Modifier.padding(horizontal = adaptiveUi.screenPadding, vertical = adaptiveUi.sectionSpacing),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

@@ -17,6 +17,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -29,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.memoriabox.data.model.Event
+import com.memoriabox.ui.utils.rememberAdaptiveUiSize
 import com.memoriabox.viewmodel.createCalendarViewModel
 import androidx.compose.ui.graphics.Color as ComposeColor
 import java.text.SimpleDateFormat
@@ -46,6 +48,7 @@ import java.io.FileOutputStream
 fun PhotoWallScreen(application: Application) {
     val vm = remember { createCalendarViewModel(application) }
     val events by vm.allEvents.collectAsState(initial = emptyList())
+    val adaptiveUi = rememberAdaptiveUiSize()
 
     // Filter events with images
     val eventsWithImages = remember(events) {
@@ -58,6 +61,8 @@ fun PhotoWallScreen(application: Application) {
     Scaffold(
         topBar = {
             TopAppBar(
+                modifier = Modifier.height(adaptiveUi.topBarHeight),
+                windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
                 title = { Text("照片墙") },
                 actions = {
                     IconButton(onClick = { showShareDialog = true }) {
@@ -87,14 +92,14 @@ fun PhotoWallScreen(application: Application) {
             }
         } else {
             LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 120.dp),
+                columns = GridCells.Adaptive(minSize = if (adaptiveUi.compact) 104.dp else 132.dp),
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .padding(8.dp),
-                contentPadding = PaddingValues(8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                    .padding(adaptiveUi.sectionSpacing),
+                contentPadding = PaddingValues(adaptiveUi.sectionSpacing),
+                horizontalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing),
+                verticalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing)
             ) {
                 items(eventsWithImages) { event ->
                     Card(
@@ -372,7 +377,7 @@ fun ExportScreen(application: Application) {
                             )
                         }
                     }
-                    Icon(Icons.Default.ArrowForward, null)
+                    Icon(Icons.AutoMirrored.Filled.ArrowForward, null)
                 }
             }
 
@@ -409,7 +414,7 @@ fun ExportScreen(application: Application) {
                             )
                         }
                     }
-                    Icon(Icons.Default.ArrowForward, null)
+                    Icon(Icons.AutoMirrored.Filled.ArrowForward, null)
                 }
             }
 

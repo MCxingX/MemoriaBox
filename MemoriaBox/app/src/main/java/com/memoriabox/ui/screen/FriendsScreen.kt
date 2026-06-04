@@ -28,6 +28,7 @@ import coil.compose.AsyncImage
 import com.memoriabox.data.model.*
 import com.memoriabox.ui.screen.components.FriendListView
 import com.memoriabox.ui.screen.dialogs.ColorPickerDialog
+import com.memoriabox.ui.utils.rememberAdaptiveUiSize
 import com.memoriabox.utils.ImageImportUtils
 import com.memoriabox.viewmodel.*
 import java.text.SimpleDateFormat
@@ -41,6 +42,7 @@ fun FriendsScreen(application: Application) {
     val friends by friendVM.friends.collectAsState(initial = emptyList())
     val friendRelations by friendVM.friendRelations.collectAsState(initial = emptyList())
     val labels by labelVM.labels.collectAsState(initial = emptyList())
+    val adaptiveUi = rememberAdaptiveUiSize()
     
     var showAddFriend by remember { mutableStateOf(false) }
     var showManageLabels by remember { mutableStateOf(false) }
@@ -55,6 +57,8 @@ fun FriendsScreen(application: Application) {
     Scaffold(
         topBar = {
             TopAppBar(
+                modifier = Modifier.height(adaptiveUi.topBarHeight),
+                windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
                 title = { Text("生日分组") },
                 actions = {
                     IconButton(onClick = { showManageLabels = true }) {
@@ -74,8 +78,8 @@ fun FriendsScreen(application: Application) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    .padding(horizontal = adaptiveUi.screenPadding, vertical = adaptiveUi.sectionSpacing),
+                horizontalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing)
             ) {
                 FilterChip(
                     selected = selectedFilterLabel == null,
