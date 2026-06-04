@@ -90,7 +90,10 @@ fun MediaBackgroundPlayer(
                 .fillMaxSize()
                 .background(
                     androidx.compose.ui.graphics.Brush.verticalGradient(
-                        listOf(Color(0xFF1A1A2E), Color(0xFF16213E))
+                        listOf(
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                            MaterialTheme.colorScheme.tertiary.copy(alpha = 0.4f)
+                        )
                     )
                 )
         )
@@ -127,8 +130,11 @@ fun DiaryDetailDialog(
     mediaList: List<DiaryMedia>,
     onDismiss: () -> Unit,
     onEdit: () -> Unit,
+    onDelete: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         modifier = modifier,
@@ -146,21 +152,18 @@ fun DiaryDetailDialog(
                     .heightIn(min = 300.dp, max = 500.dp)
                     .clip(RoundedCornerShape(16.dp))
             ) {
-                // Background media
                 MediaBackgroundPlayer(
                     mediaUri = diary.backgroundMediaUri,
                     mediaType = diary.backgroundMediaType,
                     modifier = Modifier.matchParentSize()
                 )
 
-                // Semi-transparent overlay for readability
                 Box(
                     modifier = Modifier
                         .matchParentSize()
                         .background(Color.Black.copy(alpha = 0.45f))
                 )
 
-                // Content
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -168,7 +171,6 @@ fun DiaryDetailDialog(
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    // Scrolling text animation
                     if (diary.content.isNotEmpty()) {
                         Surface(
                             color = Color.Black.copy(alpha = 0.3f),
@@ -182,7 +184,6 @@ fun DiaryDetailDialog(
                         }
                     }
 
-                    // Media attachments
                     if (mediaList.isNotEmpty()) {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             mediaList.forEach { media ->
@@ -227,12 +228,32 @@ fun DiaryDetailDialog(
                 TextButton(onClick = onEdit) {
                     Text("编辑", color = Color.White)
                 }
+                TextButton(onClick = { showDeleteConfirm = true }) {
+                    Text("删除", color = Color(0xFFFF6B6B))
+                }
                 TextButton(onClick = onDismiss) {
                     Text("关闭", color = Color.White)
                 }
             }
         }
     )
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("删除日记") },
+            text = { Text("确定要删除这篇日记吗？删除后无法恢复。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteConfirm = false
+                    onDelete()
+                }) { Text("删除", color = Color(0xFFFF6B6B)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) { Text("取消") }
+            }
+        )
+    }
 }
 
 @Composable
@@ -241,12 +262,14 @@ fun DiaryEditorDialog(
     dateStart: Long,
     onDismiss: () -> Unit,
     onSave: (content: String, mediaUris: List<String>, backgroundUri: String?) -> Unit,
+    onDelete: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     var content by remember { mutableStateOf(existingDiary?.content ?: "") }
     var backgroundUri by remember { mutableStateOf(existingDiary?.backgroundMediaUri) }
     var mediaUris by remember { mutableStateOf(mutableListOf<String>()) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
     // Image picker
     val imagePicker = rememberLauncherForActivityResult(
@@ -359,6 +382,11 @@ fun DiaryEditorDialog(
         },
         confirmButton = {
             Row {
+                if (existingDiary != null) {
+                    TextButton(onClick = { showDeleteConfirm = true }) {
+                        Text("删除", color = Color(0xFFFF6B6B))
+                    }
+                }
                 TextButton(onClick = onDismiss) {
                     Text("取消")
                 }
@@ -374,6 +402,24 @@ fun DiaryEditorDialog(
             }
         }
     )
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("删除日记") },
+            text = { Text("确定要删除这篇日记吗？删除后无法恢复。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteConfirm = false
+                    onDelete()
+                    onDismiss()
+                }) { Text("删除", color = Color(0xFFFF6B6B)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) { Text("取消") }
+            }
+        )
+    }
 }
 
 @Composable
@@ -381,13 +427,15 @@ fun DiaryIndicator(
     hasDiary: Boolean,
     hasImage: Boolean,
     hasVideo: Boolean,
+    count: Int = 1,
     modifier: Modifier = Modifier
 ) {
     if (!hasDiary) return
 
     Row(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(2.dp)
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         if (hasImage) {
             Icon(
@@ -411,6 +459,14 @@ fun DiaryIndicator(
                     .size(5.dp)
                     .clip(RoundedCornerShape(3.dp))
                     .background(Color(0xFF00B8D9))
+            )
+        }
+        if (count > 1) {
+            Text(
+                text = "$count",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(0xFF00B8D9),
+                modifier = Modifier.padding(start = 1.dp)
             )
         }
     }

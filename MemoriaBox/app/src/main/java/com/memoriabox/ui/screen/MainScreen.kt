@@ -195,6 +195,7 @@ fun MainScreen(
                         onSaveDiary = { date, content, mediaUris, backgroundUri ->
                             calendarVM.saveDiary(date, content, mediaUris, backgroundUri)
                         },
+                        onDeleteDiary = { diary -> calendarVM.deleteDiary(diary) },
                         onLoadDiaryMedia = { diary -> calendarVM.loadDiaryMedia(diary.id) }
                     )
                 }
@@ -1669,7 +1670,10 @@ fun BoxDetailScreen(
                 events = events,
                 layoutMode = layoutMode,
                 onEventClick = { showEditEvent = it },
-                onEventEdit = { showEditEvent = it }
+                onEventEdit = { showEditEvent = it },
+                onCardTemplateChange = { event, newTemplate ->
+                    viewModel.updateEvent(event.copy(cardTemplate = newTemplate))
+                }
             )
         }
     }

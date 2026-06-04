@@ -27,6 +27,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import com.memoriabox.data.model.BgType
 import com.memoriabox.data.model.Box
 import com.memoriabox.data.model.Event
@@ -845,31 +846,45 @@ fun DatePickerDialog(
         initialSelectedDateMillis = System.currentTimeMillis()
     )
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("选择日期") },
-        text = {
-            DatePicker(
-                state = datePickerState,
-                showModeToggle = true
-            )
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    datePickerState.selectedDateMillis?.let { onDateSelected(it) }
-                },
-                enabled = datePickerState.selectedDateMillis != null
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = MaterialTheme.shapes.extraLarge,
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp,
+            modifier = Modifier
+                .widthIn(min = 360.dp, max = 400.dp)
+                .heightIn(max = 580.dp)
+        ) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text("确定")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("取消")
+                Spacer(Modifier.height(24.dp))
+                Text("选择日期", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 24.dp).align(Alignment.Start))
+                Spacer(Modifier.height(16.dp))
+                DatePicker(
+                    state = datePickerState,
+                    showModeToggle = true,
+                    modifier = Modifier.padding(horizontal = 8.dp)
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) { Text("取消") }
+                    Spacer(Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            datePickerState.selectedDateMillis?.let { onDateSelected(it) }
+                        },
+                        enabled = datePickerState.selectedDateMillis != null
+                    ) { Text("确定") }
+                }
             }
         }
-    )
+    }
 }
 
 @Composable

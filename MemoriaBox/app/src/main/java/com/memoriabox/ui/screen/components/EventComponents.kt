@@ -70,6 +70,7 @@ fun EnhancedEventGrid(
     layoutMode: CardLayoutMode,
     onEventClick: (Event) -> Unit,
     onEventEdit: (Event) -> Unit,
+    onCardTemplateChange: (Event, String) -> Unit = { _, _ -> },
     boxBgType: BgType = BgType.COLOR,
     boxBgValue: String = "#F5F5F5"
 ) {
@@ -103,7 +104,8 @@ fun EnhancedEventGrid(
                     EnhancedEventCard(
                         event = event,
                         onClick = { onEventClick(event) },
-                        onLongPress = { onEventEdit(event) }
+                        onLongPress = { onEventEdit(event) },
+                        onStyleChange = { newTemplate -> onCardTemplateChange(event, newTemplate) }
                     )
                 }
             }
@@ -112,7 +114,7 @@ fun EnhancedEventGrid(
 }
 
 @Composable
-fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit) {
+fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit, onStyleChange: (String) -> Unit = {}) {
     val daysRemaining = calculateDays(event.date, event.type)
     val styleOptions = remember {
         listOf(
@@ -172,11 +174,21 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
                     onDragEnd = {
                         isDragging = false
                         if (abs(dragOffset) > 44f) {
-                            styleIndex = if (dragOffset > 0f) {
+                            val newIndex = if (dragOffset > 0f) {
                                 (styleIndex + 1) % styleOptions.size
                             } else {
                                 (styleIndex - 1 + styleOptions.size) % styleOptions.size
                             }
+                            styleIndex = newIndex
+                            val newTemplate = when (styleOptions[newIndex]) {
+                                CardVisualStyle.PosterTall -> "POSTER"
+                                CardVisualStyle.GlassCompact -> "GLASS"
+                                CardVisualStyle.SplitPanel -> "SPLIT"
+                                CardVisualStyle.NeonRail -> "NEON"
+                                CardVisualStyle.MinimalBadge -> "MINIMAL"
+                                else -> "HERO"
+                            }
+                            onStyleChange(newTemplate)
                         }
                         dragOffset = 0f
                     },
@@ -434,6 +446,7 @@ fun CalendarViewScreen(
     onEventClick: (Event) -> Unit = {},
     diaries: List<DiaryEntry> = emptyList(),
     onSaveDiary: (Long, String, List<String>, String?) -> Unit = { _, _, _, _ -> },
+    onDeleteDiary: (DiaryEntry) -> Unit = {},
     onLoadDiaryMedia: (DiaryEntry) -> Unit = {},
     diaryMediaMap: Map<String, List<DiaryMedia>> = emptyMap()
 ) {
@@ -465,7 +478,7 @@ fun CalendarViewScreen(
     var editingDiaryDate by remember { mutableStateOf<Long?>(null) }
 
     val diaryMap = remember(diaries) {
-        diaries.associateBy { it.dateStart }
+        diaries.groupBy { it.dateStart }
     }
 
     Column(modifier = modifier.fillMaxSize()) {
@@ -531,12 +544,12 @@ fun CalendarViewScreen(
     }
 
     selectedDay?.let { (date, dayEvents) ->
-        val diary = diaryMap[startOfDayMillis(date)]
+        val dayDiaries = diaryMap[startOfDayMillis(date)] ?: emptyList()
         CalendarDayDetailDialog(
             date = date,
             events = dayEvents,
-            diary = diary,
-            diaryMedia = diary?.let { diaryMediaMap[it.id] } ?: emptyList(),
+            diaries = dayDiaries,
+            diaryMediaMap = diaryMediaMap,
             onDismiss = { selectedDay = null },
             onAddEvent = {
                 selectedDay = null
@@ -555,6 +568,9 @@ fun CalendarViewScreen(
             },
             onEditDiary = { targetDiary ->
                 editingDiary = targetDiary
+            },
+            onDeleteDiary = { targetDiary ->
+                onDeleteDiary(targetDiary)
             }
         )
     }
@@ -567,6 +583,10 @@ fun CalendarViewScreen(
             onEdit = {
                 selectedDiaryForView = null
                 editingDiary = diary
+            },
+            onDelete = {
+                selectedDiaryForView = null
+                onDeleteDiary(diary)
             }
         )
     }
@@ -579,6 +599,10 @@ fun CalendarViewScreen(
             onSave = { content, mediaUris, bgUri ->
                 onSaveDiary(diary.dateStart, content, mediaUris, bgUri)
                 editingDiary = null
+            },
+            onDelete = {
+                editingDiary = null
+                onDeleteDiary(diary)
             }
         )
     }
@@ -644,7 +668,7 @@ fun CalendarGrid(
     events: List<Event>,
     cellSize: androidx.compose.ui.unit.Dp,
     horizontalPadding: androidx.compose.ui.unit.Dp,
-    diaryMap: Map<Long, DiaryEntry> = emptyMap(),
+    diaryMap: Map<Long, List<DiaryEntry>> = emptyMap(),
     onDayClick: (Calendar, List<Event>) -> Unit = { _, _ -> }
 ) {
     val daysOfWeek = listOf("日", "一", "二", "三", "四", "五", "六")
@@ -685,12 +709,12 @@ fun CalendarGrid(
                         val isToday = dayNumber == todayDay && currentMonth.get(Calendar.MONTH) == todayMonth && currentMonth.get(Calendar.YEAR) == todayYear
 
                         val dayEvents = events.filter { event -> occursOnDay(event, dayCal) }
-                        val dayDiary = diaryMap[dayCal.timeInMillis]
+                        val dayDiaries = diaryMap[dayCal.timeInMillis] ?: emptyList()
                         CalendarDayCell(
                             day = dayNumber,
                             isToday = isToday,
                             events = dayEvents,
-                            diary = dayDiary,
+                            diaries = dayDiaries,
                             modifier = Modifier.weight(1f).height(cellSize),
                             onClick = { onDayClick(dayCal, dayEvents) }
                         )
@@ -708,7 +732,7 @@ fun CalendarDayCell(
     day: Int,
     isToday: Boolean,
     events: List<Event>,
-    diary: DiaryEntry? = null,
+    diaries: List<DiaryEntry> = emptyList(),
     modifier: Modifier = Modifier,
     onClick: () -> Unit = {}
 ) {
@@ -739,12 +763,13 @@ fun CalendarDayCell(
                 }
             }
         }
-        if (diary != null) {
+        if (diaries.isNotEmpty()) {
             Spacer(modifier = Modifier.height(1.dp))
             DiaryIndicator(
                 hasDiary = true,
-                hasImage = diary.backgroundMediaType == DiaryMediaType.IMAGE,
-                hasVideo = diary.backgroundMediaType == DiaryMediaType.VIDEO,
+                hasImage = diaries.any { it.backgroundMediaType == DiaryMediaType.IMAGE },
+                hasVideo = diaries.any { it.backgroundMediaType == DiaryMediaType.VIDEO },
+                count = diaries.size,
                 modifier = Modifier.padding(horizontal = 4.dp)
             )
         }
@@ -755,20 +780,21 @@ fun CalendarDayCell(
 private fun CalendarDayDetailDialog(
     date: Long,
     events: List<Event>,
-    diary: DiaryEntry?,
-    diaryMedia: List<DiaryMedia>,
+    diaries: List<DiaryEntry>,
+    diaryMediaMap: Map<String, List<DiaryMedia>>,
     onDismiss: () -> Unit,
     onAddEvent: () -> Unit,
     onEventClick: (Event) -> Unit,
     onWriteDiary: () -> Unit,
     onViewDiary: (DiaryEntry) -> Unit,
-    onEditDiary: (DiaryEntry) -> Unit
+    onEditDiary: (DiaryEntry) -> Unit,
+    onDeleteDiary: (DiaryEntry) -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(SimpleDateFormat("yyyy年M月d日", Locale.getDefault()).format(Date(date))) },
         text = {
-            Box(modifier = Modifier.fillMaxWidth().heightIn(min = 220.dp, max = 360.dp)) {
+            Box(modifier = Modifier.fillMaxWidth().heightIn(min = 220.dp, max = 420.dp)) {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -777,7 +803,7 @@ private fun CalendarDayDetailDialog(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text("今日日记", style = MaterialTheme.typography.titleSmall)
-                    if (diary == null) {
+                    if (diaries.isEmpty()) {
                         Surface(
                             modifier = Modifier.fillMaxWidth().clickable(onClick = onWriteDiary),
                             shape = MaterialTheme.shapes.large,
@@ -796,30 +822,68 @@ private fun CalendarDayDetailDialog(
                             }
                         }
                     } else {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth().clickable { onViewDiary(diary) },
-                            shape = MaterialTheme.shapes.large,
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.84f)
-                        ) {
-                            Box(modifier = Modifier.fillMaxWidth().heightIn(min = 132.dp)) {
-                                MediaBackgroundPlayer(
-                                    mediaUri = diary.backgroundMediaUri,
-                                    mediaType = diary.backgroundMediaType,
-                                    modifier = Modifier.matchParentSize()
-                                )
-                                Box(modifier = Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.45f)))
-                                Column(
-                                    modifier = Modifier.fillMaxWidth().padding(12.dp),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    ScrollingTextAnimation(text = diary.content, charDelay = 45L)
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        AssistChip(onClick = { onEditDiary(diary) }, label = { Text("编辑日记") }, leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) })
-                                        if (diaryMedia.isNotEmpty()) {
-                                            AssistChip(onClick = { onViewDiary(diary) }, label = { Text("${diaryMedia.size} 个媒体") }, leadingIcon = { Icon(Icons.Default.Image, contentDescription = null) })
+                        diaries.forEachIndexed { index, diary ->
+                            val diaryMedia = diaryMediaMap[diary.id] ?: emptyList()
+                            Surface(
+                                modifier = Modifier.fillMaxWidth().clickable { onViewDiary(diary) },
+                                shape = MaterialTheme.shapes.large,
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.84f)
+                            ) {
+                                Box(modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp)) {
+                                    MediaBackgroundPlayer(
+                                        mediaUri = diary.backgroundMediaUri,
+                                        mediaType = diary.backgroundMediaType,
+                                        modifier = Modifier.matchParentSize()
+                                    )
+                                    Box(modifier = Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.45f)))
+                                    Column(
+                                        modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        if (diaries.size > 1) {
+                                            Surface(
+                                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                                                shape = RoundedCornerShape(999.dp)
+                                            ) {
+                                                Text(
+                                                    "第 ${index + 1} 篇",
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                                    color = Color.White,
+                                                    style = MaterialTheme.typography.labelSmall
+                                                )
+                                            }
+                                        }
+                                        ScrollingTextAnimation(text = diary.content, charDelay = 45L)
+                                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                            AssistChip(
+                                                onClick = { onEditDiary(diary) },
+                                                label = { Text("编辑") },
+                                                leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                                            )
+                                            if (diaryMedia.isNotEmpty()) {
+                                                AssistChip(
+                                                    onClick = { onViewDiary(diary) },
+                                                    label = { Text("${diaryMedia.size} 个媒体") },
+                                                    leadingIcon = { Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                                                )
+                                            }
                                         }
                                     }
                                 }
+                            }
+                        }
+                        Surface(
+                            modifier = Modifier.fillMaxWidth().clickable(onClick = onWriteDiary),
+                            shape = MaterialTheme.shapes.large,
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.52f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                                Text("再写一篇", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
                             }
                         }
                     }
