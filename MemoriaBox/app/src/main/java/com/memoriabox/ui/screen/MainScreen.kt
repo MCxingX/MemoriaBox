@@ -1121,68 +1121,188 @@ fun EmptyEventListHint() {
 @Composable
 fun HomeEventRow(event: Event, onClick: () -> Unit, onLongClick: () -> Unit) {
     val days = com.memoriabox.ui.screen.components.calculateDays(event.date, event.type)
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(116.dp)
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.linearGradient(
-                        listOf(
-                            com.memoriabox.utils.ColorUtils.hexToColor(event.gradientStart),
-                            com.memoriabox.utils.ColorUtils.hexToColor(event.gradientEnd)
-                        )
-                    )
-                )
-        ) {
-            if (!event.avatarUri.isNullOrBlank()) {
-                AsyncImage(
-                    model = event.avatarUri,
-                    contentDescription = event.name,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.matchParentSize()
-                )
-                Box(modifier = Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.38f)))
-            }
-            Row(
+    val eventTextColor = com.memoriabox.utils.ColorUtils.hexToColor(event.textColor)
+    val gradientStart = com.memoriabox.utils.ColorUtils.hexToColor(event.gradientStart)
+    val gradientEnd = com.memoriabox.utils.ColorUtils.hexToColor(event.gradientEnd)
+
+    when (event.cardTemplate) {
+        "GLASS" -> {
+            Card(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    .fillMaxWidth()
+                    .height(116.dp)
+                    .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             ) {
-                Surface(
-                    shape = MaterialTheme.shapes.large,
-                    color = Color.White.copy(alpha = 0.22f),
-                    modifier = Modifier.size(64.dp)
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.linearGradient(
+                                listOf(
+                                    Color.White.copy(alpha = 0.36f),
+                                    Color.White.copy(alpha = 0.12f)
+                                )
+                            )
+                        )
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                        Text(days.toString(), style = MaterialTheme.typography.titleLarge, color = com.memoriabox.utils.ColorUtils.hexToColor(event.textColor))
-                        Text("天", style = MaterialTheme.typography.labelSmall, color = com.memoriabox.utils.ColorUtils.hexToColor(event.textColor))
+                    if (!event.avatarUri.isNullOrBlank()) {
+                        AsyncImage(
+                            model = event.avatarUri,
+                            contentDescription = event.name,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.matchParentSize()
+                        )
+                        Box(modifier = Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.22f)))
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxSize().padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Surface(
+                            shape = MaterialTheme.shapes.large,
+                            color = Color.White.copy(alpha = 0.32f),
+                            modifier = Modifier.size(64.dp)
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                                Text(days.toString(), style = MaterialTheme.typography.titleLarge, color = eventTextColor)
+                                Text("天", style = MaterialTheme.typography.labelSmall, color = eventTextColor)
+                            }
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(event.name, style = MaterialTheme.typography.titleMedium, color = eventTextColor, maxLines = 1)
+                            Text(
+                                text = listOfNotNull(
+                                    if (event.isPinned) "置顶" else null,
+                                    eventTypeLabel(event.type),
+                                    com.memoriabox.ui.screen.components.formatDate(event.date)
+                                ).joinToString(" · "),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = eventTextColor.copy(alpha = 0.82f)
+                            )
+                            if (event.reminderEnabled) {
+                                Text(
+                                    text = "提前 ${event.reminderDays} 天提醒",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
                     }
                 }
-                Column(modifier = Modifier.weight(1f)) {
-                    val foreground = com.memoriabox.utils.ColorUtils.hexToColor(event.textColor)
-                    Text(event.name, style = MaterialTheme.typography.titleMedium, color = foreground, maxLines = 1)
-                    Text(
-                        text = listOfNotNull(
-                            if (event.isPinned) "置顶" else null,
-                            eventTypeLabel(event.type),
-                            com.memoriabox.ui.screen.components.formatDate(event.date)
-                        ).joinToString(" · "),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = foreground.copy(alpha = 0.82f)
-                    )
-                    if (event.reminderEnabled) {
-                        Text(
-                            text = "提前 ${event.reminderDays} 天提醒",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary
+            }
+        }
+        "MINIMAL" -> {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(116.dp)
+                    .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.surface)
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    if (!event.avatarUri.isNullOrBlank()) {
+                        AsyncImage(
+                            model = event.avatarUri,
+                            contentDescription = event.name,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.size(64.dp).clip(MaterialTheme.shapes.large)
                         )
+                    } else {
+                        Surface(
+                            shape = MaterialTheme.shapes.large,
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            modifier = Modifier.size(64.dp)
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                                Text(days.toString(), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                Text("天", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            }
+                        }
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(event.name, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
+                        Text(
+                            text = listOfNotNull(
+                                if (event.isPinned) "置顶" else null,
+                                eventTypeLabel(event.type),
+                                com.memoriabox.ui.screen.components.formatDate(event.date)
+                            ).joinToString(" · "),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (event.reminderEnabled) {
+                            Text(
+                                text = "提前 ${event.reminderDays} 天提醒",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        else -> {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(116.dp)
+                    .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Brush.linearGradient(listOf(gradientStart, gradientEnd)))
+                ) {
+                    if (!event.avatarUri.isNullOrBlank()) {
+                        AsyncImage(
+                            model = event.avatarUri,
+                            contentDescription = event.name,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.matchParentSize()
+                        )
+                        Box(modifier = Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.38f)))
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxSize().padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Surface(
+                            shape = MaterialTheme.shapes.large,
+                            color = Color.White.copy(alpha = 0.22f),
+                            modifier = Modifier.size(64.dp)
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                                Text(days.toString(), style = MaterialTheme.typography.titleLarge, color = eventTextColor)
+                                Text("天", style = MaterialTheme.typography.labelSmall, color = eventTextColor)
+                            }
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(event.name, style = MaterialTheme.typography.titleMedium, color = eventTextColor, maxLines = 1)
+                            Text(
+                                text = listOfNotNull(
+                                    if (event.isPinned) "置顶" else null,
+                                    eventTypeLabel(event.type),
+                                    com.memoriabox.ui.screen.components.formatDate(event.date)
+                                ).joinToString(" · "),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = eventTextColor.copy(alpha = 0.82f)
+                            )
+                            if (event.reminderEnabled) {
+                                Text(
+                                    text = "提前 ${event.reminderDays} 天提醒",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
                     }
                 }
             }
