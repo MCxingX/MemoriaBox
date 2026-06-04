@@ -1,9 +1,7 @@
 package com.memoriabox.ui.screen
 
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -22,11 +20,14 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.memoriabox.ui.utils.rememberAdaptiveUiSize
 import com.memoriabox.utils.AppSettings
+import com.memoriabox.utils.ImageImportUtils
 
 @Composable
 fun CustomizationSettingsScreen(onNavigateBack: () -> Unit) {
     val context = LocalContext.current
+    val adaptiveUi = rememberAdaptiveUiSize()
     var homeBg by remember { mutableStateOf(AppSettings.getHomeBgUri(context)) }
     var calendarBg by remember { mutableStateOf(AppSettings.getCalendarBgUri(context)) }
     var todoBg by remember { mutableStateOf(AppSettings.getTodoBgUri(context)) }
@@ -40,15 +41,25 @@ fun CustomizationSettingsScreen(onNavigateBack: () -> Unit) {
     var settingsIcon by remember { mutableStateOf(AppSettings.getSettingsIconUri(context)) }
 
     var targetForPick by remember { mutableStateOf<String?>(null) }
-    var customQuote by remember { mutableStateOf(AppSettings.getCustomDailyQuote(context).orEmpty()) }
+    var customQuotes by remember { mutableStateOf(AppSettings.getCustomDailyQuotes(context)) }
     var useCustomQuote by remember { mutableStateOf(AppSettings.getUseCustomQuote(context)) }
+    var quoteDraft by remember { mutableStateOf("") }
+    var editingQuoteIndex by remember { mutableStateOf<Int?>(null) }
+    var showQuoteEditor by remember { mutableStateOf(false) }
 
-    val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+    fun updateAllBgState() {
+        allBg = if (!homeBg.isNullOrBlank() && homeBg == calendarBg && homeBg == todoBg && homeBg == settingsBg) {
+            homeBg
+        } else {
+            null
+        }
+    }
+
+    val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         val target = targetForPick
         targetForPick = null
         uri ?: return@rememberLauncherForActivityResult
-        persistReadPermission(context, uri)
-        val value = uri.toString()
+        val value = ImageImportUtils.copyImageToPrivateStorage(context, uri, "customization_images") ?: uri.toString()
         when (target) {
             "ALL_BG" -> {
                 allBg = value
@@ -70,59 +81,195 @@ fun CustomizationSettingsScreen(onNavigateBack: () -> Unit) {
             "TODO_ICON" -> { todoIcon = value; AppSettings.setTodoIconUri(context, value) }
             "SETTINGS_ICON" -> { settingsIcon = value; AppSettings.setSettingsIconUri(context, value) }
         }
+        if (target?.endsWith("_BG") == true) updateAllBgState()
     }
 
     fun chooseImage(target: String) {
         targetForPick = target
-        pickImage.launch(arrayOf("image/*"))
+        pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
     }
 
-    Scaffold(topBar = { TopAppBar(title = { Text("个性化设置") }, navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } }) }) { paddingValues ->
-        Column(modifier = Modifier.padding(paddingValues).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Scaffold(topBar = { TopAppBar(modifier = Modifier.height(adaptiveUi.topBarHeight), windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp), title = { Text("个性化设置") }, navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } }) }) { paddingValues ->
+        Column(modifier = Modifier.padding(paddingValues).fillMaxSize().verticalScroll(rememberScrollState()).padding(adaptiveUi.screenPadding), verticalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing + 4.dp)) {
             Text("页面背景", style = MaterialTheme.typography.titleLarge)
             CustomizationBgCard(title = "全部页面背景", uri = allBg, onClick = { chooseImage("ALL_BG") }, onClear = { allBg = null; homeBg = null; calendarBg = null; todoBg = null; settingsBg = null; AppSettings.setHomeBgUri(context, null); AppSettings.setCalendarBgUri(context, null); AppSettings.setTodoBgUri(context, null); AppSettings.setSettingsBgUri(context, null) })
-            CustomizationBgCard(title = "日子首页背景", uri = homeBg, onClick = { chooseImage("HOME_BG") }, onClear = { homeBg = null; AppSettings.setHomeBgUri(context, null) })
-            CustomizationBgCard(title = "日历页背景", uri = calendarBg, onClick = { chooseImage("CALENDAR_BG") }, onClear = { calendarBg = null; AppSettings.setCalendarBgUri(context, null) })
-            CustomizationBgCard(title = "待办页背景", uri = todoBg, onClick = { chooseImage("TODO_BG") }, onClear = { todoBg = null; AppSettings.setTodoBgUri(context, null) })
-            CustomizationBgCard(title = "我的页背景", uri = settingsBg, onClick = { chooseImage("SETTINGS_BG") }, onClear = { settingsBg = null; AppSettings.setSettingsBgUri(context, null) })
+            CustomizationBgCard(title = "日子首页背景", uri = homeBg, onClick = { chooseImage("HOME_BG") }, onClear = { homeBg = null; AppSettings.setHomeBgUri(context, null); updateAllBgState() })
+            CustomizationBgCard(title = "日历页背景", uri = calendarBg, onClick = { chooseImage("CALENDAR_BG") }, onClear = { calendarBg = null; AppSettings.setCalendarBgUri(context, null); updateAllBgState() })
+            CustomizationBgCard(title = "待办页背景", uri = todoBg, onClick = { chooseImage("TODO_BG") }, onClear = { todoBg = null; AppSettings.setTodoBgUri(context, null); updateAllBgState() })
+            CustomizationBgCard(title = "我的页背景", uri = settingsBg, onClick = { chooseImage("SETTINGS_BG") }, onClear = { settingsBg = null; AppSettings.setSettingsBgUri(context, null); updateAllBgState() })
             Button(onClick = { AppSettings.setHomeBgUri(context, null); AppSettings.setCalendarBgUri(context, null); AppSettings.setTodoBgUri(context, null); AppSettings.setSettingsBgUri(context, null); allBg = null; homeBg = null; calendarBg = null; todoBg = null; settingsBg = null }, modifier = Modifier.fillMaxWidth()) { Text("全部清除") }
 
             Text("底部图标", style = MaterialTheme.typography.titleLarge)
-            CustomizationBgCard(title = "日子图标", uri = homeIcon, onClick = { chooseImage("HOME_ICON") }, onClear = { homeIcon = null; AppSettings.setHomeIconUri(context, null) })
-            CustomizationBgCard(title = "日历图标", uri = calendarIcon, onClick = { chooseImage("CALENDAR_ICON") }, onClear = { calendarIcon = null; AppSettings.setCalendarIconUri(context, null) })
-            CustomizationBgCard(title = "待办图标", uri = todoIcon, onClick = { chooseImage("TODO_ICON") }, onClear = { todoIcon = null; AppSettings.setTodoIconUri(context, null) })
-            CustomizationBgCard(title = "我的图标", uri = settingsIcon, onClick = { chooseImage("SETTINGS_ICON") }, onClear = { settingsIcon = null; AppSettings.setSettingsIconUri(context, null) })
+            IconCustomizationGrid(
+                items = listOf(
+                    IconCustomizationItem("日子图标", homeIcon, { chooseImage("HOME_ICON") }, { homeIcon = null; AppSettings.setHomeIconUri(context, null) }),
+                    IconCustomizationItem("日历图标", calendarIcon, { chooseImage("CALENDAR_ICON") }, { calendarIcon = null; AppSettings.setCalendarIconUri(context, null) }),
+                    IconCustomizationItem("待办图标", todoIcon, { chooseImage("TODO_ICON") }, { todoIcon = null; AppSettings.setTodoIconUri(context, null) }),
+                    IconCustomizationItem("我的图标", settingsIcon, { chooseImage("SETTINGS_ICON") }, { settingsIcon = null; AppSettings.setSettingsIconUri(context, null) })
+                )
+            )
             Button(onClick = { AppSettings.setHomeIconUri(context, null); AppSettings.setCalendarIconUri(context, null); AppSettings.setTodoIconUri(context, null); AppSettings.setSettingsIconUri(context, null); homeIcon = null; calendarIcon = null; todoIcon = null; settingsIcon = null }, modifier = Modifier.fillMaxWidth()) { Text("恢复默认图标") }
 
-            Text("每日一言", style = MaterialTheme.typography.titleLarge)
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("启用自定义固定语录")
+                Text("每日一言", style = MaterialTheme.typography.titleLarge)
+                FilledTonalButton(
+                    onClick = {
+                        useCustomQuote = true
+                        AppSettings.setUseCustomQuote(context, true)
+                        editingQuoteIndex = null
+                        quoteDraft = ""
+                        showQuoteEditor = true
+                    }
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text("新增")
+                }
+            }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("启用我的语录轮放")
+                    Text("每次新增会单独保存为一条，首页按日期轮流展示", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
                 Switch(checked = useCustomQuote, onCheckedChange = { useCustomQuote = it; AppSettings.setUseCustomQuote(context, it) })
             }
             if (useCustomQuote) {
+                if (customQuotes.isEmpty()) {
+                    Text("还没有自定义语录，添加后首页会优先轮放你的句子。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                customQuotes.forEachIndexed { index, quote ->
+                    QuoteEditCard(
+                        quote = quote,
+                        onEdit = {
+                            editingQuoteIndex = index
+                            quoteDraft = quote
+                            showQuoteEditor = true
+                        },
+                        onDelete = {
+                            customQuotes = customQuotes.toMutableList().also { it.removeAt(index) }
+                            AppSettings.setCustomDailyQuotes(context, customQuotes)
+                        }
+                    )
+                }
+                OutlinedButton(
+                    onClick = {
+                        useCustomQuote = false
+                        AppSettings.setUseCustomQuote(context, false)
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("使用内置随机轮换") }
+            }
+        }
+    }
+
+    if (showQuoteEditor) {
+        AlertDialog(
+            onDismissRequest = { showQuoteEditor = false },
+            title = { Text(if (editingQuoteIndex == null) "新增每日一言" else "编辑每日一言") },
+            text = {
                 OutlinedTextField(
-                    value = customQuote,
-                    onValueChange = { customQuote = it; AppSettings.setCustomDailyQuote(context, it) },
-                    label = { Text("输入每日固定语录") },
+                    value = quoteDraft,
+                    onValueChange = { quoteDraft = it },
+                    label = { Text("单条句子内容") },
                     modifier = Modifier.fillMaxWidth(),
-                    minLines = 2
+                    minLines = 3,
+                    maxLines = 8
                 )
-                Button(onClick = { customQuote = ""; AppSettings.setCustomDailyQuote(context, null); useCustomQuote = false; AppSettings.setUseCustomQuote(context, false) }, modifier = Modifier.fillMaxWidth()) { Text("恢复随机轮换") }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val value = quoteDraft.trim()
+                        if (value.isNotBlank()) {
+                            customQuotes = customQuotes.toMutableList().apply {
+                                val editIndex = editingQuoteIndex
+                                if (editIndex == null) add(value) else set(editIndex, value)
+                            }
+                            AppSettings.setCustomDailyQuotes(context, customQuotes)
+                            useCustomQuote = true
+                            AppSettings.setUseCustomQuote(context, true)
+                            showQuoteEditor = false
+                            quoteDraft = ""
+                            editingQuoteIndex = null
+                        }
+                    },
+                    enabled = quoteDraft.isNotBlank()
+                ) { Text("保存") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showQuoteEditor = false }) { Text("取消") }
+            }
+        )
+    }
+}
+
+private data class IconCustomizationItem(
+    val title: String,
+    val uri: String?,
+    val onClick: () -> Unit,
+    val onClear: () -> Unit
+)
+
+@Composable
+private fun IconCustomizationGrid(items: List<IconCustomizationItem>) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        items.chunked(2).forEach { rowItems ->
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                rowItems.forEach { item ->
+                    IconCustomizationCard(
+                        title = item.title,
+                        uri = item.uri,
+                        onClick = item.onClick,
+                        onClear = item.onClear,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                if (rowItems.size == 1) Spacer(modifier = Modifier.weight(1f))
             }
         }
     }
 }
 
-private fun persistReadPermission(context: Context, uri: Uri) {
-    try {
-        context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    } catch (_: SecurityException) {
+@Composable
+private fun IconCustomizationCard(title: String, uri: String?, onClick: () -> Unit, onClear: () -> Unit, modifier: Modifier = Modifier) {
+    OutlinedCard(
+        modifier = modifier.clickable(onClick = onClick),
+        colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.84f))
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(72.dp)
+                    .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.52f), MaterialTheme.shapes.large),
+                contentAlignment = Alignment.Center
+            ) {
+                if (uri.isNullOrBlank()) {
+                    Icon(Icons.Default.Image, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                } else {
+                    AsyncImage(model = uri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                }
+            }
+            Text(title, style = MaterialTheme.typography.bodyMedium)
+            Text(if (uri.isNullOrBlank()) "点击上传" else "已设置", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (!uri.isNullOrBlank()) {
+                TextButton(onClick = onClear) { Text("移除") }
+            }
+        }
     }
 }
 
 @Composable
 private fun CustomizationBgCard(title: String, uri: String?, onClick: () -> Unit, onClear: () -> Unit) {
-    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+    OutlinedCard(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.outlinedCardColors(
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.84f)
+        )
+    ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(title, style = MaterialTheme.typography.bodyLarge)
@@ -133,6 +280,30 @@ private fun CustomizationBgCard(title: String, uri: String?, onClick: () -> Unit
                     AsyncImage(model = uri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                 }
                 TextButton(onClick = onClear, modifier = Modifier.align(Alignment.End)) { Text("移除这张") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuoteEditCard(quote: String, onEdit: () -> Unit, onDelete: () -> Unit) {
+    OutlinedCard(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.84f))
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(quote, style = MaterialTheme.typography.bodyMedium)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = onEdit) {
+                    Icon(Icons.Default.Edit, contentDescription = null)
+                    Spacer(Modifier.width(4.dp))
+                    Text("编辑")
+                }
+                TextButton(onClick = onDelete) {
+                    Icon(Icons.Default.Delete, contentDescription = null)
+                    Spacer(Modifier.width(4.dp))
+                    Text("删除")
+                }
             }
         }
     }

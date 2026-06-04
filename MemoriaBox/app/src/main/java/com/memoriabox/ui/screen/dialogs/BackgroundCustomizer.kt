@@ -2,6 +2,7 @@ package com.memoriabox.ui.screen.dialogs
 
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -18,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.memoriabox.utils.ColorUtils
+import com.memoriabox.utils.ImageImportUtils
 
 @Composable
 fun BackgroundCustomizerDialog(
@@ -34,11 +36,11 @@ fun BackgroundCustomizerDialog(
     var showColorPicker by remember { mutableStateOf(false) }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
+        contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         uri?.let {
             selectedBgType = com.memoriabox.data.model.BgType.IMAGE
-            selectedBgValue = it.toString()
+            selectedBgValue = ImageImportUtils.copyImageToPrivateStorage(context, it, "dialog_backgrounds") ?: it.toString()
         }
     }
 
@@ -86,7 +88,7 @@ fun BackgroundCustomizerDialog(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     OutlinedButton(
-                        onClick = { imagePickerLauncher.launch("image/*") },
+                        onClick = { imagePickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                         modifier = Modifier.weight(1f)
                     ) {
                         Icon(Icons.Default.Image, contentDescription = null)

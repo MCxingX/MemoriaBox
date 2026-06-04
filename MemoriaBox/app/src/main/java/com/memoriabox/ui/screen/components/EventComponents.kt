@@ -1,9 +1,12 @@
 package com.memoriabox.ui.screen.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -12,6 +15,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -19,6 +24,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -27,10 +33,12 @@ import coil.compose.AsyncImage
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.memoriabox.data.model.*
+import com.memoriabox.ui.utils.rememberAdaptiveUiSize
 import com.memoriabox.utils.ColorUtils
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.TimeUnit
+import kotlin.math.abs
 
 @Composable
 fun LayoutModeSelector(
@@ -106,16 +114,31 @@ fun EnhancedEventGrid(
 @Composable
 fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit) {
     val daysRemaining = calculateDays(event.date, event.type)
-    val styleOptions = remember { listOf(CardVisualStyle.HeroWide, CardVisualStyle.PosterTall, CardVisualStyle.GlassCompact, CardVisualStyle.SplitPanel) }
+    val styleOptions = remember {
+        listOf(
+            CardVisualStyle.HeroWide,
+            CardVisualStyle.PosterTall,
+            CardVisualStyle.GlassCompact,
+            CardVisualStyle.SplitPanel,
+            CardVisualStyle.NeonRail,
+            CardVisualStyle.MinimalBadge
+        )
+    }
     val initialStyle = when (event.cardTemplate) {
         "POSTER" -> CardVisualStyle.PosterTall
         "GLASS" -> CardVisualStyle.GlassCompact
         "SPLIT" -> CardVisualStyle.SplitPanel
+        "NEON" -> CardVisualStyle.NeonRail
+        "MINIMAL" -> CardVisualStyle.MinimalBadge
         else -> CardVisualStyle.HeroWide
     }
     var styleIndex by remember(event.id, event.cardTemplate) { mutableIntStateOf(styleOptions.indexOf(initialStyle).coerceAtLeast(0)) }
     var isDragging by remember { mutableStateOf(false) }
+    var dragOffset by remember { mutableFloatStateOf(0f) }
     val style = styleOptions[styleIndex]
+    val dragProgress = (dragOffset / 180f).coerceIn(-1f, 1f)
+    val animatedScale by animateFloatAsState(targetValue = if (isDragging) 1.04f else 1f, label = "eventCardScale")
+    val animatedElevation by animateDpAsState(targetValue = if (isDragging) 16.dp else 4.dp, label = "eventCardElevation")
     val hasImage = event.avatarUri != null
     val displayFields = event.displayFields.split(",").map { it.trim() }.toSet()
     val eventTextColor = ColorUtils.hexToColor(event.textColor)
@@ -124,27 +147,49 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
         CardVisualStyle.PosterTall -> 236.dp
         CardVisualStyle.GlassCompact -> 138.dp
         CardVisualStyle.SplitPanel -> 196.dp
+        CardVisualStyle.NeonRail -> 184.dp
+        CardVisualStyle.MinimalBadge -> 152.dp
     }
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .height(cardHeight)
-            .shadow(elevation = if (isDragging) 12.dp else 4.dp, shape = RoundedCornerShape(22.dp))
+            .graphicsLayer {
+                scaleX = animatedScale
+                scaleY = animatedScale
+                rotationZ = dragProgress * 4f
+                translationX = dragOffset * 0.22f
+            }
+            .shadow(elevation = animatedElevation, shape = RoundedCornerShape(22.dp))
             .pointerInput(event.id) {
                 detectDragGestures(
                     onDragStart = { isDragging = true },
-                    onDragCancel = { isDragging = false },
+                    onDragCancel = {
+                        isDragging = false
+                        dragOffset = 0f
+                    },
                     onDragEnd = {
                         isDragging = false
-                        styleIndex = (styleIndex + 1) % styleOptions.size
+                        if (abs(dragOffset) > 44f) {
+                            styleIndex = if (dragOffset > 0f) {
+                                (styleIndex + 1) % styleOptions.size
+                            } else {
+                                (styleIndex - 1 + styleOptions.size) % styleOptions.size
+                            }
+                        }
+                        dragOffset = 0f
                     },
-                    onDrag = { change, _ -> change.consume() }
+                    onDrag = { change, dragAmount ->
+                        dragOffset += dragAmount.x
+                        change.consume()
+                    }
                 )
             }
             .combinedClickable(onClick = onClick, onLongClick = onLongPress),
         shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = if (isDragging) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.72f)) else null
     ) {
         Box(
             modifier = Modifier
@@ -187,12 +232,18 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
             Box(
                 modifier = Modifier
                     .matchParentSize()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(Color.Black.copy(alpha = 0.06f), Color.Black.copy(alpha = 0.58f))
-                        )
-                    )
+                    .background(cardOverlayBrush(style))
             )
+
+            if (style == CardVisualStyle.NeonRail) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .fillMaxHeight()
+                        .width(8.dp)
+                        .background(Brush.verticalGradient(listOf(ColorUtils.hexToColor(event.gradientStart), ColorUtils.hexToColor(event.gradientEnd))))
+                )
+            }
 
             if (isDragging) {
                 Box(
@@ -208,7 +259,7 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
                     shape = RoundedCornerShape(999.dp)
                 ) {
                     Text(
-                        "松手应用新排版",
+                        if (dragOffset < -44f) "松手切上一款" else if (dragOffset > 44f) "松手切下一款" else "左右拖动换排版",
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                         color = MaterialTheme.colorScheme.onPrimary,
                         style = MaterialTheme.typography.labelSmall
@@ -216,47 +267,156 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
                 }
             }
 
-            Column(
+            when (style) {
+                CardVisualStyle.SplitPanel -> EventCardSplitContent(event, daysRemaining, displayFields, eventTextColor)
+                CardVisualStyle.GlassCompact -> EventCardGlassContent(event, daysRemaining, displayFields, eventTextColor)
+                CardVisualStyle.PosterTall -> EventCardPosterContent(event, daysRemaining, displayFields, eventTextColor)
+                CardVisualStyle.MinimalBadge -> EventCardMinimalContent(event, daysRemaining, displayFields, eventTextColor)
+                else -> EventCardHeroContent(event, daysRemaining, displayFields, eventTextColor, style == CardVisualStyle.NeonRail)
+            }
+
+            Surface(
                 modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(16.dp)
+                    .align(Alignment.BottomEnd)
+                    .padding(12.dp),
+                color = Color.White.copy(alpha = if (isDragging) 0.30f else 0.16f),
+                shape = RoundedCornerShape(999.dp)
             ) {
-                Surface(
-                    color = Color.White.copy(alpha = 0.22f),
-                    shape = RoundedCornerShape(999.dp)
-                ) {
-                    Text(
-                        text = eventTypeText(event.type),
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        color = eventTextColor,
-                        style = MaterialTheme.typography.labelSmall
-                    )
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(text = event.name, style = MaterialTheme.typography.titleLarge, color = eventTextColor, maxLines = 2)
                 Text(
-                    text = "${daysRemaining} 天",
-                    style = if (style == CardVisualStyle.PosterTall) MaterialTheme.typography.displaySmall else MaterialTheme.typography.headlineMedium,
-                    color = eventTextColor
+                    text = cardStyleLabel(style),
+                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                    color = eventTextColor,
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1
                 )
-                if ("date" in displayFields) {
-                    Text(text = formatDate(event.date), style = MaterialTheme.typography.bodySmall, color = eventTextColor.copy(alpha = 0.86f))
-                }
-                if ("lunar" in displayFields && event.lunar != null) {
-                    Text(text = event.lunar, style = MaterialTheme.typography.labelSmall, color = eventTextColor.copy(alpha = 0.82f), maxLines = 1)
-                }
-                if ("note" in displayFields && event.note.isNotBlank()) {
-                    Text(text = event.note, style = MaterialTheme.typography.labelSmall, color = eventTextColor.copy(alpha = 0.82f), maxLines = 1)
-                }
-                if ("reminder" in displayFields && event.reminderEnabled) {
-                    Text(text = "提前 ${event.reminderDays} 天提醒", style = MaterialTheme.typography.labelSmall, color = eventTextColor.copy(alpha = 0.82f), maxLines = 1)
-                }
             }
         }
     }
 }
 
-private enum class CardVisualStyle { HeroWide, PosterTall, GlassCompact, SplitPanel }
+@Composable
+private fun EventCardHeroContent(event: Event, daysRemaining: Long, displayFields: Set<String>, color: Color, insetForRail: Boolean) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth(0.82f)
+            .padding(if (insetForRail) 20.dp else 16.dp)
+            .wrapContentHeight()
+    ) {
+        EventTypePill(event.type, color)
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(text = event.name, style = MaterialTheme.typography.titleLarge, color = color, maxLines = 2)
+        Text(text = "$daysRemaining 天", style = MaterialTheme.typography.headlineMedium, color = color)
+        EventMetaLines(event, displayFields, color)
+    }
+}
+
+@Composable
+private fun EventCardPosterContent(event: Event, daysRemaining: Long, displayFields: Set<String>, color: Color) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(18.dp),
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            EventTypePill(event.type, color)
+            Text(formatDate(event.date), style = MaterialTheme.typography.labelSmall, color = color.copy(alpha = 0.86f), maxLines = 1)
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+            Text(text = "$daysRemaining", style = MaterialTheme.typography.displayMedium, color = color)
+            Text(text = "天", style = MaterialTheme.typography.titleMedium, color = color.copy(alpha = 0.88f))
+        }
+        Column {
+            Text(text = event.name, style = MaterialTheme.typography.titleLarge, color = color, maxLines = 2)
+            EventMetaLines(event, displayFields - "date", color)
+        }
+    }
+}
+
+@Composable
+private fun BoxScope.EventCardGlassContent(event: Event, daysRemaining: Long, displayFields: Set<String>, color: Color) {
+    Surface(
+        modifier = Modifier
+            .align(Alignment.BottomStart)
+            .padding(14.dp)
+            .fillMaxWidth(0.88f),
+        color = Color.White.copy(alpha = 0.18f),
+        shape = RoundedCornerShape(18.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(text = event.name, style = MaterialTheme.typography.titleMedium, color = color, maxLines = 1)
+            Text(text = "$daysRemaining 天", style = MaterialTheme.typography.headlineSmall, color = color)
+            EventMetaLines(event, displayFields, color)
+        }
+    }
+}
+
+@Composable
+private fun EventCardSplitContent(event: Event, daysRemaining: Long, displayFields: Set<String>, color: Color) {
+    Row(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Surface(color = Color.White.copy(alpha = 0.22f), shape = RoundedCornerShape(18.dp), modifier = Modifier.size(76.dp)) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center, modifier = Modifier.fillMaxSize()) {
+                Text(text = "$daysRemaining", style = MaterialTheme.typography.headlineMedium, color = color, maxLines = 1)
+                Text(text = "天", style = MaterialTheme.typography.labelSmall, color = color.copy(alpha = 0.82f))
+            }
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            EventTypePill(event.type, color)
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(text = event.name, style = MaterialTheme.typography.titleMedium, color = color, maxLines = 2)
+            EventMetaLines(event, displayFields, color)
+        }
+    }
+}
+
+@Composable
+private fun BoxScope.EventCardMinimalContent(event: Event, daysRemaining: Long, displayFields: Set<String>, color: Color) {
+    Column(modifier = Modifier.align(Alignment.CenterStart).padding(18.dp).fillMaxWidth(0.74f)) {
+        Text(text = "$daysRemaining 天", style = MaterialTheme.typography.titleLarge, color = color)
+        Text(text = event.name, style = MaterialTheme.typography.titleMedium, color = color, maxLines = 2)
+        EventMetaLines(event, displayFields, color)
+    }
+}
+
+@Composable
+private fun EventTypePill(type: EventType, color: Color) {
+    Surface(color = Color.White.copy(alpha = 0.22f), shape = RoundedCornerShape(999.dp)) {
+        Text(text = eventTypeText(type), modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp), color = color, style = MaterialTheme.typography.labelSmall)
+    }
+}
+
+@Composable
+private fun EventMetaLines(event: Event, displayFields: Set<String>, color: Color) {
+    if ("date" in displayFields) Text(text = formatDate(event.date), style = MaterialTheme.typography.bodySmall, color = color.copy(alpha = 0.86f), maxLines = 1)
+    if ("lunar" in displayFields && event.lunar != null) Text(text = event.lunar, style = MaterialTheme.typography.labelSmall, color = color.copy(alpha = 0.82f), maxLines = 1)
+    if ("note" in displayFields && event.note.isNotBlank()) Text(text = event.note, style = MaterialTheme.typography.labelSmall, color = color.copy(alpha = 0.82f), maxLines = 1)
+    if ("reminder" in displayFields && event.reminderEnabled) Text(text = "提前 ${event.reminderDays} 天提醒", style = MaterialTheme.typography.labelSmall, color = color.copy(alpha = 0.82f), maxLines = 1)
+}
+
+private enum class CardVisualStyle { HeroWide, PosterTall, GlassCompact, SplitPanel, NeonRail, MinimalBadge }
+
+private fun cardStyleLabel(style: CardVisualStyle): String = when (style) {
+    CardVisualStyle.HeroWide -> "封面"
+    CardVisualStyle.PosterTall -> "海报"
+    CardVisualStyle.GlassCompact -> "玻璃"
+    CardVisualStyle.SplitPanel -> "分栏"
+    CardVisualStyle.NeonRail -> "光轨"
+    CardVisualStyle.MinimalBadge -> "徽章"
+}
+
+private fun cardOverlayBrush(style: CardVisualStyle): Brush = when (style) {
+    CardVisualStyle.GlassCompact -> Brush.linearGradient(listOf(Color.White.copy(alpha = 0.18f), Color.Black.copy(alpha = 0.50f)))
+    CardVisualStyle.SplitPanel -> Brush.horizontalGradient(listOf(Color.Black.copy(alpha = 0.70f), Color.Black.copy(alpha = 0.18f)))
+    CardVisualStyle.NeonRail -> Brush.linearGradient(listOf(Color.Black.copy(alpha = 0.68f), Color.Black.copy(alpha = 0.18f), Color.Black.copy(alpha = 0.60f)))
+    CardVisualStyle.MinimalBadge -> Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.18f), Color.Black.copy(alpha = 0.46f)))
+    else -> Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.06f), Color.Black.copy(alpha = 0.58f)))
+}
 
 private fun eventTypeText(type: EventType): String = when (type) {
     EventType.COUNTDOWN -> "还剩"
@@ -269,8 +429,11 @@ private fun eventTypeText(type: EventType): String = when (type) {
 @Composable
 fun CalendarViewScreen(
     events: List<Event>,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onAddEvent: (Long) -> Unit = {},
+    onEventClick: (Event) -> Unit = {}
 ) {
+    val adaptiveUi = rememberAdaptiveUiSize()
     var currentMonthYear by remember { mutableStateOf("${Calendar.getInstance().get(Calendar.YEAR)}-${Calendar.getInstance().get(Calendar.MONTH) + 1}") }
     val monthFormat = SimpleDateFormat("yyyy年MM月", Locale.getDefault())
     val cal = remember(currentMonthYear) {
@@ -292,10 +455,13 @@ fun CalendarViewScreen(
     val nearestEvent = remember(monthEvents) {
         monthEvents.minByOrNull { kotlin.math.abs(it.date - System.currentTimeMillis()) }
     }
+    var selectedDay by remember { mutableStateOf<Pair<Long, List<Event>>?>(null) }
 
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(
+            modifier = Modifier.height(adaptiveUi.topBarHeight),
             title = { Text("日历视图") },
+            windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
         )
         CalendarBoardSummary(
@@ -307,7 +473,7 @@ fun CalendarViewScreen(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = adaptiveUi.screenPadding, vertical = adaptiveUi.sectionSpacing),
             shape = MaterialTheme.shapes.extraLarge,
             colors = CardDefaults.cardColors(containerColor = Color.Transparent)
         ) {
@@ -336,12 +502,36 @@ fun CalendarViewScreen(
             }
         }
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            val horizontalPadding = 12.dp
+            val horizontalPadding = adaptiveUi.screenPadding
             val widthCell = (maxWidth - horizontalPadding * 2) / 7
             val heightCell = ((maxHeight - 36.dp).coerceAtLeast(240.dp)) / 6
             val cellSize = minOf(widthCell, heightCell).coerceAtLeast(36.dp)
-            CalendarGrid(currentMonth = cal, events = events, cellSize = cellSize, horizontalPadding = horizontalPadding)
+            CalendarGrid(
+                currentMonth = cal,
+                events = events,
+                cellSize = cellSize,
+                horizontalPadding = horizontalPadding,
+                onDayClick = { dayCal, dayEvents ->
+                    selectedDay = dayCal.timeInMillis to dayEvents
+                }
+            )
         }
+    }
+
+    selectedDay?.let { (date, dayEvents) ->
+        CalendarDayDetailDialog(
+            date = date,
+            events = dayEvents,
+            onDismiss = { selectedDay = null },
+            onAddEvent = {
+                selectedDay = null
+                onAddEvent(date)
+            },
+            onEventClick = { event ->
+                selectedDay = null
+                onEventClick(event)
+            }
+        )
     }
 }
 
@@ -352,12 +542,13 @@ private fun CalendarBoardSummary(
     todayCount: Int,
     nearestEvent: Event?
 ) {
+    val adaptiveUi = rememberAdaptiveUiSize()
     Card(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = adaptiveUi.screenPadding, vertical = adaptiveUi.sectionSpacing),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(modifier = Modifier.padding(if (adaptiveUi.compact) 10.dp else 14.dp), verticalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 CalendarBoardMetric("全部", totalCount.toString(), Modifier.weight(1f))
                 CalendarBoardMetric("本月", monthCount.toString(), Modifier.weight(1f))
@@ -388,7 +579,13 @@ private fun CalendarBoardMetric(label: String, value: String, modifier: Modifier
 }
 
 @Composable
-fun CalendarGrid(currentMonth: Calendar, events: List<Event>, cellSize: androidx.compose.ui.unit.Dp, horizontalPadding: androidx.compose.ui.unit.Dp) {
+fun CalendarGrid(
+    currentMonth: Calendar,
+    events: List<Event>,
+    cellSize: androidx.compose.ui.unit.Dp,
+    horizontalPadding: androidx.compose.ui.unit.Dp,
+    onDayClick: (Calendar, List<Event>) -> Unit = { _, _ -> }
+) {
     val daysOfWeek = listOf("日", "一", "二", "三", "四", "五", "六")
     val calendar = currentMonth.clone() as Calendar
     calendar.set(Calendar.DAY_OF_MONTH, 1)
@@ -423,7 +620,13 @@ fun CalendarGrid(currentMonth: Calendar, events: List<Event>, cellSize: androidx
                         val isToday = dayNumber == todayDay && currentMonth.get(Calendar.MONTH) == todayMonth && currentMonth.get(Calendar.YEAR) == todayYear
 
                         val dayEvents = events.filter { event -> occursOnDay(event, dayCal) }
-                        CalendarDayCell(day = dayNumber, isToday = isToday, events = dayEvents, modifier = Modifier.weight(1f).height(cellSize))
+                        CalendarDayCell(
+                            day = dayNumber,
+                            isToday = isToday,
+                            events = dayEvents,
+                            modifier = Modifier.weight(1f).height(cellSize),
+                            onClick = { onDayClick(dayCal, dayEvents) }
+                        )
                     } else {
                         Box(modifier = Modifier.weight(1f).height(cellSize))
                     }
@@ -438,12 +641,14 @@ fun CalendarDayCell(
     day: Int,
     isToday: Boolean,
     events: List<Event>,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit = {}
 ) {
     Column(
         modifier = modifier
             .padding(2.dp)
             .clip(RoundedCornerShape(18.dp))
+            .clickable(onClick = onClick)
             .background(
                 if (isToday) Brush.linearGradient(listOf(Color(0xFFFF6B6B).copy(alpha = 0.22f), Color(0xFF7C5CFF).copy(alpha = 0.18f)))
                 else Brush.linearGradient(listOf(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.52f)))
@@ -467,6 +672,68 @@ fun CalendarDayCell(
             }
         }
     }
+}
+
+@Composable
+private fun CalendarDayDetailDialog(
+    date: Long,
+    events: List<Event>,
+    onDismiss: () -> Unit,
+    onAddEvent: () -> Unit,
+    onEventClick: (Event) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(SimpleDateFormat("yyyy年M月d日", Locale.getDefault()).format(Date(date))) },
+        text = {
+            Box(modifier = Modifier.fillMaxWidth().heightIn(min = 220.dp, max = 360.dp)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(bottom = 72.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (events.isEmpty()) {
+                        Text("这一天还没有日子，可以点击右下角添加。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        events.forEach { event ->
+                            Surface(
+                                modifier = Modifier.fillMaxWidth().clickable { onEventClick(event) },
+                                shape = MaterialTheme.shapes.large,
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier.size(10.dp).clip(RoundedCornerShape(5.dp)).background(ColorUtils.hexToColor(event.gradientStart))
+                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(event.name, style = MaterialTheme.typography.titleSmall, maxLines = 1)
+                                        Text(eventTypeText(event.type), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    Icon(Icons.Default.ChevronRight, contentDescription = null)
+                                }
+                            }
+                        }
+                    }
+                }
+                FloatingActionButton(
+                    onClick = onAddEvent,
+                    modifier = Modifier.align(Alignment.BottomEnd),
+                    containerColor = MaterialTheme.colorScheme.primary
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "添加日子")
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("关闭") }
+        }
+    )
 }
 
 @Composable

@@ -13,6 +13,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -41,6 +42,8 @@ import com.memoriabox.ui.screen.dialogs.BatchSelectDialog
 import com.memoriabox.ui.screen.dialogs.BoxDialog
 import com.memoriabox.ui.screen.dialogs.EventDialog
 import com.memoriabox.ui.screen.dialogs.MoveToBoxDialog
+import com.memoriabox.ui.utils.AdaptiveUiSize
+import com.memoriabox.ui.utils.rememberAdaptiveUiSize
 import com.memoriabox.data.model.*
 import com.memoriabox.ui.theme.AppThemeMode
 import com.memoriabox.utils.AppSettings
@@ -61,6 +64,7 @@ fun MainScreen(
     var selectedTab by remember { mutableStateOf(0) }
     val mainViewModel = remember { createMainViewModel(application) }
     val boxes by mainViewModel.boxes.collectAsState(initial = emptyList())
+    val logs by mainViewModel.recentLogs.collectAsState(initial = emptyList())
     var showQuickAdd by remember { mutableStateOf(false) }
     var pendingQuickAddType by remember { mutableStateOf<EventType?>(null) }
     val cuteTexts = remember {
@@ -171,8 +175,61 @@ fun MainScreen(
             composable(Screen.Calendar.route) {
                 val calendarVM = remember { createCalendarViewModel(application) }
                 val events by calendarVM.allEvents.collectAsState(initial = emptyList())
+                var addDateFromCalendar by remember { mutableStateOf<Long?>(null) }
+                var selectedCalendarEvent by remember { mutableStateOf<Event?>(null) }
+                var editCalendarEvent by remember { mutableStateOf<Event?>(null) }
                 ScreenBgWrapper(context = androidx.compose.ui.platform.LocalContext.current, page = "CALENDAR") {
-                    CalendarViewScreen(events = events)
+                    CalendarViewScreen(
+                        events = events,
+                        onAddEvent = { date -> addDateFromCalendar = date },
+                        onEventClick = { event -> selectedCalendarEvent = event }
+                    )
+                }
+                addDateFromCalendar?.let { date ->
+                    EventDialog(
+                        availableBoxes = boxes,
+                        defaultDate = date,
+                        defaultType = EventType.COUNTDOWN,
+                        onDismiss = { addDateFromCalendar = null },
+                        onSave = { event ->
+                            mainViewModel.createQuickEvent(event)
+                            addDateFromCalendar = null
+                        }
+                    )
+                }
+                editCalendarEvent?.let { event ->
+                    EventDialog(
+                        existingEvent = event,
+                        availableBoxes = boxes,
+                        onDismiss = { editCalendarEvent = null },
+                        onSave = { updated ->
+                            mainViewModel.updateQuickEvent(updated)
+                            editCalendarEvent = null
+                        }
+                    )
+                }
+                selectedCalendarEvent?.let { event ->
+                    EventDetailDialog(
+                        event = event,
+                        logs = logs.filter { it.targetId == event.id },
+                        onDismiss = { selectedCalendarEvent = null },
+                        onEdit = {
+                            selectedCalendarEvent = null
+                            editCalendarEvent = event
+                        },
+                        onTogglePin = {
+                            mainViewModel.togglePinned(event)
+                            selectedCalendarEvent = null
+                        },
+                        onDelete = {
+                            mainViewModel.deleteQuickEvent(event)
+                            selectedCalendarEvent = null
+                        },
+                        onOpenCategory = {
+                            selectedCalendarEvent = null
+                            navController.navigate(Screen.BoxDetail.createRoute(event.boxId))
+                        }
+                    )
                 }
             }
             composable(Screen.Todo.route) {
@@ -436,6 +493,7 @@ fun BoxesScreen(
     var showQuickAdd by remember { mutableStateOf(false) }
     var pendingQuickAddType by remember { mutableStateOf<EventType?>(null) }
     val context = LocalContext.current
+    val adaptiveUi = rememberAdaptiveUiSize()
     val settingsVersion = AppSettings.settingsVersion
     val homeBgUri = remember(settingsVersion) { AppSettings.getHomeBgUri(context) }
 
@@ -460,7 +518,9 @@ fun BoxesScreen(
             containerColor = Color.Transparent,
             topBar = {
                 TopAppBar(
+                    modifier = Modifier.height(adaptiveUi.topBarHeight),
                     title = { Text("我的日子") },
+                    windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                     actions = {
                         IconButton(onClick = { showCreateDialog = true }) {
@@ -493,6 +553,7 @@ fun BoxesScreen(
                 onNavigateToAiSuggestions = onNavigateToAiSuggestions,
                 onEventClick = { event -> selectedEvent = event },
                 onEventLongClick = { event -> eventForActions = event },
+                adaptiveUi = adaptiveUi,
                 modifier = Modifier.padding(paddingValues)
             )
         }
@@ -624,6 +685,7 @@ fun HomeDashboard(
     onNavigateToAiSuggestions: () -> Unit,
     onEventClick: (Event) -> Unit,
     onEventLongClick: (Event) -> Unit,
+    adaptiveUi: AdaptiveUiSize,
     modifier: Modifier = Modifier
 ) {
     val sortedEvents = remember(events) {
@@ -643,14 +705,8 @@ fun HomeDashboard(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .padding(horizontal = adaptiveUi.screenPadding, vertical = adaptiveUi.sectionSpacing)
         ) {
-        HomeHeroCard(
-            onEventsClick = { onTabSelected(0) },
-            onFriendsClick = onNavigateToFriends,
-            onBoxesClick = { onTabSelected(1) }
-        )
-        Spacer(Modifier.height(8.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -667,7 +723,14 @@ fun HomeDashboard(
                 onCreateBox = onCreateBox
             )
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(adaptiveUi.sectionSpacing))
+        HomeHeroCard(
+            onEventsClick = { onTabSelected(0) },
+            onFriendsClick = onNavigateToFriends,
+            onBoxesClick = { onTabSelected(1) },
+            adaptiveUi = adaptiveUi
+        )
+        Spacer(Modifier.height(adaptiveUi.sectionSpacing))
         AllEventsTab(events = visibleEvents, onEventClick = onEventClick, onEventLongClick = onEventLongClick)
         }
     }
@@ -677,14 +740,16 @@ fun HomeDashboard(
 fun HomeHeroCard(
     onEventsClick: () -> Unit = {},
     onFriendsClick: () -> Unit = {},
-    onBoxesClick: () -> Unit = {}
+    onBoxesClick: () -> Unit = {},
+    adaptiveUi: AdaptiveUiSize
 ) {
     val context = LocalContext.current
     val settingsVersion = AppSettings.settingsVersion
     val useCustom = remember(settingsVersion) { AppSettings.getUseCustomQuote(context) }
-    val customQuote = remember(settingsVersion) { AppSettings.getCustomDailyQuote(context) }
-    val dailyQuote = if (useCustom && !customQuote.isNullOrBlank()) {
-        DailyQuote("每日语录", customQuote)
+    val customQuotes = remember(settingsVersion) { AppSettings.getCustomDailyQuotes(context) }
+    val dailyQuote = if (useCustom && customQuotes.isNotEmpty()) {
+        val dayOfYear = Calendar.getInstance().get(Calendar.DAY_OF_YEAR)
+        DailyQuote("每日语录", customQuotes[dayOfYear % customQuotes.size])
     } else {
         val quotes = listOf(
             DailyQuote("晨光收藏家", "把今天第一束光，放进值得纪念的小盒子。"),
@@ -713,12 +778,13 @@ fun HomeHeroCard(
     }
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.extraLarge,
+        shape = RoundedCornerShape(adaptiveUi.cardRadius),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
+                .heightIn(min = adaptiveUi.heroMinHeight)
                 .background(
                     Brush.linearGradient(
                         listOf(
@@ -728,13 +794,19 @@ fun HomeHeroCard(
                         )
                     )
                 )
-                .padding(14.dp)
+                .padding(if (adaptiveUi.compact) 12.dp else 16.dp)
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
                 Surface(color = Color.White.copy(alpha = 0.22f), shape = MaterialTheme.shapes.large) {
                     Text(dailyQuote.title, modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp), color = Color.White, style = MaterialTheme.typography.labelSmall)
                 }
-                Text(dailyQuote.content, color = Color.White, style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    text = dailyQuote.content,
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleMedium
+                )
             }
         }
     }
@@ -1206,6 +1278,8 @@ fun cardTemplateLabel(template: String): String = when (template) {
     "POSTER" -> "海报"
     "GLASS" -> "玻璃"
     "SPLIT" -> "分栏"
+    "NEON" -> "光轨"
+    "MINIMAL" -> "徽章"
     else -> "大图"
 }
 
@@ -1735,12 +1809,14 @@ fun SettingsScreen(
     var pushPlusToken by remember { mutableStateOf(pushPlusHelper.getPushPlusToken()) }
     var pushPlusEnabled by remember { mutableStateOf(pushPlusHelper.isPushPlusEnabled()) }
     var pushPlusChannel by remember { mutableStateOf(pushPlusHelper.getPushPlusChannel()) }
+    var showAboutDialog by remember { mutableStateOf(false) }
+    val adaptiveUi = rememberAdaptiveUiSize()
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(top = 12.dp, bottom = 20.dp)
+            .padding(top = adaptiveUi.sectionSpacing, bottom = adaptiveUi.screenPadding)
     ) {
         SettingsHeroCard()
         SettingsSectionTitle("主题设置", "默认蓝白，也可以切换深色、护眼和彩色")
@@ -1822,13 +1898,13 @@ fun SettingsScreen(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .padding(horizontal = adaptiveUi.screenPadding, vertical = adaptiveUi.sectionSpacing)
                 .background(Color.Transparent),
             shape = MaterialTheme.shapes.extraLarge,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(modifier = Modifier.padding(if (adaptiveUi.compact) 12.dp else 16.dp)) {
                 Text("PushPlus 推送", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(8.dp))
                 Row(
@@ -1878,23 +1954,43 @@ fun SettingsScreen(
         SettingsItem(
             icon = Icons.Default.Info,
             title = "关于",
-            description = "版本 1.0.0"
+            description = "版本 3.1.1 · MemoriaBox",
+            onClick = { showAboutDialog = true }
+        )
+    }
+
+    if (showAboutDialog) {
+        AlertDialog(
+            onDismissRequest = { showAboutDialog = false },
+            title = { Text("关于 MemoriaBox") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("版本：3.1.1", style = MaterialTheme.typography.bodyMedium)
+                    Text("MemoriaBox 是一个本地优先的日子、纪念日、待办和照片记录工具。", style = MaterialTheme.typography.bodyMedium)
+                    Text("数据默认保存在本机，可通过备份和 WebDAV 功能进行迁移或同步。", style = MaterialTheme.typography.bodyMedium)
+                    Text("社区：https://dc.hhhl.cc/chat/room/amlc1bekzi", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showAboutDialog = false }) { Text("知道了") }
+            }
         )
     }
 }
 
 @Composable
 fun SettingsHeroCard() {
+    val adaptiveUi = rememberAdaptiveUiSize()
     Card(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = adaptiveUi.screenPadding, vertical = adaptiveUi.sectionSpacing),
         shape = MaterialTheme.shapes.extraLarge,
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.18f))
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(Brush.linearGradient(listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary, MaterialTheme.colorScheme.tertiary)))
-                .padding(20.dp)
+                .padding(if (adaptiveUi.compact) 16.dp else 20.dp)
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("我的设置", color = Color.White, style = MaterialTheme.typography.headlineSmall)
@@ -1910,7 +2006,7 @@ fun ThemeModeCard(currentThemeMode: AppThemeMode, onThemeModeChange: (AppThemeMo
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
         shape = MaterialTheme.shapes.extraLarge,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.84f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1948,7 +2044,15 @@ private fun themePreviewBrush(mode: AppThemeMode): Brush {
 
 @Composable
 fun SettingsSectionTitle(title: String, description: String) {
-    Column(modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 6.dp)) {
+    val adaptiveUi = rememberAdaptiveUiSize()
+    Column(
+        modifier = Modifier.padding(
+            start = adaptiveUi.screenPadding + 4.dp,
+            end = adaptiveUi.screenPadding + 4.dp,
+            top = if (adaptiveUi.compact) 12.dp else 18.dp,
+            bottom = adaptiveUi.sectionSpacing / 2f
+        )
+    ) {
         Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
         Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }

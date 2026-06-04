@@ -1,8 +1,5 @@
 package com.memoriabox.ui.screen.dialogs
 
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -15,6 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.FlowRow
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -35,8 +33,8 @@ import com.memoriabox.data.model.Event
 import com.memoriabox.data.model.EventType
 import com.memoriabox.data.model.RepeatMode
 import com.memoriabox.utils.ColorUtils
+import com.memoriabox.utils.ImageImportUtils
 import coil.compose.AsyncImage
-import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -63,10 +61,9 @@ fun BoxDialog(
     var selectedBgValue by remember { mutableStateOf(existingBox?.bgValue ?: "#7C4DFF") }
     var showEmojiPicker by remember { mutableStateOf(false) }
     var showColorPicker by remember { mutableStateOf(false) }
-    val iconImagePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+    val iconImagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         uri ?: return@rememberLauncherForActivityResult
-        persistReadPermission(context, uri)
-        selectedIcon = uri.toString()
+        selectedIcon = ImageImportUtils.copyImageToPrivateStorage(context, uri, "box_icons") ?: uri.toString()
     }
 
     AlertDialog(
@@ -154,7 +151,7 @@ fun BoxDialog(
                         Text("选择图标")
                     }
                     OutlinedButton(
-                        onClick = { iconImagePicker.launch(arrayOf("image/*")) },
+                        onClick = { iconImagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                         modifier = Modifier.weight(1f)
                     ) {
                         Icon(Icons.Default.AddPhotoAlternate, contentDescription = null)
@@ -211,13 +208,6 @@ fun BoxDialog(
 }
 
 private fun String.isImageUri(): Boolean = startsWith("content://") || startsWith("file://")
-
-private fun persistReadPermission(context: Context, uri: Uri) {
-    try {
-        context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    } catch (_: SecurityException) {
-    }
-}
 
 @Composable
 fun EmojiPickerDialog(
@@ -314,8 +304,8 @@ fun EventDialog(
     var repeatEndDate by remember { mutableStateOf(existingEvent?.repeatEndDate) }
     var showRepeatEndPicker by remember { mutableStateOf(false) }
     val context = LocalContext.current
-    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        backgroundUri = uri?.let { copyImageToPrivateStorage(context, it) } ?: backgroundUri
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        backgroundUri = uri?.let { ImageImportUtils.copyImageToPrivateStorage(context, it, "event_images") } ?: backgroundUri
     }
 
     AlertDialog(
@@ -434,7 +424,7 @@ fun EventDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(128.dp)
-                        .clickable { imagePicker.launch("image/*") },
+                        .clickable { imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -540,7 +530,7 @@ fun EventDialog(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    listOf("HERO" to "大图", "POSTER" to "海报", "GLASS" to "玻璃", "SPLIT" to "分栏").forEach { (template, label) ->
+                    listOf("HERO" to "大图", "POSTER" to "海报", "GLASS" to "玻璃", "SPLIT" to "分栏", "NEON" to "光轨", "MINIMAL" to "徽章").forEach { (template, label) ->
                         ElevatedFilterChip(
                             selected = cardTemplate == template,
                             onClick = { cardTemplate = template },
@@ -817,6 +807,21 @@ private fun CardTemplatePreview(
                 "GLASS" -> Surface(color = Color.White.copy(alpha = 0.18f), shape = RoundedCornerShape(18.dp), modifier = Modifier.align(Alignment.BottomStart).padding(14.dp)) {
                     Column(modifier = Modifier.padding(12.dp)) { Text(name, color = foreground, style = MaterialTheme.typography.titleMedium, maxLines = 1); Text("99 天 · $dateText", color = foreground.copy(alpha = 0.82f), style = MaterialTheme.typography.bodySmall) }
                 }
+                "NEON" -> {
+                    Box(modifier = Modifier.align(Alignment.CenterStart).fillMaxHeight().width(8.dp).background(Brush.verticalGradient(listOf(safeDialogColor(gradientStart), safeDialogColor(gradientEnd)))))
+                    Column(modifier = Modifier.align(Alignment.BottomStart).padding(start = 24.dp, bottom = 16.dp, end = 16.dp)) {
+                        Text("光轨 · 99 天", color = foreground, style = MaterialTheme.typography.headlineSmall)
+                        Text(name, color = foreground, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                    }
+                }
+                "MINIMAL" -> Column(modifier = Modifier.align(Alignment.CenterStart).padding(18.dp)) {
+                    Surface(color = Color.White.copy(alpha = 0.20f), shape = RoundedCornerShape(999.dp)) {
+                        Text("99 天", color = foreground, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp))
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(name, color = foreground, style = MaterialTheme.typography.titleMedium, maxLines = 2)
+                    Text(dateText, color = foreground.copy(alpha = 0.82f), style = MaterialTheme.typography.bodySmall)
+                }
                 else -> Column(modifier = Modifier.align(Alignment.BottomStart).padding(16.dp)) {
                     Text("99", color = foreground, style = if (template == "POSTER") MaterialTheme.typography.displayMedium else MaterialTheme.typography.headlineMedium)
                     Text(name, color = foreground, style = MaterialTheme.typography.titleMedium, maxLines = 1)
@@ -830,17 +835,6 @@ private fun CardTemplatePreview(
 private fun safeDialogColor(value: String): Color = runCatching {
     ColorUtils.hexToColor(value)
 }.getOrElse { Color(0xFF7C4DFF) }
-
-private fun copyImageToPrivateStorage(context: Context, uri: Uri): String? {
-    return runCatching {
-        val dir = File(context.filesDir, "event_images").apply { mkdirs() }
-        val target = File(dir, "event_${System.currentTimeMillis()}.jpg")
-        context.contentResolver.openInputStream(uri)?.use { input ->
-            target.outputStream().use { output -> input.copyTo(output) }
-        }
-        Uri.fromFile(target).toString()
-    }.getOrNull()
-}
 
 @Composable
 fun DatePickerDialog(

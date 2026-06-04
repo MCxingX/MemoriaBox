@@ -15,6 +15,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.memoriabox.ui.utils.rememberAdaptiveUiSize
 
 @Composable
 fun SettingsList(
@@ -54,6 +55,7 @@ fun SettingsItem(
     description: String,
     onClick: () -> Unit = {}
 ) {
+    val adaptiveUi = rememberAdaptiveUiSize()
     val gradient = Brush.linearGradient(
         listOf(
             MaterialTheme.colorScheme.primary.copy(alpha = 0.92f),
@@ -64,26 +66,26 @@ fun SettingsItem(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .padding(horizontal = adaptiveUi.screenPadding, vertical = adaptiveUi.sectionSpacing / 2f)
             .clickable(onClick = onClick),
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = if (adaptiveUi.compact) MaterialTheme.shapes.medium else MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.84f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(if (adaptiveUi.compact) 12.dp else 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 modifier = Modifier
-                    .size(48.dp)
+                    .size(if (adaptiveUi.compact) 42.dp else 48.dp)
                     .clip(MaterialTheme.shapes.medium)
                     .background(gradient),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(icon, contentDescription = title, modifier = Modifier.size(25.dp), tint = Color.White)
+                Icon(icon, contentDescription = title, modifier = Modifier.size(if (adaptiveUi.compact) 22.dp else 25.dp), tint = Color.White)
             }
-            Spacer(Modifier.width(16.dp))
+            Spacer(Modifier.width(if (adaptiveUi.compact) 12.dp else 16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.titleMedium)
                 Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

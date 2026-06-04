@@ -51,7 +51,7 @@ fun ColorPickerDialog(
     onDismiss: () -> Unit,
     onSelected: (String) -> Unit
 ) {
-    var selectedColor by remember { mutableStateOf(ColorUtils.hexToColor(initialColor)) }
+    var selectedColor by remember(initialColor) { mutableStateOf(safePickerColor(initialColor)) }
     var selectedMode by remember { mutableStateOf(0) }
     var hue by remember { mutableFloatStateOf(270f) }
     var saturation by remember { mutableFloatStateOf(0.7f) }
@@ -187,7 +187,7 @@ fun HsvColorPicker(
                         val newBright = (1f - y / boxHeight).coerceIn(0f, 1f)
                         onSaturationChange(newSat)
                         onBrightnessChange(newBright)
-                        onColorChanged(Color.hsv(hue, newSat * 100, newBright * 100))
+                        onColorChanged(Color.hsv(hue, newSat, newBright))
                     }
                 }
                 .onSizeChanged { size ->
@@ -199,8 +199,8 @@ fun HsvColorPicker(
                 drawRect(
                     brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
                         colors = listOf(
-                            Color.hsv(hue, 0f, 100f),
-                            Color.hsv(hue, 100f, 100f)
+                            Color.hsv(hue, 0f, 1f),
+                            Color.hsv(hue, 1f, 1f)
                         )
                     )
                 )
@@ -224,15 +224,15 @@ fun HsvColorPicker(
                 value = hue,
                 onValueChange = { 
                     onHueChange(it)
-                    onColorChanged(Color.hsv(it, saturation * 100, brightness * 100))
+                    onColorChanged(Color.hsv(it, saturation, brightness))
                 },
                 valueRange = 0f..360f,
                 modifier = Modifier
                     .weight(1f)
                     .onSizeChanged { sliderWidth = it.width.toFloat() },
                 colors = SliderDefaults.colors(
-                    thumbColor = Color.hsv(hue, 100f, 100f),
-                    activeTrackColor = Color.hsv(hue, 80f, 80f)
+                    thumbColor = Color.hsv(hue, 1f, 1f),
+                    activeTrackColor = Color.hsv(hue, 0.8f, 0.8f)
                 )
             )
         }
@@ -248,7 +248,7 @@ fun HsvColorPicker(
                 value = saturation,
                 onValueChange = { 
                     onSaturationChange(it)
-                    onColorChanged(Color.hsv(hue, it * 100, brightness * 100))
+                    onColorChanged(Color.hsv(hue, it, brightness))
                 },
                 modifier = Modifier.weight(1f)
             )
@@ -265,13 +265,17 @@ fun HsvColorPicker(
                 value = brightness,
                 onValueChange = { 
                     onBrightnessChange(it)
-                    onColorChanged(Color.hsv(hue, saturation * 100, it * 100))
+                    onColorChanged(Color.hsv(hue, saturation, it))
                 },
                 modifier = Modifier.weight(1f)
             )
         }
     }
 }
+
+private fun safePickerColor(value: String): Color = runCatching {
+    ColorUtils.hexToColor(value)
+}.getOrElse { Color(0xFF7C4DFF) }
 
 @Composable
 fun RgbSliders(

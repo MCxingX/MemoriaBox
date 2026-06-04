@@ -2,9 +2,8 @@ package com.memoriabox.ui.screen
 
 import android.app.DatePickerDialog
 import android.app.Application
-import android.content.Context
-import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -29,8 +28,8 @@ import coil.compose.AsyncImage
 import com.memoriabox.data.model.*
 import com.memoriabox.ui.screen.components.FriendListView
 import com.memoriabox.ui.screen.dialogs.ColorPickerDialog
+import com.memoriabox.utils.ImageImportUtils
 import com.memoriabox.viewmodel.*
-import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -191,19 +190,9 @@ fun AddFriendDialog(
 
     val context = LocalContext.current
     val avatarPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
+        contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
-        uri?.let {
-            try {
-                context.contentResolver.takePersistableUriPermission(
-                    it,
-                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
-                avatarUri = copyFriendImageToPrivateStorage(context, it) ?: it.toString()
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
+        uri?.let { avatarUri = ImageImportUtils.copyImageToPrivateStorage(context, it, "friend_images") ?: it.toString() }
     }
 
     AlertDialog(
@@ -220,7 +209,7 @@ fun AddFriendDialog(
                     modifier = Modifier
                         .size(80.dp)
                         .clip(CircleShape)
-                        .clickable { avatarPicker.launch(arrayOf("image/*")) }
+                        .clickable { avatarPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
                         .background(MaterialTheme.colorScheme.surfaceVariant),
                     contentAlignment = Alignment.Center
                 ) {
@@ -375,17 +364,6 @@ private fun parseFriendDate(input: String): Long? {
 private fun safeComposeColor(value: String) = runCatching {
     com.memoriabox.utils.ColorUtils.hexToColor(value)
 }.getOrElse { androidx.compose.ui.graphics.Color(0xFF7C4DFF) }
-
-private fun copyFriendImageToPrivateStorage(context: Context, uri: Uri): String? {
-    return runCatching {
-        val dir = File(context.filesDir, "friend_images").apply { mkdirs() }
-        val target = File(dir, "friend_${System.currentTimeMillis()}.jpg")
-        context.contentResolver.openInputStream(uri)?.use { input ->
-            target.outputStream().use { output -> input.copyTo(output) }
-        }
-        Uri.fromFile(target).toString()
-    }.getOrNull()
-}
 
 @Composable
 fun ManageLabelsDialog(
