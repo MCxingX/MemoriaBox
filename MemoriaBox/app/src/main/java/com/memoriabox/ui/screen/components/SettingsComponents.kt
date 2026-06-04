@@ -43,7 +43,7 @@ fun SettingsList(
         SettingsItem(
             icon = Icons.Default.Info,
             title = "关于",
-            description = "版本 1.0.0"
+            description = "版本 3.2.1"
         )
     }
 }

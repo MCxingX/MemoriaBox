@@ -180,8 +180,6 @@ fun MainScreen(
                 var addDateFromCalendar by remember { mutableStateOf<Long?>(null) }
                 var selectedCalendarEvent by remember { mutableStateOf<Event?>(null) }
                 var editCalendarEvent by remember { mutableStateOf<Event?>(null) }
-                var editDiaryDate by remember { mutableStateOf<Long?>(null) }
-                var viewDiaryEntry by remember { mutableStateOf<DiaryEntry?>(null) }
 
                 val diaryMediaMap = remember(diaryMedia) {
                     diaryMedia.groupBy { it.diaryId }
@@ -194,8 +192,10 @@ fun MainScreen(
                         diaryMediaMap = diaryMediaMap,
                         onAddEvent = { date -> addDateFromCalendar = date },
                         onEventClick = { event -> selectedCalendarEvent = event },
-                        onAddDiary = { date -> editDiaryDate = date },
-                        onEditDiary = { diary -> viewDiaryEntry = diary }
+                        onSaveDiary = { date, content, mediaUris, backgroundUri ->
+                            calendarVM.saveDiary(date, content, mediaUris, backgroundUri)
+                        },
+                        onLoadDiaryMedia = { diary -> calendarVM.loadDiaryMedia(diary.id) }
                     )
                 }
                 addDateFromCalendar?.let { date ->
@@ -505,6 +505,7 @@ fun BoxesScreen(
     var eventForDelete by remember { mutableStateOf<Event?>(null) }
     var showQuickAdd by remember { mutableStateOf(false) }
     var pendingQuickAddType by remember { mutableStateOf<EventType?>(null) }
+    var selectedBoxId by rememberSaveable { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val adaptiveUi = rememberAdaptiveUiSize()
     val settingsVersion = AppSettings.settingsVersion
@@ -566,6 +567,8 @@ fun BoxesScreen(
                 onNavigateToAiSuggestions = onNavigateToAiSuggestions,
                 onEventClick = { event -> selectedEvent = event },
                 onEventLongClick = { event -> eventForActions = event },
+                selectedBoxId = selectedBoxId,
+                onBoxSelected = { selectedBoxId = it },
                 adaptiveUi = adaptiveUi,
                 modifier = Modifier.padding(paddingValues)
             )
@@ -594,6 +597,7 @@ fun BoxesScreen(
                 boxes = boxes,
                 initialType = selectedType,
                 application = application,
+                defaultBoxId = selectedBoxId,
                 onDismiss = {
                     showQuickAdd = false
                     pendingQuickAddType = null
@@ -689,6 +693,8 @@ fun HomeDashboard(
     friends: List<com.memoriabox.data.model.Friend>,
     selectedTab: Int,
     onTabSelected: (Int) -> Unit,
+    selectedBoxId: String?,
+    onBoxSelected: (String?) -> Unit,
     onBoxClick: (String) -> Unit,
     onCreateBox: () -> Unit,
     onNavigateToCalendar: () -> Unit,
@@ -707,7 +713,6 @@ fun HomeDashboard(
                 .thenBy { kotlin.math.abs(it.date - System.currentTimeMillis()) }
         )
     }
-    var selectedBoxId by rememberSaveable { mutableStateOf<String?>(null) }
     val visibleEvents = remember(sortedEvents, selectedBoxId) {
         selectedBoxId?.let { boxId -> sortedEvents.filter { it.boxId == boxId } } ?: sortedEvents
     }
@@ -732,7 +737,7 @@ fun HomeDashboard(
             HomeBoxFilter(
                 boxes = boxes,
                 selectedBoxId = selectedBoxId,
-                onBoxSelected = { selectedBoxId = it },
+                onBoxSelected = onBoxSelected,
                 onCreateBox = onCreateBox
             )
         }
@@ -1587,13 +1592,14 @@ fun QuickAddEventDialog(
     boxes: List<com.memoriabox.data.model.Box>,
     initialType: EventType,
     application: Application,
+    defaultBoxId: String? = null,
     onDismiss: () -> Unit,
     onSave: (Event) -> Unit
 ) {
     val notificationHelper = remember { com.memoriabox.utils.NotificationHelper(application) }
     EventDialog(
         availableBoxes = boxes,
-        defaultBoxId = boxes.firstOrNull()?.id ?: "",
+        defaultBoxId = defaultBoxId ?: boxes.firstOrNull()?.id ?: "",
         defaultType = initialType,
         defaultDate = System.currentTimeMillis(),
         defaultReminderEnabled = true,
@@ -1970,7 +1976,7 @@ fun SettingsScreen(
         SettingsItem(
             icon = Icons.Default.Info,
             title = "关于",
-            description = "版本 3.1.1 · MemoriaBox",
+            description = "版本 3.2.1 · MemoriaBox",
             onClick = { showAboutDialog = true }
         )
     }
@@ -1981,10 +1987,10 @@ fun SettingsScreen(
             title = { Text("关于 MemoriaBox") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("版本：3.1.1", style = MaterialTheme.typography.bodyMedium)
+                    Text("版本：3.2.1", style = MaterialTheme.typography.bodyMedium)
                     Text("MemoriaBox 是一个本地优先的日子、纪念日、待办和照片记录工具。", style = MaterialTheme.typography.bodyMedium)
                     Text("数据默认保存在本机，可通过备份和 WebDAV 功能进行迁移或同步。", style = MaterialTheme.typography.bodyMedium)
-                    Text("社区：https://dc.hhhl.cc/chat/room/amlc1bekzi", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                    Text("著名木羽制作", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                 }
             },
             confirmButton = {

@@ -433,8 +433,8 @@ fun CalendarViewScreen(
     onAddEvent: (Long) -> Unit = {},
     onEventClick: (Event) -> Unit = {},
     diaries: List<DiaryEntry> = emptyList(),
-    onAddDiary: (Long) -> Unit = {},
-    onEditDiary: (DiaryEntry) -> Unit = {},
+    onSaveDiary: (Long, String, List<String>, String?) -> Unit = { _, _, _, _ -> },
+    onLoadDiaryMedia: (DiaryEntry) -> Unit = {},
     diaryMediaMap: Map<String, List<DiaryMedia>> = emptyMap()
 ) {
     val adaptiveUi = rememberAdaptiveUiSize()
@@ -461,8 +461,8 @@ fun CalendarViewScreen(
     }
     var selectedDay by remember { mutableStateOf<Pair<Long, List<Event>>?>(null) }
     var selectedDiaryForView by remember { mutableStateOf<DiaryEntry?>(null) }
-    var selectedDiaryForEdit by remember { mutableStateOf<DiaryEntry?>(null) }
-    var editDateForDiary by remember { mutableStateOf<Long?>(null) }
+    var editingDiary by remember { mutableStateOf<DiaryEntry?>(null) }
+    var editingDiaryDate by remember { mutableStateOf<Long?>(null) }
 
     val diaryMap = remember(diaries) {
         diaries.associateBy { it.dateStart }
@@ -513,10 +513,10 @@ fun CalendarViewScreen(
             }
         }
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            val horizontalPadding = adaptiveUi.screenPadding
+            val horizontalPadding = if (adaptiveUi.compact) 6.dp else adaptiveUi.screenPadding
             val widthCell = (maxWidth - horizontalPadding * 2) / 7
-            val heightCell = ((maxHeight - 36.dp).coerceAtLeast(240.dp)) / 6
-            val cellSize = minOf(widthCell, heightCell).coerceAtLeast(36.dp)
+            val heightCell = ((maxHeight - 42.dp).coerceAtLeast(180.dp)) / 6
+            val cellSize = minOf(widthCell, heightCell).coerceAtLeast(30.dp)
             CalendarGrid(
                 currentMonth = cal,
                 events = events,
@@ -525,19 +525,18 @@ fun CalendarViewScreen(
                 diaryMap = diaryMap,
                 onDayClick = { dayCal, dayEvents ->
                     selectedDay = dayCal.timeInMillis to dayEvents
-                },
-                onDayDiaryClick = { dayCal, diary ->
-                    selectedDay = null
-                    selectedDiaryForView = diary
                 }
             )
         }
     }
 
     selectedDay?.let { (date, dayEvents) ->
+        val diary = diaryMap[startOfDayMillis(date)]
         CalendarDayDetailDialog(
             date = date,
             events = dayEvents,
+            diary = diary,
+            diaryMedia = diary?.let { diaryMediaMap[it.id] } ?: emptyList(),
             onDismiss = { selectedDay = null },
             onAddEvent = {
                 selectedDay = null
@@ -546,6 +545,16 @@ fun CalendarViewScreen(
             onEventClick = { event ->
                 selectedDay = null
                 onEventClick(event)
+            },
+            onWriteDiary = {
+                editingDiaryDate = date
+            },
+            onViewDiary = { targetDiary ->
+                onLoadDiaryMedia(targetDiary)
+                selectedDiaryForView = targetDiary
+            },
+            onEditDiary = { targetDiary ->
+                editingDiary = targetDiary
             }
         )
     }
@@ -557,30 +566,30 @@ fun CalendarViewScreen(
             onDismiss = { selectedDiaryForView = null },
             onEdit = {
                 selectedDiaryForView = null
-                selectedDiaryForEdit = diary
+                editingDiary = diary
             }
         )
     }
 
-    selectedDiaryForEdit?.let { diary ->
+    editingDiary?.let { diary ->
         DiaryEditorDialog(
             existingDiary = diary,
             dateStart = diary.dateStart,
-            onDismiss = { selectedDiaryForEdit = null },
+            onDismiss = { editingDiary = null },
             onSave = { content, mediaUris, bgUri ->
-                // Will be handled by MainScreen
-                selectedDiaryForEdit = null
+                onSaveDiary(diary.dateStart, content, mediaUris, bgUri)
+                editingDiary = null
             }
         )
     }
 
-    editDateForDiary?.let { date ->
+    editingDiaryDate?.let { date ->
         DiaryEditorDialog(
             dateStart = date,
-            onDismiss = { editDateForDiary = null },
+            onDismiss = { editingDiaryDate = null },
             onSave = { content, mediaUris, bgUri ->
-                // Will be handled by MainScreen
-                editDateForDiary = null
+                onSaveDiary(date, content, mediaUris, bgUri)
+                editingDiaryDate = null
             }
         )
     }
@@ -636,8 +645,7 @@ fun CalendarGrid(
     cellSize: androidx.compose.ui.unit.Dp,
     horizontalPadding: androidx.compose.ui.unit.Dp,
     diaryMap: Map<Long, DiaryEntry> = emptyMap(),
-    onDayClick: (Calendar, List<Event>) -> Unit = { _, _ -> },
-    onDayDiaryClick: (Calendar, DiaryEntry) -> Unit = { _, _ -> }
+    onDayClick: (Calendar, List<Event>) -> Unit = { _, _ -> }
 ) {
     val daysOfWeek = listOf("日", "一", "二", "三", "四", "五", "六")
     val calendar = currentMonth.clone() as Calendar
@@ -649,7 +657,11 @@ fun CalendarGrid(
     val todayMonth = today.get(Calendar.MONTH)
     val todayYear = today.get(Calendar.YEAR)
 
-    Column(modifier = Modifier.padding(horizontal = horizontalPadding)) {
+    Column(
+        modifier = Modifier
+            .padding(horizontal = horizontalPadding)
+            .verticalScroll(rememberScrollState())
+    ) {
         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
             daysOfWeek.forEach { day ->
                 Surface(color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.56f), shape = MaterialTheme.shapes.large, modifier = Modifier.weight(1f).padding(horizontal = 2.dp)) {
@@ -680,13 +692,7 @@ fun CalendarGrid(
                             events = dayEvents,
                             diary = dayDiary,
                             modifier = Modifier.weight(1f).height(cellSize),
-                            onClick = {
-                                if (dayDiary != null) {
-                                    onDayDiaryClick(dayCal, dayDiary)
-                                } else {
-                                    onDayClick(dayCal, dayEvents)
-                                }
-                            }
+                            onClick = { onDayClick(dayCal, dayEvents) }
                         )
                     } else {
                         Box(modifier = Modifier.weight(1f).height(cellSize))
@@ -749,9 +755,14 @@ fun CalendarDayCell(
 private fun CalendarDayDetailDialog(
     date: Long,
     events: List<Event>,
+    diary: DiaryEntry?,
+    diaryMedia: List<DiaryMedia>,
     onDismiss: () -> Unit,
     onAddEvent: () -> Unit,
-    onEventClick: (Event) -> Unit
+    onEventClick: (Event) -> Unit,
+    onWriteDiary: () -> Unit,
+    onViewDiary: (DiaryEntry) -> Unit,
+    onEditDiary: (DiaryEntry) -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -765,6 +776,55 @@ private fun CalendarDayDetailDialog(
                         .padding(bottom = 72.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    Text("今日日记", style = MaterialTheme.typography.titleSmall)
+                    if (diary == null) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth().clickable(onClick = onWriteDiary),
+                            shape = MaterialTheme.shapes.large,
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.72f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(Icons.Default.Edit, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("写今天日记", style = MaterialTheme.typography.titleSmall)
+                                    Text("记录今天发生了什么，可添加照片或视频背景", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                    } else {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth().clickable { onViewDiary(diary) },
+                            shape = MaterialTheme.shapes.large,
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.84f)
+                        ) {
+                            Box(modifier = Modifier.fillMaxWidth().heightIn(min = 132.dp)) {
+                                MediaBackgroundPlayer(
+                                    mediaUri = diary.backgroundMediaUri,
+                                    mediaType = diary.backgroundMediaType,
+                                    modifier = Modifier.matchParentSize()
+                                )
+                                Box(modifier = Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.45f)))
+                                Column(
+                                    modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    ScrollingTextAnimation(text = diary.content, charDelay = 45L)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        AssistChip(onClick = { onEditDiary(diary) }, label = { Text("编辑日记") }, leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) })
+                                        if (diaryMedia.isNotEmpty()) {
+                                            AssistChip(onClick = { onViewDiary(diary) }, label = { Text("${diaryMedia.size} 个媒体") }, leadingIcon = { Icon(Icons.Default.Image, contentDescription = null) })
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Text("当天日子", style = MaterialTheme.typography.titleSmall)
                     if (events.isEmpty()) {
                         Text("这一天还没有日子，可以点击右下角添加。", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     } else {
@@ -853,6 +913,16 @@ fun calculateDays(dateMillis: Long, type: EventType): Long {
 fun formatDate(timestamp: Long): String {
     val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
     return sdf.format(Date(timestamp))
+}
+
+private fun startOfDayMillis(timestamp: Long): Long {
+    return Calendar.getInstance().apply {
+        timeInMillis = timestamp
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
 }
 
 private fun occursOnDay(event: Event, dayCal: Calendar): Boolean {
