@@ -5,6 +5,7 @@ import com.memoriabox.data.dao.EventDao
 import com.memoriabox.data.dao.FriendDao
 import com.memoriabox.data.dao.LabelDao
 import com.memoriabox.data.dao.LogDao
+import com.memoriabox.data.dao.DiaryDao
 import com.memoriabox.data.model.*
 import kotlinx.coroutines.flow.Flow
 import java.util.UUID
@@ -97,4 +98,26 @@ class LabelRepository(private val labelDao: LabelDao) {
     fun getEventLabels(eventId: String): Flow<List<String>> = labelDao.getEventLabels(eventId)
     suspend fun addEventLabel(eventLabel: EventLabel) = labelDao.addEventLabel(eventLabel)
     suspend fun removeEventLabel(eventLabel: EventLabel) = labelDao.removeEventLabel(eventLabel)
+}
+
+class DiaryRepository(private val diaryDao: DiaryDao) {
+    fun getAllDiaries(): Flow<List<DiaryEntry>> = diaryDao.getAllDiaries()
+    fun getDiariesBetween(start: Long, end: Long): Flow<List<DiaryEntry>> = diaryDao.getDiariesBetween(start, end)
+    fun getMediaForDiary(diaryId: String): Flow<List<DiaryMedia>> = diaryDao.getMediaForDiary(diaryId)
+    fun getMediaForDiaries(diaryIds: List<String>): Flow<List<DiaryMedia>> = diaryDao.getMediaForDiaries(diaryIds)
+    suspend fun getDiaryByDateStart(dateStart: Long): DiaryEntry? = diaryDao.getDiaryByDateStart(dateStart)
+    suspend fun getMediaForDiaryOnce(diaryId: String): List<DiaryMedia> = diaryDao.getMediaForDiaryOnce(diaryId)
+
+    suspend fun saveDiary(diary: DiaryEntry, media: List<DiaryMedia>) {
+        diaryDao.upsertDiary(diary)
+        diaryDao.deleteMediaForDiary(diary.id)
+        if (media.isNotEmpty()) {
+            diaryDao.upsertMedia(media.mapIndexed { index, item -> item.copy(diaryId = diary.id, sortOrder = index) })
+        }
+    }
+
+    suspend fun deleteDiary(diary: DiaryEntry) {
+        diaryDao.deleteMediaForDiary(diary.id)
+        diaryDao.deleteDiary(diary)
+    }
 }

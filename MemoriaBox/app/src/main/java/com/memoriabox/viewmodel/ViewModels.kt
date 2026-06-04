@@ -12,6 +12,7 @@ import com.memoriabox.repository.EventRepository
 import com.memoriabox.repository.LogRepository
 import com.memoriabox.repository.FriendRepository
 import com.memoriabox.repository.LabelRepository
+import com.memoriabox.repository.DiaryRepository
 import com.memoriabox.utils.BackupManager
 import com.memoriabox.utils.NotificationHelper
 import kotlinx.coroutines.flow.*
@@ -255,16 +256,74 @@ class BoxDetailViewModel(
 
 class CalendarViewModel(
     application: Application,
-    private val eventRepository: EventRepository
+    private val eventRepository: EventRepository,
+    private val diaryRepository: DiaryRepository
 ) : AndroidViewModel(application) {
 
     val allEvents = eventRepository.getAllEvents()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val allDiaries = diaryRepository.getAllDiaries()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _selectedDiaryMedia = MutableStateFlow<List<DiaryMedia>>(emptyList())
+    val selectedDiaryMedia = _selectedDiaryMedia.asStateFlow()
+
     fun getEventsForDay(timestamp: Long, events: List<Event>): List<Event> {
         val dayStart = (timestamp / 86400000) * 86400000
         val dayEnd = dayStart + 86400000 - 1
         return events.filter { it.date >= dayStart && it.date <= dayEnd }
+    }
+
+    fun loadDiaryMedia(diaryId: String) = viewModelScope.launch {
+        _selectedDiaryMedia.value = diaryRepository.getMediaForDiaryOnce(diaryId)
+    }
+
+    fun saveDiary(date: Long, content: String, mediaUris: List<String>, backgroundUri: String?) = viewModelScope.launch {
+        val dayStart = startOfDay(date)
+        val existing = diaryRepository.getDiaryByDateStart(dayStart)
+        val diary = DiaryEntry(
+            id = existing?.id ?: java.util.UUID.randomUUID().toString(),
+            dateStart = dayStart,
+            content = content.trim(),
+            backgroundMediaUri = backgroundUri,
+            backgroundMediaType = backgroundUri?.let { inferDiaryMediaType(it) },
+            createdAt = existing?.createdAt ?: System.currentTimeMillis(),
+            updatedAt = System.currentTimeMillis()
+        )
+        val media = mediaUris.mapIndexed { index, uri ->
+            DiaryMedia(
+                diaryId = diary.id,
+                mediaUri = uri,
+                mediaType = inferDiaryMediaType(uri),
+                sortOrder = index
+            )
+        }
+        diaryRepository.saveDiary(diary, media)
+        _selectedDiaryMedia.value = media
+    }
+
+    fun deleteDiary(diary: DiaryEntry) = viewModelScope.launch {
+        diaryRepository.deleteDiary(diary)
+        _selectedDiaryMedia.value = emptyList()
+    }
+
+    private fun startOfDay(timestamp: Long): Long {
+        val cal = java.util.Calendar.getInstance()
+        cal.timeInMillis = timestamp
+        cal.set(java.util.Calendar.HOUR_OF_DAY, 0)
+        cal.set(java.util.Calendar.MINUTE, 0)
+        cal.set(java.util.Calendar.SECOND, 0)
+        cal.set(java.util.Calendar.MILLISECOND, 0)
+        return cal.timeInMillis
+    }
+
+    private fun inferDiaryMediaType(uri: String): DiaryMediaType {
+        val videoExtensions = listOf(".mp4", ".mkv", ".webm", ".3gp", ".mov")
+        return when {
+            videoExtensions.any { uri.endsWith(it, ignoreCase = true) } -> DiaryMediaType.VIDEO
+            else -> DiaryMediaType.IMAGE
+        }
     }
 }
 
@@ -573,7 +632,8 @@ fun createCalendarViewModel(application: Application): CalendarViewModel {
     val app = application as com.memoriabox.MemoriaApp
     return CalendarViewModel(
         application,
-        EventRepository(app.database.eventDao())
+        EventRepository(app.database.eventDao()),
+        DiaryRepository(app.database.diaryDao())
     )
 }
 

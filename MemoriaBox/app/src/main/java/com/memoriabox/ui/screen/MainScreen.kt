@@ -175,14 +175,27 @@ fun MainScreen(
             composable(Screen.Calendar.route) {
                 val calendarVM = remember { createCalendarViewModel(application) }
                 val events by calendarVM.allEvents.collectAsState(initial = emptyList())
+                val diaries by calendarVM.allDiaries.collectAsState(initial = emptyList())
+                val diaryMedia by calendarVM.selectedDiaryMedia.collectAsState(initial = emptyList())
                 var addDateFromCalendar by remember { mutableStateOf<Long?>(null) }
                 var selectedCalendarEvent by remember { mutableStateOf<Event?>(null) }
                 var editCalendarEvent by remember { mutableStateOf<Event?>(null) }
+                var editDiaryDate by remember { mutableStateOf<Long?>(null) }
+                var viewDiaryEntry by remember { mutableStateOf<DiaryEntry?>(null) }
+
+                val diaryMediaMap = remember(diaryMedia) {
+                    diaryMedia.groupBy { it.diaryId }
+                }
+
                 ScreenBgWrapper(context = androidx.compose.ui.platform.LocalContext.current, page = "CALENDAR") {
                     CalendarViewScreen(
                         events = events,
+                        diaries = diaries,
+                        diaryMediaMap = diaryMediaMap,
                         onAddEvent = { date -> addDateFromCalendar = date },
-                        onEventClick = { event -> selectedCalendarEvent = event }
+                        onEventClick = { event -> selectedCalendarEvent = event },
+                        onAddDiary = { date -> editDiaryDate = date },
+                        onEditDiary = { diary -> viewDiaryEntry = diary }
                     )
                 }
                 addDateFromCalendar?.let { date ->

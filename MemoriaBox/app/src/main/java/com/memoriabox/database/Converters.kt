@@ -35,4 +35,12 @@ class Converters {
     fun toRepeatMode(value: String): RepeatMode = runCatching {
         RepeatMode.valueOf(value)
     }.getOrDefault(RepeatMode.NONE)
+
+    @TypeConverter
+    fun fromDiaryMediaType(value: DiaryMediaType?): String? = value?.name
+
+    @TypeConverter
+    fun toDiaryMediaType(value: String?): DiaryMediaType? = value?.let {
+        runCatching { DiaryMediaType.valueOf(it) }.getOrNull()
+    }
 }

@@ -162,3 +162,36 @@ interface LogDao {
     @Query("SELECT COUNT(*) FROM logs")
     suspend fun getLogCount(): Int
 }
+
+@Dao
+interface DiaryDao {
+    @Query("SELECT * FROM diary_entries ORDER BY date_start DESC")
+    fun getAllDiaries(): Flow<List<DiaryEntry>>
+
+    @Query("SELECT * FROM diary_entries WHERE date_start = :dateStart LIMIT 1")
+    suspend fun getDiaryByDateStart(dateStart: Long): DiaryEntry?
+
+    @Query("SELECT * FROM diary_entries WHERE date_start BETWEEN :start AND :end ORDER BY date_start ASC")
+    fun getDiariesBetween(start: Long, end: Long): Flow<List<DiaryEntry>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertDiary(diary: DiaryEntry)
+
+    @Delete
+    suspend fun deleteDiary(diary: DiaryEntry)
+
+    @Query("SELECT * FROM diary_media WHERE diary_id = :diaryId ORDER BY sort_order ASC")
+    fun getMediaForDiary(diaryId: String): Flow<List<DiaryMedia>>
+
+    @Query("SELECT * FROM diary_media WHERE diary_id IN (:diaryIds) ORDER BY sort_order ASC")
+    fun getMediaForDiaries(diaryIds: List<String>): Flow<List<DiaryMedia>>
+
+    @Query("SELECT * FROM diary_media WHERE diary_id = :diaryId ORDER BY sort_order ASC")
+    suspend fun getMediaForDiaryOnce(diaryId: String): List<DiaryMedia>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertMedia(media: List<DiaryMedia>)
+
+    @Query("DELETE FROM diary_media WHERE diary_id = :diaryId")
+    suspend fun deleteMediaForDiary(diaryId: String)
+}

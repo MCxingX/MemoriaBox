@@ -431,7 +431,11 @@ fun CalendarViewScreen(
     events: List<Event>,
     modifier: Modifier = Modifier,
     onAddEvent: (Long) -> Unit = {},
-    onEventClick: (Event) -> Unit = {}
+    onEventClick: (Event) -> Unit = {},
+    diaries: List<DiaryEntry> = emptyList(),
+    onAddDiary: (Long) -> Unit = {},
+    onEditDiary: (DiaryEntry) -> Unit = {},
+    diaryMediaMap: Map<String, List<DiaryMedia>> = emptyMap()
 ) {
     val adaptiveUi = rememberAdaptiveUiSize()
     var currentMonthYear by remember { mutableStateOf("${Calendar.getInstance().get(Calendar.YEAR)}-${Calendar.getInstance().get(Calendar.MONTH) + 1}") }
@@ -456,6 +460,13 @@ fun CalendarViewScreen(
         monthEvents.minByOrNull { kotlin.math.abs(it.date - System.currentTimeMillis()) }
     }
     var selectedDay by remember { mutableStateOf<Pair<Long, List<Event>>?>(null) }
+    var selectedDiaryForView by remember { mutableStateOf<DiaryEntry?>(null) }
+    var selectedDiaryForEdit by remember { mutableStateOf<DiaryEntry?>(null) }
+    var editDateForDiary by remember { mutableStateOf<Long?>(null) }
+
+    val diaryMap = remember(diaries) {
+        diaries.associateBy { it.dateStart }
+    }
 
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(
@@ -511,8 +522,13 @@ fun CalendarViewScreen(
                 events = events,
                 cellSize = cellSize,
                 horizontalPadding = horizontalPadding,
+                diaryMap = diaryMap,
                 onDayClick = { dayCal, dayEvents ->
                     selectedDay = dayCal.timeInMillis to dayEvents
+                },
+                onDayDiaryClick = { dayCal, diary ->
+                    selectedDay = null
+                    selectedDiaryForView = diary
                 }
             )
         }
@@ -530,6 +546,41 @@ fun CalendarViewScreen(
             onEventClick = { event ->
                 selectedDay = null
                 onEventClick(event)
+            }
+        )
+    }
+
+    selectedDiaryForView?.let { diary ->
+        DiaryDetailDialog(
+            diary = diary,
+            mediaList = diaryMediaMap[diary.id] ?: emptyList(),
+            onDismiss = { selectedDiaryForView = null },
+            onEdit = {
+                selectedDiaryForView = null
+                selectedDiaryForEdit = diary
+            }
+        )
+    }
+
+    selectedDiaryForEdit?.let { diary ->
+        DiaryEditorDialog(
+            existingDiary = diary,
+            dateStart = diary.dateStart,
+            onDismiss = { selectedDiaryForEdit = null },
+            onSave = { content, mediaUris, bgUri ->
+                // Will be handled by MainScreen
+                selectedDiaryForEdit = null
+            }
+        )
+    }
+
+    editDateForDiary?.let { date ->
+        DiaryEditorDialog(
+            dateStart = date,
+            onDismiss = { editDateForDiary = null },
+            onSave = { content, mediaUris, bgUri ->
+                // Will be handled by MainScreen
+                editDateForDiary = null
             }
         )
     }
@@ -584,7 +635,9 @@ fun CalendarGrid(
     events: List<Event>,
     cellSize: androidx.compose.ui.unit.Dp,
     horizontalPadding: androidx.compose.ui.unit.Dp,
-    onDayClick: (Calendar, List<Event>) -> Unit = { _, _ -> }
+    diaryMap: Map<Long, DiaryEntry> = emptyMap(),
+    onDayClick: (Calendar, List<Event>) -> Unit = { _, _ -> },
+    onDayDiaryClick: (Calendar, DiaryEntry) -> Unit = { _, _ -> }
 ) {
     val daysOfWeek = listOf("日", "一", "二", "三", "四", "五", "六")
     val calendar = currentMonth.clone() as Calendar
@@ -620,12 +673,20 @@ fun CalendarGrid(
                         val isToday = dayNumber == todayDay && currentMonth.get(Calendar.MONTH) == todayMonth && currentMonth.get(Calendar.YEAR) == todayYear
 
                         val dayEvents = events.filter { event -> occursOnDay(event, dayCal) }
+                        val dayDiary = diaryMap[dayCal.timeInMillis]
                         CalendarDayCell(
                             day = dayNumber,
                             isToday = isToday,
                             events = dayEvents,
+                            diary = dayDiary,
                             modifier = Modifier.weight(1f).height(cellSize),
-                            onClick = { onDayClick(dayCal, dayEvents) }
+                            onClick = {
+                                if (dayDiary != null) {
+                                    onDayDiaryClick(dayCal, dayDiary)
+                                } else {
+                                    onDayClick(dayCal, dayEvents)
+                                }
+                            }
                         )
                     } else {
                         Box(modifier = Modifier.weight(1f).height(cellSize))
@@ -641,6 +702,7 @@ fun CalendarDayCell(
     day: Int,
     isToday: Boolean,
     events: List<Event>,
+    diary: DiaryEntry? = null,
     modifier: Modifier = Modifier,
     onClick: () -> Unit = {}
 ) {
@@ -670,6 +732,15 @@ fun CalendarDayCell(
                     Box(modifier = Modifier.size(5.dp).clip(RoundedCornerShape(3.dp)).background(dotColor))
                 }
             }
+        }
+        if (diary != null) {
+            Spacer(modifier = Modifier.height(1.dp))
+            DiaryIndicator(
+                hasDiary = true,
+                hasImage = diary.backgroundMediaType == DiaryMediaType.IMAGE,
+                hasVideo = diary.backgroundMediaType == DiaryMediaType.VIDEO,
+                modifier = Modifier.padding(horizontal = 4.dp)
+            )
         }
     }
 }

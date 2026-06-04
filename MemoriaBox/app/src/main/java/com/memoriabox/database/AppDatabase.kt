@@ -13,10 +13,11 @@ import javax.crypto.SecretKeyFactory
 
 @Database(
     entities = [
-        Box::class, Event::class, Friend::class, Label::class, 
-        FriendRelation::class, EventLabel::class, LogEntry::class
+        Box::class, Event::class, Friend::class, Label::class,
+        FriendRelation::class, EventLabel::class, LogEntry::class,
+        DiaryEntry::class, DiaryMedia::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -26,6 +27,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun friendDao(): FriendDao
     abstract fun labelDao(): LabelDao
     abstract fun logDao(): LogDao
+    abstract fun diaryDao(): DiaryDao
     
     companion object {
         @Volatile
@@ -47,7 +49,8 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_1_2,
                     MIGRATION_2_3,
                     MIGRATION_3_4,
-                    MIGRATION_4_5
+                    MIGRATION_4_5,
+                    MIGRATION_5_6
                 )
                 
                 dbBuilder.addCallback(object : Callback() {
@@ -107,6 +110,7 @@ abstract class AppDatabase : RoomDatabase() {
             ensureColumnExists(db, "events", "pushplus_enabled", "INTEGER NOT NULL DEFAULT 0")
             ensureEventStyleColumns(db)
             ensureEventRepeatColumns(db)
+            ensureDiaryTables(db)
             db.execSQL("UPDATE events SET repeat_mode = 'NONE' WHERE repeat_mode NOT IN ('NONE', 'YEARLY', 'MONTHLY', 'CUSTOM_DAYS', 'CUSTOM_WEEKS', 'CUSTOM_MONTHS')")
             db.execSQL("""
                 INSERT OR IGNORE INTO boxes (id, name, icon, bg_type, bg_value, sort_order, is_archived, created_at)
@@ -171,6 +175,12 @@ val MIGRATION_4_5 = object : Migration(4, 5) {
     }
 }
 
+val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        ensureDiaryTables(database)
+    }
+}
+
 private fun ensureEventStyleColumns(database: SupportSQLiteDatabase) {
     ensureColumnExists(database, "events", "repeat_mode", "TEXT NOT NULL DEFAULT 'NONE'")
     ensureColumnExists(database, "events", "repeat_interval", "INTEGER NOT NULL DEFAULT 1")
@@ -185,4 +195,29 @@ private fun ensureEventRepeatColumns(database: SupportSQLiteDatabase) {
     ensureColumnExists(database, "events", "repeat_end_date", "INTEGER")
     ensureColumnExists(database, "events", "repeat_count", "INTEGER NOT NULL DEFAULT 0")
     ensureColumnExists(database, "events", "reminder_offsets", "TEXT NOT NULL DEFAULT '1'")
+}
+
+private fun ensureDiaryTables(database: SupportSQLiteDatabase) {
+    database.execSQL("""
+        CREATE TABLE IF NOT EXISTS diary_entries (
+            id TEXT NOT NULL PRIMARY KEY,
+            date_start INTEGER NOT NULL,
+            content TEXT NOT NULL,
+            background_media_uri TEXT,
+            background_media_type TEXT,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        )
+    """.trimIndent())
+    database.execSQL("CREATE INDEX IF NOT EXISTS index_diary_entries_date_start ON diary_entries(date_start)")
+    database.execSQL("""
+        CREATE TABLE IF NOT EXISTS diary_media (
+            id TEXT NOT NULL PRIMARY KEY,
+            diary_id TEXT NOT NULL,
+            media_uri TEXT NOT NULL,
+            media_type TEXT NOT NULL,
+            sort_order INTEGER NOT NULL DEFAULT 0
+        )
+    """.trimIndent())
+    database.execSQL("CREATE INDEX IF NOT EXISTS index_diary_media_diary_id ON diary_media(diary_id)")
 }

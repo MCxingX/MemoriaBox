@@ -28,6 +28,10 @@ enum class RepeatMode {
     NONE, YEARLY, MONTHLY, CUSTOM_DAYS, CUSTOM_WEEKS, CUSTOM_MONTHS
 }
 
+enum class DiaryMediaType {
+    IMAGE, VIDEO
+}
+
 @Entity(tableName = "boxes")
 data class Box(
     @PrimaryKey
@@ -153,6 +157,37 @@ data class LogEntry(
     val targetName: String,
     val result: String = "success",
     val extra: String? = null
+)
+
+@Entity(tableName = "diary_entries")
+data class DiaryEntry(
+    @PrimaryKey
+    val id: String = java.util.UUID.randomUUID().toString(),
+    @ColumnInfo(name = "date_start", index = true)
+    val dateStart: Long,
+    val content: String,
+    @ColumnInfo(name = "background_media_uri")
+    val backgroundMediaUri: String? = null,
+    @ColumnInfo(name = "background_media_type")
+    val backgroundMediaType: DiaryMediaType? = null,
+    @ColumnInfo(name = "created_at")
+    val createdAt: Long = System.currentTimeMillis(),
+    @ColumnInfo(name = "updated_at")
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "diary_media")
+data class DiaryMedia(
+    @PrimaryKey
+    val id: String = java.util.UUID.randomUUID().toString(),
+    @ColumnInfo(name = "diary_id", index = true)
+    val diaryId: String,
+    @ColumnInfo(name = "media_uri")
+    val mediaUri: String,
+    @ColumnInfo(name = "media_type")
+    val mediaType: DiaryMediaType,
+    @ColumnInfo(name = "sort_order")
+    val sortOrder: Int = 0
 )
 
 data class CardStyle(
