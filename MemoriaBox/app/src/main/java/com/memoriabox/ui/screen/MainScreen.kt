@@ -333,32 +333,20 @@ fun MainScreen(
     }
 
     if (showQuickAdd) {
-        val selectedType = pendingQuickAddType
-        if (selectedType == null) {
-            AddTypePickerDialog(
-                onDismiss = { showQuickAdd = false },
-                onTypeSelected = { type -> pendingQuickAddType = type },
-                onAddDiary = {
-                    showQuickAdd = false
-                    showDiaryEditor = true
-                }
-            )
-        } else {
-            QuickAddEventDialog(
-                boxes = boxes,
-                initialType = selectedType,
-                application = application,
-                onDismiss = {
-                    showQuickAdd = false
-                    pendingQuickAddType = null
-                },
-                onSave = { event ->
-                    mainViewModel.createQuickEvent(event)
-                    pendingQuickAddType = null
-                    showQuickAdd = false
-                }
-            )
-        }
+        QuickAddEventDialog(
+            boxes = boxes,
+            initialType = EventType.COUNTDOWN,
+            application = application,
+            onDismiss = {
+                showQuickAdd = false
+                pendingQuickAddType = null
+            },
+            onSave = { event ->
+                mainViewModel.createQuickEvent(event)
+                pendingQuickAddType = null
+                showQuickAdd = false
+            }
+        )
     }
 
     if (showDiaryEditor) {
@@ -609,33 +597,33 @@ fun BoxesScreen(
     }
 
     if (showQuickAdd) {
-        val selectedType = pendingQuickAddType
-        if (selectedType == null) {
-            AddTypePickerDialog(
-                onDismiss = { showQuickAdd = false },
-                onTypeSelected = { type -> pendingQuickAddType = type },
-                onAddDiary = {
-                    showQuickAdd = false
-                    showDiaryEditor = true
-                }
-            )
-        } else {
-            QuickAddEventDialog(
-                boxes = boxes,
-                initialType = selectedType,
-                application = application,
-                defaultBoxId = selectedBoxId,
-                onDismiss = {
-                    showQuickAdd = false
-                    pendingQuickAddType = null
-                },
-                onSave = { event ->
-                    viewModel.createQuickEvent(event)
-                    showQuickAdd = false
-                    pendingQuickAddType = null
-                }
-            )
-        }
+        AddTypePickerDialog(
+            onDismiss = { showQuickAdd = false },
+            onTypeSelected = { type ->
+                showQuickAdd = false
+                pendingQuickAddType = type
+            },
+            onAddDiary = {
+                showQuickAdd = false
+                showDiaryEditor = true
+            }
+        )
+    }
+
+    pendingQuickAddType?.let { type ->
+        QuickAddEventDialog(
+            boxes = boxes,
+            initialType = type,
+            application = application,
+            defaultBoxId = selectedBoxId,
+            onDismiss = {
+                pendingQuickAddType = null
+            },
+            onSave = { event ->
+                viewModel.createQuickEvent(event)
+                pendingQuickAddType = null
+            }
+        )
     }
 
     if (showDiaryEditor) {

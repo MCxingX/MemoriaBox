@@ -448,67 +448,69 @@ fun EventDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                Text("重复规则", style = MaterialTheme.typography.labelLarge)
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    listOf(
-                        RepeatMode.NONE to "不重复",
-                        RepeatMode.CUSTOM_DAYS to "每日/按天",
-                        RepeatMode.CUSTOM_WEEKS to "每周/按周",
-                        RepeatMode.MONTHLY to "每月",
-                        RepeatMode.YEARLY to "每年",
-                        RepeatMode.CUSTOM_MONTHS to "按月数"
-                    ).forEach { (mode, label) ->
-                        FilterChip(
-                            selected = repeatMode == mode,
-                            onClick = {
-                                repeatMode = mode
-                                if (mode == RepeatMode.CUSTOM_DAYS || mode == RepeatMode.CUSTOM_WEEKS) repeatInterval = 1
-                            },
-                            label = { Text(label) }
-                        )
+                if (selectedType != EventType.BIRTHDAY) {
+                    Text("重复规则", style = MaterialTheme.typography.labelLarge)
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf(
+                            RepeatMode.NONE to "不重复",
+                            RepeatMode.CUSTOM_DAYS to "每日/按天",
+                            RepeatMode.CUSTOM_WEEKS to "每周/按周",
+                            RepeatMode.MONTHLY to "每月",
+                            RepeatMode.YEARLY to "每年",
+                            RepeatMode.CUSTOM_MONTHS to "按月数"
+                        ).forEach { (mode, label) ->
+                            FilterChip(
+                                selected = repeatMode == mode,
+                                onClick = {
+                                    repeatMode = mode
+                                    if (mode == RepeatMode.CUSTOM_DAYS || mode == RepeatMode.CUSTOM_WEEKS) repeatInterval = 1
+                                },
+                                label = { Text(label) }
+                            )
+                        }
                     }
-                }
-                if (repeatMode in listOf(RepeatMode.CUSTOM_DAYS, RepeatMode.CUSTOM_WEEKS, RepeatMode.CUSTOM_MONTHS)) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("每", style = MaterialTheme.typography.bodySmall)
-                        OutlinedTextField(
-                            value = repeatInterval.toString(),
-                            onValueChange = { repeatInterval = it.toIntOrNull()?.coerceIn(1, 365) ?: 1 },
-                            modifier = Modifier.width(88.dp),
-                            singleLine = true,
-                            textStyle = MaterialTheme.typography.bodySmall
-                        )
-                        Text(
-                            when (repeatMode) {
-                                RepeatMode.CUSTOM_DAYS -> "天重复"
-                                RepeatMode.CUSTOM_WEEKS -> "周重复"
-                                else -> "个月重复"
-                            },
-                            style = MaterialTheme.typography.bodySmall
-                        )
+                    if (repeatMode in listOf(RepeatMode.CUSTOM_DAYS, RepeatMode.CUSTOM_WEEKS, RepeatMode.CUSTOM_MONTHS)) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("每", style = MaterialTheme.typography.bodySmall)
+                            OutlinedTextField(
+                                value = repeatInterval.toString(),
+                                onValueChange = { repeatInterval = it.toIntOrNull()?.coerceIn(1, 365) ?: 1 },
+                                modifier = Modifier.width(88.dp),
+                                singleLine = true,
+                                textStyle = MaterialTheme.typography.bodySmall
+                            )
+                            Text(
+                                when (repeatMode) {
+                                    RepeatMode.CUSTOM_DAYS -> "天重复"
+                                    RepeatMode.CUSTOM_WEEKS -> "周重复"
+                                    else -> "个月重复"
+                                },
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
                     }
-                }
-                if (repeatMode != RepeatMode.NONE) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                        OutlinedTextField(
-                            value = repeatCountText,
-                            onValueChange = { repeatCountText = it.filter { char -> char.isDigit() } },
-                            label = { Text("重复次数") },
-                            placeholder = { Text("留空为不限") },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true
-                        )
-                        OutlinedButton(
-                            onClick = { showRepeatEndPicker = true },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(repeatEndDate?.let { formatDate(it) } ?: "结束日期")
+                    if (repeatMode != RepeatMode.NONE) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            OutlinedTextField(
+                                value = repeatCountText,
+                                onValueChange = { repeatCountText = it.filter { char -> char.isDigit() } },
+                                label = { Text("重复次数") },
+                                placeholder = { Text("留空为不限") },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true
+                            )
+                            OutlinedButton(
+                                onClick = { showRepeatEndPicker = true },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(repeatEndDate?.let { formatDate(it) } ?: "结束日期")
+                            }
                         }
                     }
                 }
