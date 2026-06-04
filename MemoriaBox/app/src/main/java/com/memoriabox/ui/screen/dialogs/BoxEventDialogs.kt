@@ -260,6 +260,7 @@ fun EventDialog(
     defaultReminderEnabled: Boolean = false,
     defaultPushPlusEnabled: Boolean = false,
     allowTypeChange: Boolean = true,
+    showFixedTypeLabel: Boolean = true,
     onPushPlusEnabledChange: (Boolean) -> Unit = {},
     onDismiss: () -> Unit,
     onSave: (Event) -> Unit
@@ -391,7 +392,7 @@ fun EventDialog(
                             )
                         }
                     }
-                } else {
+                } else if (showFixedTypeLabel) {
                     AssistChip(
                         onClick = {},
                         label = {
@@ -672,7 +673,7 @@ fun EventDialog(
                         avatarUri = backgroundUri,
                         isPinned = existingEvent?.isPinned ?: false,
                         pushPlusEnabled = pushPlusEnabled && reminderEnabled,
-                        repeatMode = repeatMode,
+                        repeatMode = if (selectedType == EventType.BIRTHDAY) RepeatMode.YEARLY else repeatMode,
                         repeatInterval = repeatInterval.coerceAtLeast(1),
                         repeatEndDate = repeatEndDate,
                         repeatCount = repeatCountText.toIntOrNull()?.coerceAtLeast(0) ?: 0,
@@ -681,7 +682,7 @@ fun EventDialog(
                         textColor = textColor,
                         cardTemplate = cardTemplate,
                         displayFields = displayFieldSet.filterValues { it }.keys.joinToString(","),
-                        repeatYearly = repeatMode == RepeatMode.YEARLY,
+                        repeatYearly = selectedType == EventType.BIRTHDAY || repeatMode == RepeatMode.YEARLY,
                         createdAt = existingEvent?.createdAt ?: System.currentTimeMillis()
                     )
                     if (pushPlusEnabled && reminderEnabled) {

@@ -46,8 +46,9 @@ fun ScrollingTextAnimation(
     modifier: Modifier = Modifier
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val scrollEnabled = remember { com.memoriabox.utils.AppSettings.getDiaryScrollEnabled(context) }
-    val scrollSpeed = remember { com.memoriabox.utils.AppSettings.getDiaryScrollSpeed(context) }
+    val settingsVersion = com.memoriabox.utils.AppSettings.settingsVersion
+    val scrollEnabled = remember(settingsVersion) { com.memoriabox.utils.AppSettings.getDiaryScrollEnabled(context) }
+    val scrollSpeed = remember(settingsVersion) { com.memoriabox.utils.AppSettings.getDiaryScrollSpeed(context) }
 
     if (!scrollEnabled) {
         Text(
@@ -63,7 +64,7 @@ fun ScrollingTextAnimation(
     var visibleChars by remember { mutableIntStateOf(0) }
     var isComplete by remember { mutableStateOf(false) }
 
-    LaunchedEffect(text) {
+    LaunchedEffect(text, scrollSpeed) {
         visibleChars = 0
         isComplete = false
         for (i in text.indices) {
@@ -486,5 +487,4 @@ fun DiaryIndicator(
         }
     }
 }
-
 

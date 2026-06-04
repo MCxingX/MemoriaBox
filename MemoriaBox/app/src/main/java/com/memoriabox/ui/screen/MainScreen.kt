@@ -931,14 +931,14 @@ fun AllEventsTab(events: List<Event>, onEventClick: (Event) -> Unit, onEventLong
         Text("置顶", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.height(6.dp))
         pinnedEvents.forEach { event ->
-            HomeEventRow(event = event, onClick = { onEventClick(event) }, onLongClick = { onEventLongClick(event) })
+            EnhancedEventCard(event = event, onClick = { onEventClick(event) }, onLongPress = { onEventLongClick(event) })
             Spacer(Modifier.height(6.dp))
         }
         Spacer(Modifier.height(12.dp))
     }
     if (events.isNotEmpty()) {
         normalEvents.forEach { event ->
-            HomeEventRow(event = event, onClick = { onEventClick(event) }, onLongClick = { onEventLongClick(event) })
+            EnhancedEventCard(event = event, onClick = { onEventClick(event) }, onLongPress = { onEventLongClick(event) })
             Spacer(Modifier.height(6.dp))
         }
     }
@@ -1751,6 +1751,7 @@ fun QuickAddEventDialog(
         defaultReminderEnabled = true,
         defaultPushPlusEnabled = notificationHelper.isPushPlusEnabled(),
         allowTypeChange = false,
+        showFixedTypeLabel = false,
         onPushPlusEnabledChange = { notificationHelper.setPushPlusEnabled(it) },
         onDismiss = onDismiss,
         onSave = onSave
