@@ -41,6 +41,8 @@ object AppSettings {
     const val CUSTOM_DAILY_QUOTE = "custom_daily_quote"
     const val CUSTOM_DAILY_QUOTES = "custom_daily_quotes"
     const val USE_CUSTOM_QUOTE = "use_custom_daily_quote"
+    const val DIARY_SCROLL_ENABLED = "diary_scroll_enabled"
+    const val DIARY_SCROLL_SPEED = "diary_scroll_speed"
 
     fun getHomeBgUri(context: Context) = getPrefs(context).getString(HOME_BG_URI, null)
     fun setHomeBgUri(context: Context, uri: String?) = saveString(context, HOME_BG_URI, uri)
@@ -104,4 +106,13 @@ object AppSettings {
 
     fun getUseCustomQuote(context: Context) = getPrefs(context).getBoolean(USE_CUSTOM_QUOTE, false)
     fun setUseCustomQuote(context: Context, use: Boolean) = saveBoolean(context, USE_CUSTOM_QUOTE, use)
+
+    fun getDiaryScrollEnabled(context: Context) = getPrefs(context).getBoolean(DIARY_SCROLL_ENABLED, true)
+    fun setDiaryScrollEnabled(context: Context, enabled: Boolean) = saveBoolean(context, DIARY_SCROLL_ENABLED, enabled)
+
+    fun getDiaryScrollSpeed(context: Context) = getPrefs(context).getInt(DIARY_SCROLL_SPEED, 60)
+    fun setDiaryScrollSpeed(context: Context, speed: Int) {
+        getPrefs(context).edit().putInt(DIARY_SCROLL_SPEED, speed.coerceIn(10, 200)).apply()
+        settingsVersion++
+    }
 }

@@ -1818,7 +1818,9 @@ fun BoxDetailScreen(
                 onEventEdit = { showEditEvent = it },
                 onCardTemplateChange = { event, newTemplate ->
                     viewModel.updateEvent(event.copy(cardTemplate = newTemplate))
-                }
+                },
+                boxBgType = box?.bgType ?: com.memoriabox.data.model.BgType.COLOR,
+                boxBgValue = box?.bgValue ?: "#F5F5F5"
             )
         }
     }
@@ -1981,6 +1983,7 @@ fun SettingsScreen(
     var pushPlusEnabled by remember { mutableStateOf(pushPlusHelper.isPushPlusEnabled()) }
     var pushPlusChannel by remember { mutableStateOf(pushPlusHelper.getPushPlusChannel()) }
     var showAboutDialog by remember { mutableStateOf(false) }
+    var showDiarySettings by remember { mutableStateOf(false) }
     val adaptiveUi = rememberAdaptiveUiSize()
 
     Column(
@@ -2061,6 +2064,12 @@ fun SettingsScreen(
             title = "WebDAV 同步",
             description = "配置云端同步服务",
             onClick = onWebDavSettingsClick
+        )
+        SettingsItem(
+            icon = Icons.Default.Edit,
+            title = "日记设置",
+            description = "滚动动画速度、开关",
+            onClick = { showDiarySettings = true }
         )
         
         SettingsSectionTitle("推送提醒", "生日、纪念日和待办都能乖乖提醒")
@@ -2146,6 +2155,10 @@ fun SettingsScreen(
                 TextButton(onClick = { showAboutDialog = false }) { Text("知道了") }
             }
         )
+    }
+
+    if (showDiarySettings) {
+        DiarySettingsDialog(onDismiss = { showDiarySettings = false })
     }
 }
 

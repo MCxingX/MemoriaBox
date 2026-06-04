@@ -45,6 +45,21 @@ fun ScrollingTextAnimation(
     onComplete: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scrollEnabled = remember { com.memoriabox.utils.AppSettings.getDiaryScrollEnabled(context) }
+    val scrollSpeed = remember { com.memoriabox.utils.AppSettings.getDiaryScrollSpeed(context) }
+
+    if (!scrollEnabled) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyLarge,
+            color = Color.White,
+            modifier = modifier.fillMaxWidth()
+        )
+        LaunchedEffect(text) { onComplete() }
+        return
+    }
+
     var visibleChars by remember { mutableIntStateOf(0) }
     var isComplete by remember { mutableStateOf(false) }
 
@@ -54,7 +69,7 @@ fun ScrollingTextAnimation(
         for (i in text.indices) {
             if (!isActive) break
             visibleChars = i + 1
-            delay(charDelay)
+            delay(scrollSpeed.toLong())
         }
         isComplete = true
         onComplete()

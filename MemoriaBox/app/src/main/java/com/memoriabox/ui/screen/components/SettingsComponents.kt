@@ -20,7 +20,8 @@ import com.memoriabox.ui.utils.rememberAdaptiveUiSize
 @Composable
 fun SettingsList(
     onBackupSettingsClick: () -> Unit = {},
-    onWebDavSettingsClick: () -> Unit = {}
+    onWebDavSettingsClick: () -> Unit = {},
+    onDiarySettingsClick: () -> Unit = {}
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         SettingsItem(
@@ -34,6 +35,12 @@ fun SettingsList(
             title = "WebDAV 同步",
             description = "配置云端同步服务",
             onClick = onWebDavSettingsClick
+        )
+        SettingsItem(
+            icon = Icons.Default.Edit,
+            title = "日记设置",
+            description = "滚动动画速度、开关",
+            onClick = onDiarySettingsClick
         )
         SettingsItem(
             icon = Icons.Default.NotificationImportant,
@@ -191,4 +198,71 @@ fun WebDavSettingsContent(
             Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
+}
+
+@Composable
+fun DiarySettingsDialog(
+    onDismiss: () -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var scrollEnabled by remember { mutableStateOf(com.memoriabox.utils.AppSettings.getDiaryScrollEnabled(context)) }
+    var scrollSpeed by remember { mutableIntStateOf(com.memoriabox.utils.AppSettings.getDiaryScrollSpeed(context)) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("日记设置") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text("滚动动画", style = MaterialTheme.typography.titleSmall)
+                        Text("关闭后直接显示全部文字", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(
+                        checked = scrollEnabled,
+                        onCheckedChange = {
+                            scrollEnabled = it
+                            com.memoriabox.utils.AppSettings.setDiaryScrollEnabled(context, it)
+                        }
+                    )
+                }
+
+                if (scrollEnabled) {
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("滚动速度", style = MaterialTheme.typography.titleSmall)
+                            Text("${scrollSpeed}ms/字", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Slider(
+                            value = scrollSpeed.toFloat(),
+                            onValueChange = {
+                                scrollSpeed = it.toInt()
+                                com.memoriabox.utils.AppSettings.setDiaryScrollSpeed(context, scrollSpeed)
+                            },
+                            valueRange = 10f..200f,
+                            steps = 18,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("快", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("慢", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("完成") }
+        }
+    )
 }
