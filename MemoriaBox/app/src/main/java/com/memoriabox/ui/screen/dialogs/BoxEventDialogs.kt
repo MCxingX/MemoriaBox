@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.FlowRow
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -26,6 +27,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.memoriabox.data.model.BgType
 import com.memoriabox.data.model.Box
@@ -855,6 +857,7 @@ private fun safeDialogColor(value: String): Color = runCatching {
 }.getOrElse { Color(0xFF7C4DFF) }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 fun DatePickerDialog(
     onDismiss: () -> Unit,
     onDateSelected: (Long) -> Unit,
@@ -871,6 +874,7 @@ fun DatePickerDialog(
         })
     }
     var selectedDate by remember(initialDateMillis) { mutableLongStateOf(toLocalStartOfDay(initialDateMillis)) }
+    var yearText by remember(initialDateMillis) { mutableStateOf(visibleMonth.get(Calendar.YEAR).toString()) }
     val monthTitle = remember(visibleMonth.timeInMillis) {
         SimpleDateFormat("yyyy年M月", Locale.getDefault()).format(visibleMonth.time)
     }
@@ -878,6 +882,15 @@ fun DatePickerDialog(
     val daysInMonth = visibleMonth.getActualMaximum(Calendar.DAY_OF_MONTH)
     val firstDayOffset = (visibleMonth.get(Calendar.DAY_OF_WEEK) - Calendar.MONDAY + 7) % 7
     val weekLabels = listOf("一", "二", "三", "四", "五", "六", "日")
+    val monthLabels = (1..12).map { "${it}月" }
+
+    fun updateVisibleMonth(year: Int, month: Int) {
+        visibleMonth = Calendar.getInstance().apply {
+            clear()
+            set(year.coerceIn(1900, 2100), month.coerceIn(0, 11), 1, 0, 0, 0)
+        }
+        yearText = visibleMonth.get(Calendar.YEAR).toString()
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -886,7 +899,8 @@ fun DatePickerDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .widthIn(min = 320.dp, max = 360.dp),
+                    .widthIn(min = 320.dp, max = 380.dp)
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Row(
@@ -896,14 +910,54 @@ fun DatePickerDialog(
                 ) {
                     IconButton(onClick = {
                         visibleMonth = (visibleMonth.clone() as Calendar).apply { add(Calendar.MONTH, -1) }
+                        yearText = visibleMonth.get(Calendar.YEAR).toString()
                     }) {
                         Icon(Icons.Default.ChevronLeft, contentDescription = "上个月")
                     }
                     Text(monthTitle, style = MaterialTheme.typography.titleMedium)
                     IconButton(onClick = {
                         visibleMonth = (visibleMonth.clone() as Calendar).apply { add(Calendar.MONTH, 1) }
+                        yearText = visibleMonth.get(Calendar.YEAR).toString()
                     }) {
                         Icon(Icons.Default.ChevronRight, contentDescription = "下个月")
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedButton(onClick = { updateVisibleMonth(visibleMonth.get(Calendar.YEAR) - 1, visibleMonth.get(Calendar.MONTH)) }) {
+                        Text("上一年")
+                    }
+                    OutlinedTextField(
+                        value = yearText,
+                        onValueChange = { value ->
+                            yearText = value.filter { it.isDigit() }.take(4)
+                            yearText.toIntOrNull()?.let { updateVisibleMonth(it, visibleMonth.get(Calendar.MONTH)) }
+                        },
+                        label = { Text("年份") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f)
+                    )
+                    OutlinedButton(onClick = { updateVisibleMonth(visibleMonth.get(Calendar.YEAR) + 1, visibleMonth.get(Calendar.MONTH)) }) {
+                        Text("下一年")
+                    }
+                }
+
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    monthLabels.forEachIndexed { index, label ->
+                        FilterChip(
+                            selected = visibleMonth.get(Calendar.MONTH) == index,
+                            onClick = { updateVisibleMonth(visibleMonth.get(Calendar.YEAR), index) },
+                            label = { Text(label) }
+                        )
                     }
                 }
 
@@ -976,6 +1030,7 @@ fun DatePickerDialog(
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 fun LunarCalendarDialog(
     onDismiss: () -> Unit,
     onSelected: (String, Long) -> Unit
@@ -990,49 +1045,71 @@ fun LunarCalendarDialog(
         "七月", "八月", "九月", "十月", "十一月", "腊月"
     )
     val lunarDays = (1..30).toList()
+    var yearText by remember { mutableStateOf(currentYear.toString()) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("选择农历") },
         text = {
             Column(
-                modifier = Modifier.verticalScroll(rememberScrollState())
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .widthIn(min = 320.dp, max = 380.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text("年份", style = MaterialTheme.typography.labelLarge)
-                OutlinedTextField(
-                    value = selectedYear.toString(),
-                    onValueChange = { selectedYear = it.toIntOrNull() ?: currentYear },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedButton(onClick = {
+                        selectedYear = (selectedYear - 1).coerceIn(1900, 2100)
+                        yearText = selectedYear.toString()
+                    }) { Text("上一年") }
+                    OutlinedTextField(
+                        value = yearText,
+                        onValueChange = { value ->
+                            yearText = value.filter { it.isDigit() }.take(4)
+                            selectedYear = yearText.toIntOrNull()?.coerceIn(1900, 2100) ?: selectedYear
+                        },
+                        label = { Text("年份") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f)
+                    )
+                    OutlinedButton(onClick = {
+                        selectedYear = (selectedYear + 1).coerceIn(1900, 2100)
+                        yearText = selectedYear.toString()
+                    }) { Text("下一年") }
+                }
 
                 Text("月份", style = MaterialTheme.typography.labelLarge)
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(4),
-                    modifier = Modifier.height(150.dp)
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    items(lunarMonths) { month ->
+                    lunarMonths.forEachIndexed { index, month ->
                         FilterChip(
-                            selected = selectedMonth == lunarMonths.indexOf(month) + 1,
-                            onClick = { selectedMonth = lunarMonths.indexOf(month) + 1 },
+                            selected = selectedMonth == index + 1,
+                            onClick = { selectedMonth = index + 1 },
                             label = { Text(month) },
-                            modifier = Modifier.padding(4.dp)
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(8.dp))
 
                 Text("日期", style = MaterialTheme.typography.labelLarge)
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(6),
-                    modifier = Modifier.height(150.dp)
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    items(lunarDays) { day ->
+                    lunarDays.forEach { day ->
                         FilterChip(
                             selected = selectedDay == day,
                             onClick = { selectedDay = day },
                             label = { Text(day.toString()) },
-                            modifier = Modifier.padding(4.dp)
                         )
                     }
                 }
@@ -1057,15 +1134,16 @@ fun LunarCalendarDialog(
 }
 
 private fun approximateLunarSelectionDate(year: Int, month: Int, day: Int): Long {
-    return Calendar.getInstance().apply {
-        set(Calendar.YEAR, year)
-        set(Calendar.MONTH, (month - 1).coerceIn(0, 11))
-        set(Calendar.DAY_OF_MONTH, day.coerceIn(1, 28))
-        set(Calendar.HOUR_OF_DAY, 0)
-        set(Calendar.MINUTE, 0)
-        set(Calendar.SECOND, 0)
-        set(Calendar.MILLISECOND, 0)
-    }.timeInMillis
+    val targetMonth = (month - 1).coerceIn(0, 11)
+    val candidate = Calendar.getInstance().apply {
+        clear()
+        set(year, targetMonth, 1, 0, 0, 0)
+        set(Calendar.DAY_OF_MONTH, day.coerceIn(1, getActualMaximum(Calendar.DAY_OF_MONTH)))
+    }
+    if (candidate.timeInMillis < toLocalStartOfDay(System.currentTimeMillis())) {
+        candidate.add(Calendar.YEAR, 1)
+    }
+    return candidate.timeInMillis
 }
 
 private fun formatDate(timestamp: Long): String {

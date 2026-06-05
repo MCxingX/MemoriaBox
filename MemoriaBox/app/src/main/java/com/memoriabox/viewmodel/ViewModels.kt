@@ -112,12 +112,8 @@ class MainViewModel(
             }
 
             eventRepository.insertEvent(targetEvent)
-            if (targetEvent.reminderEnabled) {
-                notificationHelper.scheduleReminder(targetEvent)
-            }
-            syncSystemCalendarIfNeeded(targetEvent)
+            runEventSideEffects(targetEvent, notificationHelper, backupManager)
             logRepository.logEventOperation("QUICK_CREATE", targetEvent.id, targetEvent.name)
-            backupManager.onDataChanged()
         } catch (e: Exception) {
             Log.e("MainViewModel", "Quick create event failed", e)
         }
@@ -127,12 +123,8 @@ class MainViewModel(
         try {
             eventRepository.updateEvent(event)
             notificationHelper.cancelReminder(event)
-            if (event.reminderEnabled) {
-                notificationHelper.scheduleReminder(event)
-            }
-            syncSystemCalendarIfNeeded(event)
+            runEventSideEffects(event, notificationHelper, backupManager)
             logRepository.logEventOperation("QUICK_UPDATE", event.id, event.name)
-            backupManager.onDataChanged()
         } catch (e: Exception) {
             Log.e("MainViewModel", "Quick update event failed", e)
         }
@@ -192,12 +184,8 @@ class BoxDetailViewModel(
     fun createEvent(event: Event) = viewModelScope.launch {
         try {
             eventRepository.insertEvent(event)
-            if (event.reminderEnabled) {
-                notificationHelper.scheduleReminder(event)
-            }
-            syncSystemCalendarIfNeeded(event)
+            runEventSideEffects(event, notificationHelper, backupManager)
             logRepository.logEventOperation("CREATE", event.id, event.name)
-            backupManager.onDataChanged()
         } catch (e: Exception) {
             Log.e("BoxDetailVM", "Create event failed", e)
         }
@@ -207,12 +195,8 @@ class BoxDetailViewModel(
         try {
             eventRepository.updateEvent(event)
             notificationHelper.cancelReminder(event)
-            if (event.reminderEnabled) {
-                notificationHelper.scheduleReminder(event)
-            }
-            syncSystemCalendarIfNeeded(event)
+            runEventSideEffects(event, notificationHelper, backupManager)
             logRepository.logEventOperation("UPDATE", event.id, event.name)
-            backupManager.onDataChanged()
         } catch (e: Exception) {
             Log.e("BoxDetailVM", "Update event failed", e)
         }
@@ -430,10 +414,22 @@ class BackupViewModel(
     }
 }
 
-private fun AndroidViewModel.syncSystemCalendarIfNeeded(event: Event) {
-    if (event.calendarSyncEnabled && event.reminderEnabled) {
-        SystemCalendarHelper(getApplication()).insertEvent(event)
-    }
+private fun AndroidViewModel.runEventSideEffects(event: Event, notificationHelper: NotificationHelper, backupManager: BackupManager) {
+    runCatching {
+        if (event.reminderEnabled) {
+            notificationHelper.scheduleReminder(event)
+        }
+    }.onFailure { Log.e("EventSideEffects", "Schedule reminder failed", it) }
+
+    runCatching {
+        if (event.calendarSyncEnabled && event.reminderEnabled) {
+            SystemCalendarHelper(getApplication()).insertEvent(event)
+        }
+    }.onFailure { Log.e("EventSideEffects", "Sync system calendar failed", it) }
+
+    runCatching {
+        backupManager.onDataChanged()
+    }.onFailure { Log.e("EventSideEffects", "Backup change tracking failed", it) }
 }
 
 class LabelViewModel(

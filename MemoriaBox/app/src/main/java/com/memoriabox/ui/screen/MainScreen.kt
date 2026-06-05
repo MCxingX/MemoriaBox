@@ -436,18 +436,32 @@ fun MainScreen(
     }
 
     if (showQuickAdd) {
-        QuickAddEventDialog(
-            boxes = boxes,
-            initialType = EventType.COUNTDOWN,
-            application = application,
+        AddTypePickerDialog(
             onDismiss = {
                 showQuickAdd = false
                 pendingQuickAddType = null
             },
+            onTypeSelected = { type ->
+                showQuickAdd = false
+                pendingQuickAddType = type
+            },
+            onAddDiary = {
+                showQuickAdd = false
+                quickExistingDiary = null
+                showDiaryEditor = true
+            }
+        )
+    }
+
+    pendingQuickAddType?.let { type ->
+        QuickAddEventDialog(
+            boxes = boxes,
+            initialType = type,
+            application = application,
+            onDismiss = { pendingQuickAddType = null },
             onSave = { event ->
                 mainViewModel.createQuickEvent(event)
                 pendingQuickAddType = null
-                showQuickAdd = false
             }
         )
     }
@@ -1124,6 +1138,8 @@ fun EmptyUpcomingEventHint(upcomingDays: Int) {
             Text("近期很轻松", style = MaterialTheme.typography.titleSmall)
             Spacer(Modifier.height(4.dp))
             Text("${upcomingDays} 天内没有需要特别留意的日子。", style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(4.dp))
+            Text("新保存但日期更远的日子，可以在分类里查看，或到设置关闭即将到来筛选。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -2114,7 +2130,7 @@ fun SettingsScreen(
         SettingsItem(
             icon = Icons.Default.Info,
             title = "关于",
-            description = "版本 3.2.8 · MemoriaBox",
+            description = "版本 3.2.9 · MemoriaBox",
             onClick = { showAboutDialog = true }
         )
     }
@@ -2125,7 +2141,7 @@ fun SettingsScreen(
             title = { Text("关于 MemoriaBox") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("版本：3.2.8", style = MaterialTheme.typography.bodyMedium)
+                    Text("版本：3.2.9", style = MaterialTheme.typography.bodyMedium)
                     Text("MemoriaBox 是一个本地优先的日子、纪念日、待办和照片记录工具。", style = MaterialTheme.typography.bodyMedium)
                     Text("数据默认保存在本机，可通过备份和 WebDAV 功能进行迁移或同步。", style = MaterialTheme.typography.bodyMedium)
                     Text("著名木羽制作", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
