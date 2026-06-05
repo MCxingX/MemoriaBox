@@ -36,6 +36,7 @@ import com.memoriabox.data.model.EventType
 import com.memoriabox.data.model.RepeatMode
 import com.memoriabox.utils.ColorUtils
 import com.memoriabox.utils.ImageImportUtils
+import com.memoriabox.utils.LunarDateUtils
 import coil.compose.AsyncImage
 import java.text.SimpleDateFormat
 import java.util.*
@@ -1052,7 +1053,7 @@ fun LunarCalendarDialog(
         "正月", "二月", "三月", "四月", "五月", "六月",
         "七月", "八月", "九月", "十月", "十一月", "腊月"
     )
-    val lunarDays = (1..30).toList()
+    val lunarDays = (1..30).map { it to LunarDateUtils.dayLabel(it) }
     val initialSelection = remember(initialLunar, initialDateMillis) {
         parseLunarSelection(initialLunar, lunarMonths) ?: run {
             val cal = Calendar.getInstance().apply { timeInMillis = initialDateMillis ?: System.currentTimeMillis() }
@@ -1124,11 +1125,11 @@ fun LunarCalendarDialog(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    lunarDays.forEach { day ->
+                    lunarDays.forEach { (day, label) ->
                         FilterChip(
                             selected = selectedDay == day,
                             onClick = { selectedDay = day },
-                            label = { Text(day.toString()) },
+                            label = { Text(label) },
                         )
                     }
                 }
@@ -1137,7 +1138,7 @@ fun LunarCalendarDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    val lunar = "${selectedYear}年农历${lunarMonths[selectedMonth - 1]}${selectedDay}日"
+                    val lunar = "${selectedYear}年农历${lunarMonths[selectedMonth - 1]}${LunarDateUtils.dayLabel(selectedDay)}"
                     onSelected(lunar, approximateLunarSelectionDate(selectedYear, selectedMonth, selectedDay))
                 }
             ) {
@@ -1153,23 +1154,16 @@ fun LunarCalendarDialog(
 }
 
 private fun approximateLunarSelectionDate(year: Int, month: Int, day: Int): Long {
-    val targetMonth = (month - 1).coerceIn(0, 11)
-    val candidate = Calendar.getInstance().apply {
-        clear()
-        set(year, targetMonth, 1, 0, 0, 0)
-        set(Calendar.DAY_OF_MONTH, day.coerceIn(1, getActualMaximum(Calendar.DAY_OF_MONTH)))
-    }
-    if (candidate.timeInMillis < toLocalStartOfDay(System.currentTimeMillis())) {
-        candidate.add(Calendar.YEAR, 1)
-    }
-    return candidate.timeInMillis
+    val today = toLocalStartOfDay(System.currentTimeMillis())
+    LunarDateUtils.monthDayToGregorian(year, month, day)?.takeIf { it >= today }?.let { return it }
+    return LunarDateUtils.monthDayToGregorian(year + 1, month, day) ?: today
 }
 
 private fun parseLunarSelection(lunar: String?, lunarMonths: List<String>): Triple<Int, Int, Int>? {
     if (lunar.isNullOrBlank()) return null
     val year = Regex("(\\d{4})年").find(lunar)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: return null
     val month = lunarMonths.indexOfFirst { lunar.contains(it) }.takeIf { it >= 0 }?.plus(1) ?: return null
-    val day = Regex("(\\d{1,2})日").find(lunar)?.groupValues?.getOrNull(1)?.toIntOrNull()?.coerceIn(1, 30) ?: return null
+    val day = LunarDateUtils.parseDay(lunar) ?: return null
     return Triple(year.coerceIn(1900, 2100), month, day)
 }
 

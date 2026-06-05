@@ -109,6 +109,7 @@ class NotificationHelper(private val context: Context) {
                 putExtra("event_note", event.note)
                 putExtra("event_date", event.date)
                 putExtra("event_type", event.type.name)
+                putExtra("event_lunar", event.lunar)
                 putExtra("reminder_days", offsetDays)
                 putExtra("reminder_offsets", event.reminderOffsets)
                 putExtra("alarm_time", event.alarmTime)
@@ -169,6 +170,9 @@ class NotificationHelper(private val context: Context) {
     }
 
     private fun nextOccurrenceDate(event: Event): Long? {
+        if (event.type == com.memoriabox.data.model.EventType.BIRTHDAY && !event.lunar.isNullOrBlank()) {
+            return LunarDateUtils.nextOccurrenceMillis(event.lunar)
+        }
         val mode = effectiveRepeatMode(event)
         if (mode == RepeatMode.NONE) return event.date
 

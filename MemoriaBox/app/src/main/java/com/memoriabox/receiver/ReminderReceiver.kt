@@ -63,6 +63,7 @@ class ReminderReceiver : BroadcastReceiver() {
                     boxId = "",
                     name = eventTitle,
                     date = intent.getLongExtra("event_date", System.currentTimeMillis()),
+                    lunar = intent.getStringExtra("event_lunar"),
                     type = runCatching { EventType.valueOf(intent.getStringExtra("event_type") ?: "COUNTDOWN") }.getOrDefault(EventType.COUNTDOWN),
                     note = eventNote,
                     reminderEnabled = true,

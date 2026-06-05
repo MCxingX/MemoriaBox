@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import com.memoriabox.data.model.*
 import com.memoriabox.ui.utils.rememberAdaptiveUiSize
 import com.memoriabox.utils.ColorUtils
+import com.memoriabox.utils.LunarDateUtils
 import com.memoriabox.utils.MonthlySummaryUiState
 import com.memoriabox.utils.startOfMonth
 import java.text.SimpleDateFormat
@@ -86,7 +87,7 @@ fun EnhancedEventGrid(
 
 @Composable
 fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit, onStyleChange: (String) -> Unit = {}) {
-    val daysRemaining = calculateDays(event.date, event.type)
+    val daysRemaining = calculateDays(event)
     val styleOptions = remember {
         listOf(
             CardVisualStyle.HeroWide,
@@ -972,13 +973,18 @@ fun LogFilterBar(
     }
 }
 
-fun calculateDays(dateMillis: Long, type: EventType): Long {
+fun calculateDays(event: Event): Long = calculateDays(event.date, event.type, event.lunar)
+
+fun calculateDays(dateMillis: Long, type: EventType, lunar: String? = null): Long {
     val now = System.currentTimeMillis()
     return when (type) {
         EventType.COUNTDOWN -> TimeUnit.MILLISECONDS.toDays(dateMillis - now)
         EventType.ANNIVERSARY -> TimeUnit.MILLISECONDS.toDays(now - dateMillis)
         EventType.ELAPSED -> TimeUnit.MILLISECONDS.toDays(now - dateMillis)
         EventType.BIRTHDAY -> {
+            lunar?.let { lunarValue ->
+                LunarDateUtils.daysUntilNextOccurrence(lunarValue, now)?.let { return it }
+            }
             val eventCal = Calendar.getInstance().apply { timeInMillis = dateMillis }
             val nowCal = Calendar.getInstance()
             val eventMonth = eventCal.get(Calendar.MONTH)

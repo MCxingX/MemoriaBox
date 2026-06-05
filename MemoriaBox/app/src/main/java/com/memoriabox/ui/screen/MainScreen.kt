@@ -49,6 +49,7 @@ import com.memoriabox.ui.theme.AppThemeMode
 import com.memoriabox.utils.AppSettings
 import com.memoriabox.utils.MonthlySummaryHelper
 import com.memoriabox.utils.NotificationHelper
+import com.memoriabox.utils.LunarDateUtils
 import com.memoriabox.utils.startOfMonth
 import com.memoriabox.viewmodel.*
 import kotlinx.coroutines.launch
@@ -878,15 +879,21 @@ fun HomeDashboard(
     val upcomingDays = remember(settingsVersion) { AppSettings.getUpcomingEventsDays(context) }
     val upcomingReminderEnabled = remember(settingsVersion) { AppSettings.getUpcomingEventsReminderEnabled(context) }
     val now = remember(events, settingsVersion) { System.currentTimeMillis() }
-    val upcomingEvents = remember(events, upcomingEnabled, upcomingDays, now) {
-        events.mapNotNull { event ->
-            val daysLeft = daysUntilNextOccurrence(event, now) ?: return@mapNotNull null
-            if (upcomingEnabled && daysLeft in 0..upcomingDays) UpcomingEvent(event, daysLeft) else null
-        }.sortedBy { it.daysLeft }
-    }
-    val sortedEvents = remember(events, upcomingEvents, upcomingEnabled) {
+    val sortedEvents = remember(events, upcomingEnabled, upcomingDays, now) {
         if (upcomingEnabled) {
-            upcomingEvents.map { it.event }
+            events.sortedWith(
+                compareBy<Event> { event ->
+                    val daysLeft = daysUntilNextOccurrence(event, now)
+                    when {
+                        daysLeft != null && daysLeft in 0..upcomingDays -> 0
+                        daysLeft != null && daysLeft > upcomingDays -> 1
+                        else -> 2
+                    }
+                }
+                    .thenBy { event -> daysUntilNextOccurrence(event, now) ?: Long.MAX_VALUE }
+                    .thenByDescending { it.isPinned }
+                    .thenBy { it.date }
+            )
         } else {
             events.sortedWith(
                 compareByDescending<Event> { it.isPinned }
@@ -916,7 +923,7 @@ fun HomeDashboard(
                 Text(
                     if (upcomingEnabled) {
                         val reminderText = if (upcomingReminderEnabled) "提醒开启" else "提醒关闭"
-                        "${visibleEvents.size} 个 · ${upcomingDays} 天内 · $reminderText · $selectedBoxName"
+                        "${visibleEvents.size} 个 · ${upcomingDays} 天内优先 · $reminderText · $selectedBoxName"
                     } else {
                         "${visibleEvents.size} 个 · $selectedBoxName"
                     },
@@ -1139,12 +1146,10 @@ fun EmptyUpcomingEventHint(upcomingDays: Int) {
             Spacer(Modifier.height(4.dp))
             Text("${upcomingDays} 天内没有需要特别留意的日子。", style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.height(4.dp))
-            Text("新保存但日期更远的日子，可以在分类里查看，或到设置关闭即将到来筛选。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("所有日子都会显示，临近的排前面，较远或已过的排后面。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
-
-private data class UpcomingEvent(val event: Event, val daysLeft: Long)
 
 @Composable
 fun CategoryFoldersTab(
@@ -1242,6 +1247,9 @@ private fun daysUntilNextOccurrence(event: Event, nowMillis: Long): Long? {
 }
 
 private fun nextOccurrenceMillis(event: Event, nowMillis: Long): Long {
+    if (event.type == EventType.BIRTHDAY && !event.lunar.isNullOrBlank()) {
+        LunarDateUtils.nextOccurrenceMillis(event.lunar, nowMillis)?.let { return it }
+    }
     if (event.repeatYearly || event.type == EventType.BIRTHDAY || event.type == EventType.ANNIVERSARY) {
         val now = Calendar.getInstance().apply { timeInMillis = nowMillis }
         val target = Calendar.getInstance().apply { timeInMillis = event.date }
@@ -1292,7 +1300,7 @@ fun EventDetailDialog(
     onOpenCategory: () -> Unit
 ) {
     val context = LocalContext.current
-    val days = com.memoriabox.ui.screen.components.calculateDays(event.date, event.type)
+    val days = com.memoriabox.ui.screen.components.calculateDays(event)
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(event.name) },
