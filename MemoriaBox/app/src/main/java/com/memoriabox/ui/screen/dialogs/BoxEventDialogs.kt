@@ -535,7 +535,7 @@ fun EventDialog(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    listOf("HERO" to "大图", "POSTER" to "海报", "GLASS" to "玻璃", "SPLIT" to "分栏", "NEON" to "光轨", "MINIMAL" to "徽章").forEach { (template, label) ->
+                    listOf("HERO" to "大图", "SPLIT" to "分栏", "NEON" to "光轨", "MINIMAL" to "徽章").forEach { (template, label) ->
                         ElevatedFilterChip(
                             selected = cardTemplate == template,
                             onClick = { cardTemplate = template },
@@ -794,12 +794,12 @@ private fun CardTemplatePreview(
     gradientEnd: String,
     textColor: String
 ) {
-    val shape = RoundedCornerShape(if (template == "POSTER") 22.dp else 18.dp)
+    val shape = RoundedCornerShape(18.dp)
     val foreground = safeDialogColor(textColor)
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(if (template == "POSTER") 156.dp else 112.dp),
+            .height(112.dp),
         shape = shape
     ) {
         Box(
@@ -824,9 +824,6 @@ private fun CardTemplatePreview(
                     Spacer(Modifier.width(12.dp))
                     Column { Text(name, color = foreground, style = MaterialTheme.typography.titleMedium, maxLines = 1); Text(dateText, color = foreground.copy(alpha = 0.82f), style = MaterialTheme.typography.bodySmall) }
                 }
-                "GLASS" -> Surface(color = Color.White.copy(alpha = 0.18f), shape = RoundedCornerShape(18.dp), modifier = Modifier.align(Alignment.BottomStart).padding(14.dp)) {
-                    Column(modifier = Modifier.padding(12.dp)) { Text(name, color = foreground, style = MaterialTheme.typography.titleMedium, maxLines = 1); Text("99 天 · $dateText", color = foreground.copy(alpha = 0.82f), style = MaterialTheme.typography.bodySmall) }
-                }
                 "NEON" -> {
                     Box(modifier = Modifier.align(Alignment.CenterStart).fillMaxHeight().width(8.dp).background(Brush.verticalGradient(listOf(safeDialogColor(gradientStart), safeDialogColor(gradientEnd)))))
                     Column(modifier = Modifier.align(Alignment.BottomStart).padding(start = 24.dp, bottom = 16.dp, end = 16.dp)) {
@@ -843,7 +840,7 @@ private fun CardTemplatePreview(
                     Text(dateText, color = foreground.copy(alpha = 0.82f), style = MaterialTheme.typography.bodySmall)
                 }
                 else -> Column(modifier = Modifier.align(Alignment.BottomStart).padding(16.dp)) {
-                    Text("99", color = foreground, style = if (template == "POSTER") MaterialTheme.typography.displayMedium else MaterialTheme.typography.headlineMedium)
+                    Text("99", color = foreground, style = MaterialTheme.typography.headlineMedium)
                     Text(name, color = foreground, style = MaterialTheme.typography.titleMedium, maxLines = 1)
                     Text(dateText, color = foreground.copy(alpha = 0.82f), style = MaterialTheme.typography.bodySmall)
                 }

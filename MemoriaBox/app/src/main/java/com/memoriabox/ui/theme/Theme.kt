@@ -1,8 +1,8 @@
 package com.memoriabox.ui.theme
 
-import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
@@ -10,12 +10,7 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.SideEffect
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.core.view.WindowCompat
 import androidx.compose.ui.unit.dp
 
 enum class AppThemeMode(val id: String, val label: String, val description: String) {
@@ -23,7 +18,10 @@ enum class AppThemeMode(val id: String, val label: String, val description: Stri
     DARK("dark", "深色模式", "夜间使用更舒服"),
     EYE_CARE("eye_care", "护眼绿", "柔和低刺激"),
     PLAYFUL("playful", "活泼彩色", "更明亮、更调皮"),
-    WARM("warm", "暖橙小米感", "温暖、轻快、有活力")
+    WARM("warm", "暖橙小米感", "温暖、轻快、有活力"),
+    CREAM("cream", "奶油米白", "轻松、温柔、像纸质手账"),
+    MINT("mint", "薄荷清晨", "清爽、安静、适合日常记录"),
+    LAVENDER("lavender", "薰衣草雾", "柔软、舒缓、带一点浪漫")
 }
 
 private val BlueWhiteColorScheme = lightColorScheme(
@@ -99,6 +97,57 @@ private val WarmColorScheme = lightColorScheme(
     onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFF6E5A47),
 )
 
+private val CreamColorScheme = lightColorScheme(
+    primary = androidx.compose.ui.graphics.Color(0xFFD97706),
+    onPrimary = androidx.compose.ui.graphics.Color.White,
+    primaryContainer = androidx.compose.ui.graphics.Color(0xFFFFE8C2),
+    onPrimaryContainer = androidx.compose.ui.graphics.Color(0xFF4B2500),
+    secondary = androidx.compose.ui.graphics.Color(0xFFB7791F),
+    onSecondary = androidx.compose.ui.graphics.Color.White,
+    secondaryContainer = androidx.compose.ui.graphics.Color(0xFFFFF2D8),
+    tertiary = androidx.compose.ui.graphics.Color(0xFFE88C6D),
+    background = androidx.compose.ui.graphics.Color(0xFFFFFCF5),
+    surface = androidx.compose.ui.graphics.Color(0xFFFFF8EC),
+    surfaceVariant = androidx.compose.ui.graphics.Color(0xFFF7EAD8),
+    onBackground = androidx.compose.ui.graphics.Color(0xFF241A10),
+    onSurface = androidx.compose.ui.graphics.Color(0xFF241A10),
+    onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFF6C5841),
+)
+
+private val MintColorScheme = lightColorScheme(
+    primary = androidx.compose.ui.graphics.Color(0xFF0F9F8E),
+    onPrimary = androidx.compose.ui.graphics.Color.White,
+    primaryContainer = androidx.compose.ui.graphics.Color(0xFFD9F7F2),
+    onPrimaryContainer = androidx.compose.ui.graphics.Color(0xFF003C35),
+    secondary = androidx.compose.ui.graphics.Color(0xFF5BAE8C),
+    onSecondary = androidx.compose.ui.graphics.Color.White,
+    secondaryContainer = androidx.compose.ui.graphics.Color(0xFFE8F8EF),
+    tertiary = androidx.compose.ui.graphics.Color(0xFF5B8DEF),
+    background = androidx.compose.ui.graphics.Color(0xFFF7FFFC),
+    surface = androidx.compose.ui.graphics.Color(0xFFFFFFFF),
+    surfaceVariant = androidx.compose.ui.graphics.Color(0xFFE8F7F3),
+    onBackground = androidx.compose.ui.graphics.Color(0xFF10201D),
+    onSurface = androidx.compose.ui.graphics.Color(0xFF10201D),
+    onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFF4C6861),
+)
+
+private val LavenderColorScheme = lightColorScheme(
+    primary = androidx.compose.ui.graphics.Color(0xFF8B5CF6),
+    onPrimary = androidx.compose.ui.graphics.Color.White,
+    primaryContainer = androidx.compose.ui.graphics.Color(0xFFEDE7FF),
+    onPrimaryContainer = androidx.compose.ui.graphics.Color(0xFF2D145C),
+    secondary = androidx.compose.ui.graphics.Color(0xFFB56CC7),
+    onSecondary = androidx.compose.ui.graphics.Color.White,
+    secondaryContainer = androidx.compose.ui.graphics.Color(0xFFF7E8FB),
+    tertiary = androidx.compose.ui.graphics.Color(0xFFFF8FB3),
+    background = androidx.compose.ui.graphics.Color(0xFFFCF8FF),
+    surface = androidx.compose.ui.graphics.Color(0xFFFFFFFF),
+    surfaceVariant = androidx.compose.ui.graphics.Color(0xFFF3ECFA),
+    onBackground = androidx.compose.ui.graphics.Color(0xFF211827),
+    onSurface = androidx.compose.ui.graphics.Color(0xFF211827),
+    onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFF65566E),
+)
+
 private val DarkColorScheme = darkColorScheme(
     primary = androidx.compose.ui.graphics.Color(0xFFFF8A9A),
     secondary = androidx.compose.ui.graphics.Color(0xFFB8A6FF),
@@ -137,17 +186,10 @@ fun MemoriaBoxTheme(
         themeMode == AppThemeMode.EYE_CARE -> EyeCareColorScheme
         themeMode == AppThemeMode.PLAYFUL -> PlayfulColorScheme
         themeMode == AppThemeMode.WARM -> WarmColorScheme
+        themeMode == AppThemeMode.CREAM -> CreamColorScheme
+        themeMode == AppThemeMode.MINT -> MintColorScheme
+        themeMode == AppThemeMode.LAVENDER -> LavenderColorScheme
         else -> BlueWhiteColorScheme
-    }
-
-    val view = LocalView.current
-    if (!view.isInEditMode) {
-        SideEffect {
-            val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.background.toArgb()
-            window.navigationBarColor = colorScheme.surface.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
-        }
     }
 
     MaterialTheme(

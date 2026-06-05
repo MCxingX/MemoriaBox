@@ -35,6 +35,11 @@ object AppSettings {
         settingsVersion++
     }
 
+    private fun saveInt(context: Context, key: String, value: Int) {
+        getPrefs(context).edit().putInt(key, value).apply()
+        settingsVersion++
+    }
+
     const val HOME_BG_URI = "home_bg_uri"
     const val CALENDAR_BG_URI = "calendar_bg_uri"
     const val TODO_BG_URI = "todo_bg_uri"
@@ -54,6 +59,12 @@ object AppSettings {
     const val MONTHLY_SUMMARY_PLAY_MODE = "monthly_summary_play_mode"
     const val MONTHLY_SUMMARY_PLAY_SPEED_FACTOR = "monthly_summary_play_speed_factor"
     const val MONTHLY_SUMMARY_LAST_PROMPT_MONTH = "monthly_summary_last_prompt_month"
+    const val UPCOMING_EVENTS_ENABLED = "upcoming_events_enabled"
+    const val UPCOMING_EVENTS_DAYS = "upcoming_events_days"
+    const val UPCOMING_EVENTS_URGENT_DAYS = "upcoming_events_urgent_days"
+    const val UPCOMING_EVENTS_URGENT_COLOR = "upcoming_events_urgent_color"
+    const val UPCOMING_EVENTS_NORMAL_COLOR = "upcoming_events_normal_color"
+    const val UPCOMING_EVENTS_REMINDER_ENABLED = "upcoming_events_reminder_enabled"
 
     fun getHomeBgUri(context: Context) = getPrefs(context).getString(HOME_BG_URI, null)
     fun setHomeBgUri(context: Context, uri: String?) = saveString(context, HOME_BG_URI, uri)
@@ -144,4 +155,22 @@ object AppSettings {
 
     fun getMonthlySummaryLastPromptMonth(context: Context) = getPrefs(context).getString(MONTHLY_SUMMARY_LAST_PROMPT_MONTH, null)
     fun setMonthlySummaryLastPromptMonth(context: Context, month: String) = saveString(context, MONTHLY_SUMMARY_LAST_PROMPT_MONTH, month)
+
+    fun getUpcomingEventsEnabled(context: Context) = getPrefs(context).getBoolean(UPCOMING_EVENTS_ENABLED, true)
+    fun setUpcomingEventsEnabled(context: Context, enabled: Boolean) = saveBoolean(context, UPCOMING_EVENTS_ENABLED, enabled)
+
+    fun getUpcomingEventsDays(context: Context) = getPrefs(context).getInt(UPCOMING_EVENTS_DAYS, 30)
+    fun setUpcomingEventsDays(context: Context, days: Int) = saveInt(context, UPCOMING_EVENTS_DAYS, days.coerceIn(1, 365))
+
+    fun getUpcomingEventsUrgentDays(context: Context) = getPrefs(context).getInt(UPCOMING_EVENTS_URGENT_DAYS, 7)
+    fun setUpcomingEventsUrgentDays(context: Context, days: Int) = saveInt(context, UPCOMING_EVENTS_URGENT_DAYS, days.coerceIn(1, 30))
+
+    fun getUpcomingEventsUrgentColor(context: Context) = getPrefs(context).getString(UPCOMING_EVENTS_URGENT_COLOR, "#F97316") ?: "#F97316"
+    fun setUpcomingEventsUrgentColor(context: Context, color: String) = saveString(context, UPCOMING_EVENTS_URGENT_COLOR, color)
+
+    fun getUpcomingEventsNormalColor(context: Context) = getPrefs(context).getString(UPCOMING_EVENTS_NORMAL_COLOR, "#2563EB") ?: "#2563EB"
+    fun setUpcomingEventsNormalColor(context: Context, color: String) = saveString(context, UPCOMING_EVENTS_NORMAL_COLOR, color)
+
+    fun getUpcomingEventsReminderEnabled(context: Context) = getPrefs(context).getBoolean(UPCOMING_EVENTS_REMINDER_ENABLED, true)
+    fun setUpcomingEventsReminderEnabled(context: Context, enabled: Boolean) = saveBoolean(context, UPCOMING_EVENTS_REMINDER_ENABLED, enabled)
 }

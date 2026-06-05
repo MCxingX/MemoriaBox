@@ -7,11 +7,14 @@ import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,6 +37,7 @@ class MainActivity : ComponentActivity() {
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        applySystemBarStyle(AppThemeMode.BLUE_WHITE)
         
         Log.d(TAG, "onCreate called")
         pendingMonthlySummaryMonth = extractMonthlySummaryMonth(intent)
@@ -51,6 +55,9 @@ class MainActivity : ComponentActivity() {
                     mutableStateOf(
                         AppThemeMode.entries.firstOrNull { it.id == prefs.getString("theme_mode", AppThemeMode.BLUE_WHITE.id) } ?: AppThemeMode.BLUE_WHITE
                     )
+                }
+                SideEffect {
+                    applySystemBarStyle(themeMode)
                 }
                 MemoriaBoxTheme(themeMode = themeMode) {
                     Surface(
@@ -75,6 +82,31 @@ class MainActivity : ComponentActivity() {
             Log.e(TAG, "setContent failed", e)
             throw e
         }
+    }
+
+    private fun applySystemBarStyle(themeMode: AppThemeMode) {
+        val background = when (themeMode) {
+            AppThemeMode.DARK -> 0xFF17121A.toInt()
+            AppThemeMode.EYE_CARE -> 0xFFFAFCF4.toInt()
+            AppThemeMode.PLAYFUL -> 0xFFFFFBFF.toInt()
+            AppThemeMode.WARM -> 0xFFFFF8EF.toInt()
+            AppThemeMode.CREAM -> 0xFFFFF8EC.toInt()
+            AppThemeMode.MINT -> 0xFFF7FFFC.toInt()
+            AppThemeMode.LAVENDER -> 0xFFFCF8FF.toInt()
+            AppThemeMode.BLUE_WHITE -> 0xFFFFFFFF.toInt()
+        }
+        val isDarkTheme = themeMode == AppThemeMode.DARK
+        val statusBarStyle = if (isDarkTheme) {
+            SystemBarStyle.dark(background)
+        } else {
+            SystemBarStyle.light(background, 0xFF000000.toInt())
+        }
+        val navigationBarStyle = if (isDarkTheme) {
+            SystemBarStyle.dark(background)
+        } else {
+            SystemBarStyle.light(background, 0xFF000000.toInt())
+        }
+        enableEdgeToEdge(statusBarStyle = statusBarStyle, navigationBarStyle = navigationBarStyle)
     }
 
     override fun onNewIntent(intent: Intent) {

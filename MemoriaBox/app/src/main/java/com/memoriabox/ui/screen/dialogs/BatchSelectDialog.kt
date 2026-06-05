@@ -27,7 +27,8 @@ fun BatchSelectDialog(
     onBatchMove: () -> Unit,
     onBatchEdit: () -> Unit
 ) {
-    var showActionMenu by remember { mutableStateOf(false) }
+    val allEventIds = remember(events) { events.map { it.id }.toSet() }
+    val allSelected = events.isNotEmpty() && selectedEvents.containsAll(allEventIds)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -39,6 +40,14 @@ fun BatchSelectDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    ActionChip(
+                        icon = if (allSelected) Icons.Default.Clear else Icons.Default.SelectAll,
+                        label = if (allSelected) "取消全选" else "全选",
+                        onClick = {
+                            onSelectionChange(if (allSelected) emptySet() else allEventIds)
+                        },
+                        enabled = events.isNotEmpty()
+                    )
                     ActionChip(
                         icon = Icons.Default.Delete,
                         label = "删除",
@@ -90,9 +99,6 @@ fun BatchSelectDialog(
         }
     )
 
-    if (showActionMenu) {
-        // Action menu dialog
-    }
 }
 
 @Composable

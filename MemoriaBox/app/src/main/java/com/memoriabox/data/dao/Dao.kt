@@ -33,22 +33,22 @@ interface BoxDao {
     @Query("UPDATE boxes SET sort_order = :order WHERE id = :id")
     suspend fun updateBoxOrder(id: String, order: Int)
 
-    @Query("SELECT COUNT(*) FROM events WHERE box_id = :boxId")
+    @Query("SELECT COUNT(*) FROM events WHERE box_id = :boxId AND id NOT LIKE 'milestone_%'")
     fun getEventCountByBoxId(boxId: String): Flow<Int>
 }
 
 @Dao
 interface EventDao {
-    @Query("SELECT * FROM events WHERE box_id = :boxId ORDER BY is_pinned DESC, date ASC")
+    @Query("SELECT * FROM events WHERE box_id = :boxId AND id NOT LIKE 'milestone_%' ORDER BY is_pinned DESC, date ASC")
     fun getEventsByBoxId(boxId: String): Flow<List<Event>>
 
-    @Query("SELECT * FROM events ORDER BY is_pinned DESC, date ASC")
+    @Query("SELECT * FROM events WHERE id NOT LIKE 'milestone_%' ORDER BY is_pinned DESC, date ASC")
     fun getAllEvents(): Flow<List<Event>>
 
-    @Query("SELECT * FROM events WHERE type = 'TODO' ORDER BY due_date ASC")
+    @Query("SELECT * FROM events WHERE type = 'TODO' AND id NOT LIKE 'milestone_%' ORDER BY due_date ASC")
     fun getTodoEvents(): Flow<List<Event>>
 
-    @Query("SELECT * FROM events WHERE type = 'BIRTHDAY' ORDER BY date ASC")
+    @Query("SELECT * FROM events WHERE type = 'BIRTHDAY' AND id NOT LIKE 'milestone_%' ORDER BY date ASC")
     fun getBirthdayEvents(): Flow<List<Event>>
 
     @Query("SELECT * FROM events WHERE id = :id")
@@ -78,29 +78,11 @@ interface EventDao {
     @Query("UPDATE events SET is_pinned = :isPinned WHERE id = :id")
     suspend fun updatePinned(id: String, isPinned: Boolean)
 
-    @Query("SELECT * FROM events WHERE date >= :now ORDER BY date ASC LIMIT 1")
+    @Query("SELECT * FROM events WHERE date >= :now AND id NOT LIKE 'milestone_%' ORDER BY date ASC LIMIT 1")
     suspend fun getNextUpcomingEvent(now: Long): Event?
 
-    @Query("SELECT COUNT(*) FROM events WHERE date >= :start AND date <= :end")
+    @Query("SELECT COUNT(*) FROM events WHERE date >= :start AND date <= :end AND id NOT LIKE 'milestone_%'")
     suspend fun getEventCountBetween(start: Long, end: Long): Int
-}
-
-@Dao
-interface FriendDao {
-    @Query("SELECT * FROM friends ORDER BY name ASC")
-    fun getAllFriends(): Flow<List<Friend>>
-
-    @Query("SELECT * FROM friends WHERE id = :id")
-    suspend fun getFriendById(id: String): Friend?
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertFriend(friend: Friend): Long
-
-    @Update
-    suspend fun updateFriend(friend: Friend)
-
-    @Delete
-    suspend fun deleteFriend(friend: Friend)
 }
 
 @Dao
@@ -120,23 +102,11 @@ interface LabelDao {
     @Query("SELECT label FROM event_labels WHERE event_id = :eventId")
     fun getEventLabels(eventId: String): Flow<List<String>>
 
-    @Query("SELECT friend_id FROM friend_relations WHERE label = :label")
-    fun getFriendsByLabel(label: String): Flow<List<String>>
-
-    @Query("SELECT * FROM friend_relations")
-    fun getAllFriendRelations(): Flow<List<FriendRelation>>
-
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun addEventLabel(eventLabel: EventLabel)
 
     @Delete
     suspend fun removeEventLabel(eventLabel: EventLabel)
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun addFriendRelation(relation: FriendRelation)
-
-    @Delete
-    suspend fun removeFriendRelation(relation: FriendRelation)
 }
 
 @Dao

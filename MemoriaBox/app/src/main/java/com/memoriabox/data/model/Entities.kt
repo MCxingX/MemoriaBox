@@ -12,10 +12,6 @@ enum class BgType {
     COLOR, IMAGE
 }
 
-enum class CardLayoutMode {
-    SINGLE_COLUMN, GRID_2X4, GRID_3X3, FLOW
-}
-
 enum class ImportMode {
     OVERWRITE, MERGE_SKIP, MERGE_REPLACE
 }

@@ -2,7 +2,6 @@ package com.memoriabox.repository
 
 import com.memoriabox.data.dao.BoxDao
 import com.memoriabox.data.dao.EventDao
-import com.memoriabox.data.dao.FriendDao
 import com.memoriabox.data.dao.LabelDao
 import com.memoriabox.data.dao.LogDao
 import com.memoriabox.data.dao.DiaryDao
@@ -76,18 +75,6 @@ class LogRepository(private val logDao: LogDao) {
     suspend fun logBackupOperation(operation: String, result: String = "success", extra: String? = null) {
         logOperation("BACKUP_$operation", "backup", "Backup", result, extra)
     }
-}
-
-class FriendRepository(private val friendDao: FriendDao, private val labelDao: LabelDao) {
-    fun getAllFriends(): Flow<List<Friend>> = friendDao.getAllFriends()
-    suspend fun getFriendById(id: String): Friend? = friendDao.getFriendById(id)
-    suspend fun insertFriend(friend: Friend): Long = friendDao.insertFriend(friend)
-    suspend fun updateFriend(friend: Friend) = friendDao.updateFriend(friend)
-    suspend fun deleteFriend(friend: Friend) = friendDao.deleteFriend(friend)
-    suspend fun addRelation(relation: FriendRelation) = labelDao.addFriendRelation(relation)
-    suspend fun removeRelation(relation: FriendRelation) = labelDao.removeFriendRelation(relation)
-    fun getFriendsByLabel(label: String): Flow<List<String>> = labelDao.getFriendsByLabel(label)
-    fun getAllFriendRelations(): Flow<List<FriendRelation>> = labelDao.getAllFriendRelations()
 }
 
 class LabelRepository(private val labelDao: LabelDao) {

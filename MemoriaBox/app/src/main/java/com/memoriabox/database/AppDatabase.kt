@@ -24,7 +24,6 @@ import javax.crypto.SecretKeyFactory
 abstract class AppDatabase : RoomDatabase() {
     abstract fun boxDao(): BoxDao
     abstract fun eventDao(): EventDao
-    abstract fun friendDao(): FriendDao
     abstract fun labelDao(): LabelDao
     abstract fun logDao(): LogDao
     abstract fun diaryDao(): DiaryDao
@@ -115,6 +114,7 @@ abstract class AppDatabase : RoomDatabase() {
             ensureDiaryTables(db)
             ensureColumnExists(db, "diary_media", "aspect_ratio", "TEXT NOT NULL DEFAULT '16:9'")
             db.execSQL("UPDATE events SET repeat_mode = 'NONE' WHERE repeat_mode NOT IN ('NONE', 'YEARLY', 'MONTHLY', 'CUSTOM_DAYS', 'CUSTOM_WEEKS', 'CUSTOM_MONTHS')")
+            db.execSQL("DELETE FROM events WHERE id LIKE 'milestone_%'")
             db.execSQL("""
                 INSERT OR IGNORE INTO boxes (id, name, icon, bg_type, bg_value, sort_order, is_archived, created_at)
                 VALUES ('default_1', '我的日子', '*', 'COLOR', '#7C4DFF', 0, 0, strftime('%s', 'now') * 1000)

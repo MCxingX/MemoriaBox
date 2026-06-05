@@ -50,7 +50,7 @@ fun SettingsList(
         SettingsItem(
             icon = Icons.Default.Info,
             title = "关于",
-            description = "版本 3.2.2"
+            description = "版本 3.2.4"
         )
     }
 }
@@ -358,6 +358,131 @@ fun MonthlySummarySettingsDialog(
                         Text("快", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("完成") }
+        }
+    )
+}
+
+@Composable
+fun UpcomingEventsSettingsDialog(
+    onDismiss: () -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var enabled by remember { mutableStateOf(com.memoriabox.utils.AppSettings.getUpcomingEventsEnabled(context)) }
+    var days by remember { mutableIntStateOf(com.memoriabox.utils.AppSettings.getUpcomingEventsDays(context)) }
+    var urgentDays by remember { mutableIntStateOf(com.memoriabox.utils.AppSettings.getUpcomingEventsUrgentDays(context)) }
+    var reminderEnabled by remember { mutableStateOf(com.memoriabox.utils.AppSettings.getUpcomingEventsReminderEnabled(context)) }
+    var urgentColor by remember { mutableStateOf(com.memoriabox.utils.AppSettings.getUpcomingEventsUrgentColor(context)) }
+    var normalColor by remember { mutableStateOf(com.memoriabox.utils.AppSettings.getUpcomingEventsNormalColor(context)) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("即将到来") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("首页只看临近日子", style = MaterialTheme.typography.titleSmall)
+                        Text("默认显示 30 天内事件，并按剩余天数排序", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(
+                        checked = enabled,
+                        onCheckedChange = {
+                            enabled = it
+                            com.memoriabox.utils.AppSettings.setUpcomingEventsEnabled(context, it)
+                        }
+                    )
+                }
+
+                HorizontalDivider()
+                Column {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("显示范围", style = MaterialTheme.typography.titleSmall)
+                        Text("${days}天内", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Slider(
+                        value = days.toFloat(),
+                        onValueChange = {
+                            days = it.toInt()
+                            if (urgentDays > days) {
+                                urgentDays = days
+                                com.memoriabox.utils.AppSettings.setUpcomingEventsUrgentDays(context, urgentDays)
+                            }
+                            com.memoriabox.utils.AppSettings.setUpcomingEventsDays(context, days)
+                        },
+                        valueRange = 1f..90f,
+                        steps = 88,
+                        enabled = enabled
+                    )
+                }
+
+                Column {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("紧急阈值", style = MaterialTheme.typography.titleSmall)
+                        Text("${urgentDays}天内", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Slider(
+                        value = urgentDays.toFloat(),
+                        onValueChange = {
+                            urgentDays = it.toInt().coerceAtMost(days)
+                            com.memoriabox.utils.AppSettings.setUpcomingEventsUrgentDays(context, urgentDays)
+                        },
+                        valueRange = 1f..days.coerceAtLeast(2).toFloat(),
+                        steps = (days - 2).coerceAtLeast(0),
+                        enabled = enabled
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("即将到来提醒", style = MaterialTheme.typography.titleSmall)
+                        Text("作为首页提醒展示开关，默认开启", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(
+                        checked = reminderEnabled,
+                        onCheckedChange = {
+                            reminderEnabled = it
+                            com.memoriabox.utils.AppSettings.setUpcomingEventsReminderEnabled(context, it)
+                        },
+                        enabled = enabled
+                    )
+                }
+
+                OutlinedTextField(
+                    value = urgentColor,
+                    onValueChange = {
+                        urgentColor = it
+                        com.memoriabox.utils.AppSettings.setUpcomingEventsUrgentColor(context, it)
+                    },
+                    label = { Text("紧急颜色") },
+                    supportingText = { Text("默认 #F97316") },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = enabled,
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = normalColor,
+                    onValueChange = {
+                        normalColor = it
+                        com.memoriabox.utils.AppSettings.setUpcomingEventsNormalColor(context, it)
+                    },
+                    label = { Text("正常颜色") },
+                    supportingText = { Text("默认 #2563EB") },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = enabled,
+                    singleLine = true
+                )
             }
         },
         confirmButton = {

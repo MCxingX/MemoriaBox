@@ -19,10 +19,8 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.memoriabox.data.model.Box
 import com.memoriabox.data.model.Event
-import com.memoriabox.data.model.CardLayoutMode
 import com.memoriabox.data.model.LogEntry
 import com.memoriabox.data.model.TodoStatus
-import com.memoriabox.data.model.Friend
 import com.memoriabox.utils.ColorUtils
 import java.text.SimpleDateFormat
 import java.util.*
@@ -141,73 +139,6 @@ fun TodoListView(
                                     "截止: ${SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(cal.time)}",
                                     style = MaterialTheme.typography.bodySmall
                                 )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun FriendListView(
-    friends: List<Pair<Friend, List<String>>>,
-    onFriendClick: (Friend) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    LazyColumn(modifier = modifier) {
-        items(friends) { (friend, labels) ->
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp)
-                    .clickable { onFriendClick(friend) }
-            ) {
-                Row(
-                    modifier = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(MaterialTheme.shapes.large)
-                            .background(MaterialTheme.colorScheme.primaryContainer),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (!friend.avatarUri.isNullOrBlank()) {
-                            AsyncImage(
-                                model = friend.avatarUri,
-                                contentDescription = friend.name,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        } else {
-                            Text(
-                                text = friend.name.firstOrNull()?.toString() ?: "F",
-                                style = MaterialTheme.typography.headlineMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        }
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    Column {
-                        Text(friend.name, style = MaterialTheme.typography.titleMedium)
-                        if (labels.isNotEmpty()) {
-                            Row {
-                                labels.forEach { label ->
-                                    Surface(
-                                        color = MaterialTheme.colorScheme.secondaryContainer,
-                                        shape = MaterialTheme.shapes.small,
-                                        modifier = Modifier.padding(end = 4.dp)
-                                    ) {
-                                        Text(
-                                            text = label,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                            style = MaterialTheme.typography.labelSmall
-                                        )
-                                    }
-                                }
                             }
                         }
                     }

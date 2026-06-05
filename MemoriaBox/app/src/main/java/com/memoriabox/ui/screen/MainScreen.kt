@@ -51,10 +51,12 @@ import com.memoriabox.utils.MonthlySummaryHelper
 import com.memoriabox.utils.NotificationHelper
 import com.memoriabox.utils.startOfMonth
 import com.memoriabox.viewmodel.*
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 @Composable
 fun MainScreen(
@@ -196,7 +198,6 @@ fun MainScreen(
                     application = application,
                     onBoxClick = { navController.navigate(Screen.BoxDetail.createRoute(it)) },
                     onNavigateToCalendar = { navController.navigate(Screen.Calendar.route) },
-                    onNavigateToFriends = { navController.navigate(Screen.Friends.route) },
                     onNavigateToPhotoWall = { navController.navigate(Screen.PhotoWall.route) },
                     onNavigateToStatistics = { navController.navigate(Screen.Statistics.route) },
                     onNavigateToAiSuggestions = { navController.navigate(Screen.AiSuggestions.route) }
@@ -333,7 +334,6 @@ fun MainScreen(
                     currentThemeMode = currentThemeMode,
                     onThemeModeChange = onThemeModeChange,
                     onNavigateToStatistics = { navController.navigate(Screen.Statistics.route) },
-                    onNavigateToFriends = { navController.navigate(Screen.Friends.route) },
                     onNavigateToPhotoWall = { navController.navigate(Screen.PhotoWall.route) },
                     onNavigateToExport = { navController.navigate(Screen.Export.route) },
                     onNavigateToAiSuggestions = { navController.navigate(Screen.AiSuggestions.route) },
@@ -348,9 +348,6 @@ fun MainScreen(
             }
             composable(Screen.Statistics.route) {
                 StatisticsScreen(application)
-            }
-            composable(Screen.Friends.route) {
-                FriendsScreen(application)
             }
             composable(Screen.PhotoWall.route) {
                 PhotoWallScreen(application)
@@ -370,9 +367,6 @@ fun MainScreen(
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
-            composable(Screen.Birthday.route) {
-                BirthdayScreen(application)
-            }
             composable(Screen.Timeline.route) {
                 TimelineScreen(application)
             }
@@ -388,6 +382,7 @@ fun MainScreen(
             composable(Screen.DayTools.route) {
                 DayToolsScreen(
                     application = application,
+                    onNavigateBack = { navController.popBackStack() },
                     onNavigateToCalendar = { navController.navigate(Screen.Calendar.route) },
                     onNavigateToPhotoWall = { navController.navigate(Screen.PhotoWall.route) },
                     onNavigateToExport = { navController.navigate(Screen.Export.route) }
@@ -616,18 +611,15 @@ fun BoxesScreen(
     application: Application,
     onBoxClick: (String) -> Unit,
     onNavigateToCalendar: () -> Unit,
-    onNavigateToFriends: () -> Unit,
     onNavigateToPhotoWall: () -> Unit,
     onNavigateToStatistics: () -> Unit,
     onNavigateToAiSuggestions: () -> Unit
 ) {
     val viewModel = remember { createMainViewModel(application) }
-    val friendViewModel = remember { createFriendViewModel(application) }
     val notificationHelper = remember { com.memoriabox.utils.NotificationHelper(application) }
     val boxes by viewModel.boxes.collectAsState(initial = emptyList())
     val events by viewModel.allEvents.collectAsState(initial = emptyList())
     val logs by viewModel.recentLogs.collectAsState(initial = emptyList())
-    val friends by friendViewModel.friends.collectAsState(initial = emptyList())
     var showCreateDialog by remember { mutableStateOf(false) }
     var homeTab by remember { mutableIntStateOf(0) }
     var selectedEvent by remember { mutableStateOf<Event?>(null) }
@@ -666,7 +658,7 @@ fun BoxesScreen(
             topBar = {
                 TopAppBar(
                     modifier = Modifier.height(adaptiveUi.topBarHeight),
-                    title = { Text("我的日子") },
+                    title = { Text("日子") },
                     windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                     actions = {
@@ -688,13 +680,11 @@ fun BoxesScreen(
             HomeDashboard(
                 boxes = boxes,
                 events = events,
-                friends = friends,
                 selectedTab = homeTab,
                 onTabSelected = { homeTab = it },
                 onBoxClick = onBoxClick,
                 onCreateBox = { showCreateDialog = true },
                 onNavigateToCalendar = onNavigateToCalendar,
-                onNavigateToFriends = onNavigateToFriends,
                 onNavigateToPhotoWall = onNavigateToPhotoWall,
                 onNavigateToStatistics = onNavigateToStatistics,
                 onNavigateToAiSuggestions = onNavigateToAiSuggestions,
@@ -853,7 +843,6 @@ fun BoxesScreen(
 fun HomeDashboard(
     boxes: List<com.memoriabox.data.model.Box>,
     events: List<Event>,
-    friends: List<com.memoriabox.data.model.Friend>,
     selectedTab: Int,
     onTabSelected: (Int) -> Unit,
     selectedBoxId: String?,
@@ -861,7 +850,6 @@ fun HomeDashboard(
     onBoxClick: (String) -> Unit,
     onCreateBox: () -> Unit,
     onNavigateToCalendar: () -> Unit,
-    onNavigateToFriends: () -> Unit,
     onNavigateToPhotoWall: () -> Unit,
     onNavigateToStatistics: () -> Unit,
     onNavigateToAiSuggestions: () -> Unit,
@@ -870,11 +858,30 @@ fun HomeDashboard(
     adaptiveUi: AdaptiveUiSize,
     modifier: Modifier = Modifier
 ) {
-    val sortedEvents = remember(events) {
-        events.sortedWith(
-            compareByDescending<Event> { it.isPinned }
-                .thenBy { kotlin.math.abs(it.date - System.currentTimeMillis()) }
-        )
+    val context = LocalContext.current
+    val settingsVersion = AppSettings.settingsVersion
+    val upcomingEnabled = remember(settingsVersion) { AppSettings.getUpcomingEventsEnabled(context) }
+    val upcomingDays = remember(settingsVersion) { AppSettings.getUpcomingEventsDays(context) }
+    val urgentDays = remember(settingsVersion) { AppSettings.getUpcomingEventsUrgentDays(context) }
+    val upcomingReminderEnabled = remember(settingsVersion) { AppSettings.getUpcomingEventsReminderEnabled(context) }
+    val urgentColor = remember(settingsVersion) { com.memoriabox.utils.ColorUtils.hexToColor(AppSettings.getUpcomingEventsUrgentColor(context)) }
+    val normalColor = remember(settingsVersion) { com.memoriabox.utils.ColorUtils.hexToColor(AppSettings.getUpcomingEventsNormalColor(context)) }
+    val now = remember(events, settingsVersion) { System.currentTimeMillis() }
+    val upcomingEvents = remember(events, upcomingEnabled, upcomingDays, now) {
+        events.mapNotNull { event ->
+            val daysLeft = daysUntilNextOccurrence(event, now) ?: return@mapNotNull null
+            if (upcomingEnabled && daysLeft in 0..upcomingDays) UpcomingEvent(event, daysLeft) else null
+        }.sortedBy { it.daysLeft }
+    }
+    val sortedEvents = remember(events, upcomingEvents, upcomingEnabled) {
+        if (upcomingEnabled) {
+            upcomingEvents.map { it.event }
+        } else {
+            events.sortedWith(
+                compareByDescending<Event> { it.isPinned }
+                    .thenBy { kotlin.math.abs(it.date - System.currentTimeMillis()) }
+            )
+        }
     }
     val visibleEvents = remember(sortedEvents, selectedBoxId) {
         selectedBoxId?.let { boxId -> sortedEvents.filter { it.boxId == boxId } } ?: sortedEvents
@@ -894,8 +901,17 @@ fun HomeDashboard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column {
-                Text("全部日子", style = MaterialTheme.typography.titleMedium)
-                Text("${visibleEvents.size} 个 · $selectedBoxName", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(if (upcomingEnabled) "即将到来" else "今天先看这些", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    if (upcomingEnabled) {
+                        val reminderText = if (upcomingReminderEnabled) "提醒开启" else "提醒关闭"
+                        "${visibleEvents.size} 个 · ${upcomingDays} 天内 · $reminderText · $selectedBoxName"
+                    } else {
+                        "${visibleEvents.size} 个 · $selectedBoxName"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
             HomeBoxFilter(
                 boxes = boxes,
@@ -907,12 +923,21 @@ fun HomeDashboard(
         Spacer(Modifier.height(adaptiveUi.sectionSpacing))
         HomeHeroCard(
             onEventsClick = { onTabSelected(0) },
-            onFriendsClick = onNavigateToFriends,
             onBoxesClick = { onTabSelected(1) },
             adaptiveUi = adaptiveUi
         )
         Spacer(Modifier.height(adaptiveUi.sectionSpacing))
-        AllEventsTab(events = visibleEvents, onEventClick = onEventClick, onEventLongClick = onEventLongClick)
+        AllEventsTab(
+            events = visibleEvents,
+            upcomingEnabled = upcomingEnabled,
+            upcomingDays = upcomingDays,
+            urgentDays = urgentDays,
+            urgentColor = urgentColor,
+            normalColor = normalColor,
+            now = now,
+            onEventClick = onEventClick,
+            onEventLongClick = onEventLongClick
+        )
         }
     }
 }
@@ -920,7 +945,6 @@ fun HomeDashboard(
 @Composable
 fun HomeHeroCard(
     onEventsClick: () -> Unit = {},
-    onFriendsClick: () -> Unit = {},
     onBoxesClick: () -> Unit = {},
     adaptiveUi: AdaptiveUiSize
 ) {
@@ -1057,12 +1081,38 @@ fun HeroStatPill(label: String, value: String, modifier: Modifier = Modifier, on
 }
 
 @Composable
-fun AllEventsTab(events: List<Event>, onEventClick: (Event) -> Unit, onEventLongClick: (Event) -> Unit) {
+fun AllEventsTab(
+    events: List<Event>,
+    upcomingEnabled: Boolean,
+    upcomingDays: Int,
+    urgentDays: Int,
+    urgentColor: Color,
+    normalColor: Color,
+    now: Long,
+    onEventClick: (Event) -> Unit,
+    onEventLongClick: (Event) -> Unit
+) {
     val pinnedEvents = events.filter { it.isPinned }
     val normalEvents = events.filter { !it.isPinned }
     
     if (events.isEmpty()) {
-        EmptyEventListHint()
+        if (upcomingEnabled) {
+            EmptyUpcomingEventHint(upcomingDays)
+        } else {
+            EmptyEventListHint()
+        }
+    } else if (upcomingEnabled) {
+        events.forEach { event ->
+            val daysLeft = daysUntilNextOccurrence(event, now) ?: 0
+            HomeEventRow(
+                event = event,
+                daysLeft = daysLeft,
+                accentColor = upcomingAccentColor(daysLeft, urgentDays, urgentColor, normalColor),
+                onClick = { onEventClick(event) },
+                onLongClick = { onEventLongClick(event) }
+            )
+            Spacer(Modifier.height(6.dp))
+        }
     } else if (pinnedEvents.isNotEmpty()) {
         Text("置顶", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.height(6.dp))
@@ -1072,13 +1122,32 @@ fun AllEventsTab(events: List<Event>, onEventClick: (Event) -> Unit, onEventLong
         }
         Spacer(Modifier.height(12.dp))
     }
-    if (events.isNotEmpty()) {
+    if (events.isNotEmpty() && !upcomingEnabled) {
         normalEvents.forEach { event ->
             EnhancedEventCard(event = event, onClick = { onEventClick(event) }, onLongPress = { onEventLongClick(event) })
             Spacer(Modifier.height(6.dp))
         }
     }
 }
+
+@Composable
+fun EmptyUpcomingEventHint(upcomingDays: Int) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("近期很轻松", style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.height(4.dp))
+            Text("${upcomingDays} 天内没有需要特别留意的日子。", style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
+private data class UpcomingEvent(val event: Event, val daysLeft: Long)
+
+private fun upcomingAccentColor(daysLeft: Long, urgentDays: Int, urgentColor: Color, normalColor: Color): Color =
+    if (daysLeft in 0..urgentDays) urgentColor else normalColor
 
 @Composable
 fun CategoryFoldersTab(
@@ -1106,100 +1175,6 @@ fun CategoryFoldersTab(
             showCreateButton = false
         )
     }
-}
-
-@Composable
-fun FriendGroupsTab(
-    friends: List<com.memoriabox.data.model.Friend>,
-    onNavigateToFriends: () -> Unit
-) {
-    val sortedFriends = remember(friends) {
-        friends.sortedWith(
-            compareBy<com.memoriabox.data.model.Friend> { friend ->
-                friend.birthdayDate?.let { daysUntilNextBirthday(it) } ?: Int.MAX_VALUE
-            }.thenBy { it.name }
-        )
-    }
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text("生日分组", style = MaterialTheme.typography.titleMedium)
-        TextButton(onClick = onNavigateToFriends) { Text("管理分组") }
-    }
-    Spacer(Modifier.height(8.dp))
-    if (friends.isEmpty()) {
-        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text("还没有生日分组", style = MaterialTheme.typography.titleSmall)
-                Spacer(Modifier.height(4.dp))
-                Text("添加成员后，可以按标签管理生日、纪念日和重要联系人。", style = MaterialTheme.typography.bodyMedium)
-            }
-        }
-    } else {
-        sortedFriends.take(8).forEach { friend ->
-            val birthdayDays = friend.birthdayDate?.let { daysUntilNextBirthday(it) }
-            Card(modifier = Modifier.fillMaxWidth().clickable { onNavigateToFriends() }) {
-                Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(48.dp)) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(friend.name.firstOrNull()?.toString() ?: "F", style = MaterialTheme.typography.titleLarge)
-                        }
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(friend.name, style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            friend.birthdayDate?.let { "生日 ${formatFriendBirthdayMonthDay(it)}" } ?: "未设置生日",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    birthdayDays?.let { days ->
-                        Surface(
-                            shape = MaterialTheme.shapes.medium,
-                            color = MaterialTheme.colorScheme.primaryContainer
-                        ) {
-                            Text(
-                                text = if (days == 0) "今天生日" else "还有 ${days} 天",
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                maxLines = 1
-                            )
-                        }
-                    }
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-        }
-    }
-}
-
-private fun formatFriendBirthdayMonthDay(timestamp: Long): String {
-    return SimpleDateFormat("M月d日", Locale.getDefault()).format(timestamp)
-}
-
-private fun daysUntilNextBirthday(timestamp: Long): Int {
-    val today = Calendar.getInstance().apply {
-        set(Calendar.HOUR_OF_DAY, 0)
-        set(Calendar.MINUTE, 0)
-        set(Calendar.SECOND, 0)
-        set(Calendar.MILLISECOND, 0)
-    }
-    val birthday = Calendar.getInstance().apply { timeInMillis = timestamp }
-    val nextBirthday = Calendar.getInstance().apply {
-        set(Calendar.YEAR, today.get(Calendar.YEAR))
-        set(Calendar.MONTH, birthday.get(Calendar.MONTH))
-        set(Calendar.DAY_OF_MONTH, birthday.get(Calendar.DAY_OF_MONTH))
-        set(Calendar.HOUR_OF_DAY, 0)
-        set(Calendar.MINUTE, 0)
-        set(Calendar.SECOND, 0)
-        set(Calendar.MILLISECOND, 0)
-        if (before(today)) add(Calendar.YEAR, 1)
-    }
-    return ((nextBirthday.timeInMillis - today.timeInMillis) / (24L * 60L * 60L * 1000L)).toInt()
 }
 
 @Composable
@@ -1246,201 +1221,69 @@ fun EmptyEventListHint() {
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text("还没有倒数日", style = MaterialTheme.typography.titleSmall)
+            Text("这里还很清爽", style = MaterialTheme.typography.titleSmall)
             Spacer(Modifier.height(4.dp))
-            Text("点击底部中间的 (=^.^=)，记录纪念日、生日、倒数日或待办。", style = MaterialTheme.typography.bodyMedium)
+            Text("点底部中间按钮，先记录一个真正重要的日子。", style = MaterialTheme.typography.bodyMedium)
         }
     }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun HomeEventRow(event: Event, onClick: () -> Unit, onLongClick: () -> Unit) {
-    val days = com.memoriabox.ui.screen.components.calculateDays(event.date, event.type)
-    val eventTextColor = com.memoriabox.utils.ColorUtils.hexToColor(event.textColor)
-    val gradientStart = com.memoriabox.utils.ColorUtils.hexToColor(event.gradientStart)
-    val gradientEnd = com.memoriabox.utils.ColorUtils.hexToColor(event.gradientEnd)
-
-    when (event.cardTemplate) {
-        "GLASS" -> {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(116.dp)
-                    .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+fun HomeEventRow(
+    event: Event,
+    daysLeft: Long,
+    accentColor: Color,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Surface(
+                color = accentColor.copy(alpha = 0.14f),
+                shape = MaterialTheme.shapes.large,
+                modifier = Modifier.size(56.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.linearGradient(
-                                listOf(
-                                    Color.White.copy(alpha = 0.36f),
-                                    Color.White.copy(alpha = 0.12f)
-                                )
-                            )
-                        )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
                 ) {
-                    if (!event.avatarUri.isNullOrBlank()) {
-                        AsyncImage(
-                            model = event.avatarUri,
-                            contentDescription = event.name,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.matchParentSize()
-                        )
-                        Box(modifier = Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.22f)))
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxSize().padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Surface(
-                            shape = MaterialTheme.shapes.large,
-                            color = Color.White.copy(alpha = 0.32f),
-                            modifier = Modifier.size(64.dp)
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                                Text(days.toString(), style = MaterialTheme.typography.titleLarge, color = eventTextColor)
-                                Text("天", style = MaterialTheme.typography.labelSmall, color = eventTextColor)
-                            }
-                        }
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(event.name, style = MaterialTheme.typography.titleMedium, color = eventTextColor, maxLines = 1)
-                            Text(
-                                text = listOfNotNull(
-                                    if (event.isPinned) "置顶" else null,
-                                    eventTypeLabel(event.type),
-                                    com.memoriabox.ui.screen.components.formatDate(event.date)
-                                ).joinToString(" · "),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = eventTextColor.copy(alpha = 0.82f)
-                            )
-                            if (event.reminderEnabled) {
-                                Text(
-                                    text = "提前 ${event.reminderDays} 天提醒",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-                    }
+                    Text(daysLeft.toString(), style = MaterialTheme.typography.titleMedium, color = accentColor)
+                    Text("天", style = MaterialTheme.typography.labelSmall, color = accentColor)
                 }
             }
-        }
-        "MINIMAL" -> {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(116.dp)
-                    .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.surface)
-                        .padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    if (!event.avatarUri.isNullOrBlank()) {
-                        AsyncImage(
-                            model = event.avatarUri,
-                            contentDescription = event.name,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.size(64.dp).clip(MaterialTheme.shapes.large)
-                        )
-                    } else {
-                        Surface(
-                            shape = MaterialTheme.shapes.large,
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            modifier = Modifier.size(64.dp)
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                                Text(days.toString(), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                                Text("天", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                            }
-                        }
-                    }
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(event.name, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
-                        Text(
-                            text = listOfNotNull(
-                                if (event.isPinned) "置顶" else null,
-                                eventTypeLabel(event.type),
-                                com.memoriabox.ui.screen.components.formatDate(event.date)
-                            ).joinToString(" · "),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        if (event.reminderEnabled) {
-                            Text(
-                                text = "提前 ${event.reminderDays} 天提醒",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-                }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(event.name, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = listOfNotNull(
+                        if (event.isPinned) "置顶" else null,
+                        eventTypeLabel(event.type),
+                        upcomingDisplayDate(event)
+                    ).joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
-        }
-        else -> {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(116.dp)
-                    .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Brush.linearGradient(listOf(gradientStart, gradientEnd)))
-                ) {
-                    if (!event.avatarUri.isNullOrBlank()) {
-                        AsyncImage(
-                            model = event.avatarUri,
-                            contentDescription = event.name,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.matchParentSize()
-                        )
-                        Box(modifier = Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.38f)))
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxSize().padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Surface(
-                            shape = MaterialTheme.shapes.large,
-                            color = Color.White.copy(alpha = 0.22f),
-                            modifier = Modifier.size(64.dp)
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                                Text(days.toString(), style = MaterialTheme.typography.titleLarge, color = eventTextColor)
-                                Text("天", style = MaterialTheme.typography.labelSmall, color = eventTextColor)
-                            }
-                        }
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(event.name, style = MaterialTheme.typography.titleMedium, color = eventTextColor, maxLines = 1)
-                            Text(
-                                text = listOfNotNull(
-                                    if (event.isPinned) "置顶" else null,
-                                    eventTypeLabel(event.type),
-                                    com.memoriabox.ui.screen.components.formatDate(event.date)
-                                ).joinToString(" · "),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = eventTextColor.copy(alpha = 0.82f)
-                            )
-                            if (event.reminderEnabled) {
-                                Text(
-                                    text = "提前 ${event.reminderDays} 天提醒",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-                    }
-                }
+            Surface(color = accentColor.copy(alpha = 0.14f), shape = MaterialTheme.shapes.large) {
+                Text(
+                    text = if (daysLeft == 0L) "今天" else "还剩${daysLeft}天",
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = accentColor
+                )
             }
         }
     }
@@ -1452,6 +1295,54 @@ fun eventTypeLabel(type: EventType): String = when (type) {
     EventType.ELAPSED -> "正计时"
     EventType.BIRTHDAY -> "生日"
     EventType.TODO -> "待办"
+}
+
+private fun daysUntilNextOccurrence(event: Event, nowMillis: Long): Long? {
+    if (event.type == EventType.ELAPSED) return null
+    val targetDate = nextOccurrenceMillis(event, nowMillis)
+    val startToday = startOfDay(nowMillis)
+    val startTarget = startOfDay(targetDate)
+    return TimeUnit.MILLISECONDS.toDays(startTarget - startToday)
+}
+
+private fun nextOccurrenceMillis(event: Event, nowMillis: Long): Long {
+    if (event.repeatYearly || event.type == EventType.BIRTHDAY || event.type == EventType.ANNIVERSARY) {
+        val now = Calendar.getInstance().apply { timeInMillis = nowMillis }
+        val target = Calendar.getInstance().apply { timeInMillis = event.date }
+        val next = Calendar.getInstance().apply {
+            timeInMillis = nowMillis
+            set(Calendar.MONTH, target.get(Calendar.MONTH))
+            set(Calendar.DAY_OF_MONTH, target.get(Calendar.DAY_OF_MONTH))
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        if (next.before(startCalendar(nowMillis))) {
+            next.add(Calendar.YEAR, 1)
+        }
+        return next.timeInMillis
+    }
+    return event.date
+}
+
+private fun startOfDay(timeMillis: Long): Long = startCalendar(timeMillis).timeInMillis
+
+private fun startCalendar(timeMillis: Long): Calendar = Calendar.getInstance().apply {
+    timeInMillis = timeMillis
+    set(Calendar.HOUR_OF_DAY, 0)
+    set(Calendar.MINUTE, 0)
+    set(Calendar.SECOND, 0)
+    set(Calendar.MILLISECOND, 0)
+}
+
+private fun upcomingDisplayDate(event: Event): String {
+    val date = if (event.repeatYearly || event.type == EventType.BIRTHDAY || event.type == EventType.ANNIVERSARY) {
+        nextOccurrenceMillis(event, System.currentTimeMillis())
+    } else {
+        event.date
+    }
+    return SimpleDateFormat("M月d日", Locale.getDefault()).format(Date(date))
 }
 
 @Composable
@@ -1559,6 +1450,7 @@ fun EventDetailDialog(
                 TextButton(onClick = onOpenCategory) { Text("分类") }
                 TextButton(onClick = onTogglePin) { Text(if (event.isPinned) "取消置顶" else "置顶") }
                 TextButton(onClick = onDelete) { Text("删除") }
+                TextButton(onClick = onDismiss) { Text("取消") }
             }
         }
     )
@@ -1575,8 +1467,6 @@ fun repeatModeLabel(event: Event): String = when {
 }
 
 fun cardTemplateLabel(template: String): String = when (template) {
-    "POSTER" -> "海报"
-    "GLASS" -> "玻璃"
     "SPLIT" -> "分栏"
     "NEON" -> "光轨"
     "MINIMAL" -> "徽章"
@@ -1630,6 +1520,7 @@ fun EventActionDialog(
 @Composable
 fun DayToolsScreen(
     application: Application,
+    onNavigateBack: () -> Unit,
     onNavigateToCalendar: () -> Unit,
     onNavigateToPhotoWall: () -> Unit,
     onNavigateToExport: () -> Unit
@@ -1637,16 +1528,14 @@ fun DayToolsScreen(
     val viewModel = remember { createMainViewModel(application) }
     val boxes by viewModel.boxes.collectAsState(initial = emptyList())
     val events by viewModel.allEvents.collectAsState(initial = emptyList())
+    val logs by viewModel.recentLogs.collectAsState(initial = emptyList())
+    val snackbarHostState = remember { SnackbarHostState() }
+    val snackbarScope = rememberCoroutineScope()
     var showBatchImport by remember { mutableStateOf(false) }
+    var selectedEvent by remember { mutableStateOf<Event?>(null) }
+    var editingEvent by remember { mutableStateOf<Event?>(null) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     val defaultBoxId = boxes.firstOrNull()?.id ?: ""
-    val today = remember { Calendar.getInstance() }
-    val todayEvents = remember(events) { events.filter { isSameMonthDay(it.date, System.currentTimeMillis()) } }
-    val upcomingEvents = remember(events) {
-        events.filter { it.date >= System.currentTimeMillis() }
-            .sortedBy { it.date }
-            .take(8)
-    }
     val archivedSuggestions = remember(events) {
         val cutoff = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -30) }.timeInMillis
         events.filter { it.date < cutoff && !it.isPinned }
@@ -1659,7 +1548,19 @@ fun DayToolsScreen(
         }.take(20)
     }
 
-    Scaffold(topBar = { TopAppBar(title = { Text("日子工具箱") }) }) { paddingValues ->
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        topBar = {
+            TopAppBar(
+                title = { Text("日子工具箱") },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                    }
+                }
+            )
+        }
+    ) { paddingValues ->
         Column(
             modifier = Modifier
                 .padding(paddingValues)
@@ -1668,38 +1569,22 @@ fun DayToolsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            ToolSection("日子模板", "一键创建常用类型，自动带提醒和文案") {
-                dayTemplates().forEach { template ->
-                    ToolActionRow(template.title, template.description, Icons.Default.AddCircle) {
-                        viewModel.createQuickEvent(template.toEvent(defaultBoxId))
-                    }
-                }
-            }
-            ToolSection("节日库", "常见节日可一键加入我的日子") {
-                holidayTemplates(today.get(Calendar.YEAR)).forEach { template ->
-                    ToolActionRow(template.title, template.description, Icons.Default.EventAvailable) {
-                        viewModel.createQuickEvent(template.toEvent(defaultBoxId))
-                    }
-                }
-            }
-            ToolSection("批量导入", "按行输入名称和日期，快速生成多个日子") {
-                ToolActionRow("打开批量导入", "支持：木羽生日 6月24日 / 考试 2026-07-10", Icons.Default.Upload) {
-                    showBatchImport = true
-                }
-            }
-            ToolSection("提醒中心", "集中查看接下来要发生的日子") {
-                if (upcomingEvents.isEmpty()) {
-                    Text("暂无即将到来的日子", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                } else {
-                    upcomingEvents.forEach { event -> CompactToolEventRow(event) }
-                }
-            }
-            ToolSection("今日回忆", "查看历史今天和今天相关的日子") {
-                if (todayEvents.isEmpty()) {
-                    Text("今天还没有对应回忆", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                } else {
-                    todayEvents.forEach { event -> CompactToolEventRow(event) }
-                }
+            ToolSection("批量导入", "把多条日期一次性加入日子列表") {
+                ToolActionRow(
+                    title = "打开批量导入",
+                    subtitle = "支持：木羽生日 6月24日 / 考试 2026-07-10",
+                    icon = Icons.Default.Upload,
+                    onClick = {
+                        if (defaultBoxId.isBlank()) {
+                            snackbarScope.launch {
+                                snackbarHostState.showSnackbar("请先创建一个分类，再使用批量导入。")
+                            }
+                        } else {
+                            showBatchImport = true
+                        }
+                    },
+                    featured = true
+                )
             }
             ToolSection("搜索和筛选", "按名称或备注查找日子") {
                 OutlinedTextField(
@@ -1709,23 +1594,23 @@ fun DayToolsScreen(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
-                filteredEvents.forEach { event -> CompactToolEventRow(event) }
-            }
-            ToolSection("归档建议", "过去较久且未置顶的日子可移入历史视角") {
-                if (archivedSuggestions.isEmpty()) {
-                    Text("暂无需要归档的日子", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                } else {
-                    archivedSuggestions.forEach { event -> CompactToolEventRow(event) }
+                when {
+                    searchQuery.isBlank() -> Text("输入名称或备注后开始查找。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    filteredEvents.isEmpty() -> Text("未找到相关日子", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    else -> filteredEvents.forEach { event -> CompactToolEventRow(event, onClick = { selectedEvent = event }) }
                 }
             }
-            ToolSection("纪念节点", "自动节点保持轻量生成，后续可继续细化开关") {
-                Text("纪念日会自动生成 100天、520天、666天、999天、1/2/3/5/10周年。", style = MaterialTheme.typography.bodySmall)
+            ToolSection("较早未置顶", "查看过去较久且仍未置顶的日子") {
+                if (archivedSuggestions.isEmpty()) {
+                    Text("暂无较早未置顶的日子", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    archivedSuggestions.forEach { event -> CompactToolEventRow(event, onClick = { selectedEvent = event }) }
+                }
             }
-            ToolSection("分享和小组件", "分享海报、照片墙和桌面小组件集中入口") {
+            ToolSection("分享和看板", "分享海报、照片墙、导出和日历看板入口") {
                 ToolActionRow("分享海报", "生成社交分享图片", Icons.Default.PhotoLibrary, onNavigateToPhotoWall)
                 ToolActionRow("导出分享", "导出数据和分享内容", Icons.Default.Share, onNavigateToExport)
                 ToolActionRow("月历看板", "查看所有事件分布", Icons.Default.CalendarToday, onNavigateToCalendar)
-                Text("桌面小组件可在手机桌面长按后添加 MemoriaBox 小组件。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -1734,8 +1619,61 @@ fun DayToolsScreen(
         BatchImportDialog(
             onDismiss = { showBatchImport = false },
             onImport = { text ->
-                parseBatchEvents(text, defaultBoxId).forEach { viewModel.createQuickEvent(it) }
+                val parsedEvents = parseBatchEvents(text, defaultBoxId)
+                when {
+                    defaultBoxId.isBlank() -> {
+                        snackbarScope.launch {
+                            snackbarHostState.showSnackbar("请先创建一个分类，再使用批量导入。")
+                        }
+                    }
+                    parsedEvents.isEmpty() -> {
+                        snackbarScope.launch {
+                            snackbarHostState.showSnackbar("没有识别到可导入的日期。")
+                        }
+                    }
+                    else -> {
+                        parsedEvents.forEach { viewModel.createQuickEvent(it) }
+                        snackbarScope.launch {
+                            snackbarHostState.showSnackbar("已导入 ${parsedEvents.size} 条日子。")
+                        }
+                    }
+                }
                 showBatchImport = false
+            }
+        )
+    }
+
+    selectedEvent?.let { event ->
+        EventDetailDialog(
+            event = event,
+            logs = logs.filter { it.targetId == event.id },
+            onDismiss = { selectedEvent = null },
+            onEdit = {
+                selectedEvent = null
+                editingEvent = event
+            },
+            onTogglePin = {
+                viewModel.togglePinned(event)
+                selectedEvent = null
+            },
+            onDelete = {
+                viewModel.deleteQuickEvent(event)
+                selectedEvent = null
+            },
+            onOpenCategory = {
+                selectedEvent = null
+            }
+        )
+    }
+
+    editingEvent?.let { event ->
+        EventDialog(
+            existingEvent = event,
+            availableBoxes = boxes,
+            onDismiss = { editingEvent = null },
+            onSave = { updated ->
+                viewModel.updateQuickEvent(updated)
+                editingEvent = null
             }
         )
     }
@@ -1753,29 +1691,51 @@ private fun ToolSection(title: String, subtitle: String, content: @Composable Co
 }
 
 @Composable
-private fun ToolActionRow(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+private fun ToolActionRow(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit, featured: Boolean = false) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 56.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(14.dp),
+        color = if (featured) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f) else Color.Transparent
     ) {
-        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyMedium)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = if (featured) 10.dp else 0.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.bodyMedium)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Icon(Icons.Default.ChevronRight, contentDescription = null)
         }
-        Icon(Icons.Default.ChevronRight, contentDescription = null)
     }
 }
 
 @Composable
-private fun CompactToolEventRow(event: Event) {
-    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(event.name, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
-            Text(eventTypeLabel(event.type), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+private fun CompactToolEventRow(event: Event, onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 52.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 9.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(event.name, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+                Text(eventTypeLabel(event.type), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Text(com.memoriabox.ui.screen.components.formatDate(event.date), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
         }
-        Text(com.memoriabox.ui.screen.components.formatDate(event.date), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
     }
 }
 
@@ -1802,44 +1762,6 @@ private fun BatchImportDialog(onDismiss: () -> Unit, onImport: (String) -> Unit)
     )
 }
 
-private data class DayTemplate(val title: String, val description: String, val type: EventType, val offsetDays: Int, val note: String)
-
-private fun DayTemplate.toEvent(boxId: String): Event = Event(
-    boxId = boxId,
-    name = title,
-    date = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, offsetDays) }.timeInMillis,
-    type = type,
-    note = note,
-    reminderEnabled = true,
-    reminderOffsets = "0,1,7",
-    gradientStart = if (type == EventType.BIRTHDAY) "#FF8A80" else "#1677FF",
-    gradientEnd = if (type == EventType.BIRTHDAY) "#FFC069" else "#13C2C2"
-)
-
-private fun dayTemplates(): List<DayTemplate> = listOf(
-    DayTemplate("重要考试", "默认 30 天后，适合考试倒计时", EventType.COUNTDOWN, 30, "认真准备，稳稳发挥。"),
-    DayTemplate("旅行出发", "默认 60 天后，适合旅行计划", EventType.COUNTDOWN, 60, "把期待装进行李箱。"),
-    DayTemplate("恋爱纪念日", "默认今天，自动生成纪念节点", EventType.ANNIVERSARY, 0, "把心动的日子好好保存。"),
-    DayTemplate("还款提醒", "默认 7 天后，适合财务提醒", EventType.TODO, 7, "提前安排，安心一点。"),
-    DayTemplate("体检提醒", "默认 14 天后，适合健康事项", EventType.TODO, 14, "照顾好自己。"),
-    DayTemplate("宠物生日", "默认 90 天后，适合毛孩子生日", EventType.BIRTHDAY, 90, "今天也要给小可爱加餐。")
-)
-
-private fun holidayTemplates(year: Int): List<DayTemplate> = listOf(
-    fixedDateTemplate("元旦", year, 1, 1, "新的一年开始啦。"),
-    fixedDateTemplate("情人节", year, 2, 14, "把喜欢准时送达。"),
-    fixedDateTemplate("劳动节", year, 5, 1, "给认真生活的自己放个假。"),
-    fixedDateTemplate("儿童节", year, 6, 1, "保持一点童心。"),
-    fixedDateTemplate("国庆节", year, 10, 1, "假期和重要安排都值得记录。"),
-    fixedDateTemplate("圣诞节", year, 12, 25, "冬天也要有一点仪式感。")
-)
-
-private fun fixedDateTemplate(title: String, year: Int, month: Int, day: Int, note: String): DayTemplate {
-    val date = Calendar.getInstance().apply { set(year, month - 1, day, 9, 0, 0) }
-    val offset = ((date.timeInMillis - System.currentTimeMillis()) / 86_400_000L).toInt().coerceAtLeast(0)
-    return DayTemplate(title, "一键添加 $month 月 $day 日", EventType.ANNIVERSARY, offset, note)
-}
-
 private fun parseBatchEvents(text: String, boxId: String): List<Event> {
     return text.lines().mapNotNull { line ->
         val trimmed = line.trim()
@@ -1847,26 +1769,47 @@ private fun parseBatchEvents(text: String, boxId: String): List<Event> {
         val dateRegex = Regex("(\\d{4}-\\d{1,2}-\\d{1,2}|\\d{1,2}月\\d{1,2}日)")
         val match = dateRegex.find(trimmed) ?: return@mapNotNull null
         val name = trimmed.removeRange(match.range).trim().ifBlank { "新日子" }
-        Event(boxId = boxId, name = name, date = parseFlexibleDate(match.value), type = if (name.contains("生日")) EventType.BIRTHDAY else EventType.COUNTDOWN, reminderEnabled = true, reminderOffsets = "0,1,7")
+        Event(
+            boxId = boxId,
+            name = name,
+            date = parseFlexibleDate(match.value) ?: return@mapNotNull null,
+            type = if (name.contains("生日")) EventType.BIRTHDAY else EventType.COUNTDOWN,
+            reminderEnabled = true,
+            reminderOffsets = "0,1,7"
+        )
     }
 }
 
-private fun parseFlexibleDate(value: String): Long {
+private fun parseFlexibleDate(value: String): Long? {
     val cal = Calendar.getInstance()
-    if (value.contains("-")) {
-        val parts = value.split("-").map { it.toInt() }
-        cal.set(parts[0], parts[1] - 1, parts[2], 9, 0, 0)
-    } else {
-        val parts = Regex("(\\d{1,2})月(\\d{1,2})日").find(value)?.groupValues ?: return System.currentTimeMillis()
-        cal.set(cal.get(Calendar.YEAR), parts[1].toInt() - 1, parts[2].toInt(), 9, 0, 0)
+    val year: Int
+    val month: Int
+    val day: Int
+    try {
+        if (value.contains("-")) {
+            val parts = value.split("-").map { it.toInt() }
+            if (parts.size != 3) return null
+            year = parts[0]
+            month = parts[1]
+            day = parts[2]
+        } else {
+            val parts = Regex("(\\d{1,2})月(\\d{1,2})日").find(value)?.groupValues ?: return null
+            year = cal.get(Calendar.YEAR)
+            month = parts[1].toInt()
+            day = parts[2].toInt()
+        }
+    } catch (_: NumberFormatException) {
+        return null
     }
-    return cal.timeInMillis
-}
-
-private fun isSameMonthDay(left: Long, right: Long): Boolean {
-    val leftCal = Calendar.getInstance().apply { timeInMillis = left }
-    val rightCal = Calendar.getInstance().apply { timeInMillis = right }
-    return leftCal.get(Calendar.MONTH) == rightCal.get(Calendar.MONTH) && leftCal.get(Calendar.DAY_OF_MONTH) == rightCal.get(Calendar.DAY_OF_MONTH)
+    if (month !in 1..12 || day !in 1..31) return null
+    cal.isLenient = false
+    return try {
+        cal.set(year, month - 1, day, 9, 0, 0)
+        cal.set(Calendar.MILLISECOND, 0)
+        cal.timeInMillis
+    } catch (_: IllegalArgumentException) {
+        null
+    }
 }
 
 @Composable
@@ -1903,7 +1846,7 @@ fun BoxDetailScreen(
     val viewModel = remember { createBoxDetailViewModel(application) }
     val events by viewModel.events.collectAsState(initial = emptyList())
     val box by viewModel.box.collectAsState()
-    val layoutMode by viewModel.layoutMode.collectAsState()
+    val allBoxes by viewModel.allBoxes.collectAsState(initial = emptyList())
     val notificationHelper = remember { com.memoriabox.utils.NotificationHelper(application) }
 
     var showCreateEvent by remember { mutableStateOf(false) }
@@ -1943,14 +1886,13 @@ fun BoxDetailScreen(
     ) { paddingValues ->
         Column(modifier = Modifier.padding(paddingValues)) {
             Text(
-                text = "拖拽卡片可切换展示样式，松手后自动应用",
+                text = "左右拖动卡片切换排版，松手后自动应用",
                 modifier = Modifier.padding(horizontal = adaptiveUi.screenPadding, vertical = adaptiveUi.sectionSpacing),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             EnhancedEventGrid(
                 events = events,
-                layoutMode = layoutMode,
                 onEventClick = { showEditEvent = it },
                 onEventEdit = { showEditEvent = it },
                 onCardTemplateChange = { event, newTemplate ->
@@ -2013,7 +1955,7 @@ fun BoxDetailScreen(
 
     if (showMoveDialog) {
         MoveToBoxDialog(
-            boxes = box?.let { listOf(it) } ?: emptyList(),
+            boxes = allBoxes.filter { it.id != boxId },
             onDismiss = { showMoveDialog = false },
             onBoxSelected = { targetBoxId ->
                 viewModel.moveEvents(selectedEvents, targetBoxId)
@@ -2104,7 +2046,6 @@ fun SettingsScreen(
     currentThemeMode: AppThemeMode,
     onThemeModeChange: (AppThemeMode) -> Unit,
     onNavigateToStatistics: () -> Unit,
-    onNavigateToFriends: () -> Unit,
     onNavigateToPhotoWall: () -> Unit,
     onNavigateToExport: () -> Unit,
     onNavigateToAiSuggestions: () -> Unit,
@@ -2122,6 +2063,8 @@ fun SettingsScreen(
     var showAboutDialog by remember { mutableStateOf(false) }
     var showDiarySettings by remember { mutableStateOf(false) }
     var showMonthlySummarySettings by remember { mutableStateOf(false) }
+    var showUpcomingSettings by remember { mutableStateOf(false) }
+    var showMoreToolsDialog by remember { mutableStateOf(false) }
     val adaptiveUi = rememberAdaptiveUiSize()
 
     Column(
@@ -2131,13 +2074,13 @@ fun SettingsScreen(
             .padding(top = adaptiveUi.sectionSpacing, bottom = adaptiveUi.screenPadding)
     ) {
         SettingsHeroCard()
-        SettingsSectionTitle("主题设置", "默认蓝白，也可以切换深色、护眼和彩色")
+        SettingsSectionTitle("轻松一点", "先选一个舒服的颜色，再整理常用入口")
         ThemeModeCard(currentThemeMode = currentThemeMode, onThemeModeChange = onThemeModeChange)
-        SettingsSectionTitle("常用工具", "高频功能放前面，少找一步")
+        SettingsSectionTitle("常用", "每天会用到的功能放在这里")
         SettingsItem(
             icon = Icons.Default.AutoAwesome,
             title = "日子工具箱",
-            description = "模板、节日库、提醒中心、今日回忆和批量导入",
+            description = "批量导入、搜索筛选、归档建议和分享入口",
             onClick = onNavigateToDayTools
         )
         SettingsItem(
@@ -2147,49 +2090,13 @@ fun SettingsScreen(
             onClick = onNavigateToCustomization
         )
         SettingsItem(
-            icon = Icons.Default.BarChart,
-            title = "数据统计",
-            description = "查看事件统计和趋势",
-            onClick = onNavigateToStatistics
+            icon = Icons.Default.MoreHoriz,
+            title = "更多工具",
+            description = "统计、照片墙、导出、AI、成就和同步",
+            onClick = { showMoreToolsDialog = true }
         )
-        SettingsItem(
-            icon = Icons.Default.People,
-            title = "生日分组",
-            description = "管理生日资料和分组标签",
-            onClick = onNavigateToFriends
-        )
-        SettingsItem(
-            icon = Icons.Default.PhotoLibrary,
-            title = "照片墙",
-            description = "查看所有事件照片",
-            onClick = onNavigateToPhotoWall
-        )
-        SettingsItem(
-            icon = Icons.Default.Share,
-            title = "导出分享",
-            description = "导出数据和分享图片",
-            onClick = onNavigateToExport
-        )
-        SettingsItem(
-            icon = Icons.Default.AutoAwesome,
-            title = "AI 智能建议",
-            description = "根据事件和提醒状态给出整理建议",
-            onClick = onNavigateToAiSuggestions
-        )
-        SettingsItem(
-            icon = Icons.Default.EmojiEvents,
-            title = "成就系统",
-            description = "查看记录事件、生日、照片等成就进度",
-            onClick = onNavigateToAchievements
-        )
-        SettingsItem(
-            icon = Icons.Default.CloudSync,
-            title = "多设备同步",
-            description = "查看 WebDAV 跨设备同步状态和建议",
-            onClick = onNavigateToSyncStatus
-        )
-        
-        SettingsSectionTitle("数据和同步", "备份、WebDAV 和跨设备管理")
+
+        SettingsSectionTitle("记录和数据", "备份、同步、日记和月度总结")
         
         SettingsItem(
             icon = Icons.Default.Backup,
@@ -2216,8 +2123,15 @@ fun SettingsScreen(
             onClick = { showMonthlySummarySettings = true }
         )
         
-        SettingsSectionTitle("推送提醒", "生日、纪念日和待办都能乖乖提醒")
-        
+        SettingsSectionTitle("提醒", "需要跨平台推送时再开启")
+
+        SettingsItem(
+            icon = Icons.Default.NotificationsActive,
+            title = "即将到来",
+            description = "首页显示、天数范围、颜色和提醒",
+            onClick = { showUpcomingSettings = true }
+        )
+
         // PushPlus settings inline
         Card(
             modifier = Modifier
@@ -2278,7 +2192,7 @@ fun SettingsScreen(
         SettingsItem(
             icon = Icons.Default.Info,
             title = "关于",
-            description = "版本 3.2.2 · MemoriaBox",
+            description = "版本 3.2.4 · MemoriaBox",
             onClick = { showAboutDialog = true }
         )
     }
@@ -2289,7 +2203,7 @@ fun SettingsScreen(
             title = { Text("关于 MemoriaBox") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("版本：3.2.2", style = MaterialTheme.typography.bodyMedium)
+                    Text("版本：3.2.4", style = MaterialTheme.typography.bodyMedium)
                     Text("MemoriaBox 是一个本地优先的日子、纪念日、待办和照片记录工具。", style = MaterialTheme.typography.bodyMedium)
                     Text("数据默认保存在本机，可通过备份和 WebDAV 功能进行迁移或同步。", style = MaterialTheme.typography.bodyMedium)
                     Text("著名木羽制作", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
@@ -2306,6 +2220,111 @@ fun SettingsScreen(
     }
     if (showMonthlySummarySettings) {
         MonthlySummarySettingsDialog(onDismiss = { showMonthlySummarySettings = false })
+    }
+    if (showUpcomingSettings) {
+        UpcomingEventsSettingsDialog(onDismiss = { showUpcomingSettings = false })
+    }
+    if (showMoreToolsDialog) {
+        MoreToolsDialog(
+            onDismiss = { showMoreToolsDialog = false },
+            onNavigateToStatistics = {
+                showMoreToolsDialog = false
+                onNavigateToStatistics()
+            },
+            onNavigateToPhotoWall = {
+                showMoreToolsDialog = false
+                onNavigateToPhotoWall()
+            },
+            onNavigateToExport = {
+                showMoreToolsDialog = false
+                onNavigateToExport()
+            },
+            onNavigateToAiSuggestions = {
+                showMoreToolsDialog = false
+                onNavigateToAiSuggestions()
+            },
+            onNavigateToAchievements = {
+                showMoreToolsDialog = false
+                onNavigateToAchievements()
+            },
+            onNavigateToSyncStatus = {
+                showMoreToolsDialog = false
+                onNavigateToSyncStatus()
+            }
+        )
+    }
+}
+
+@Composable
+fun MoreToolsDialog(
+    onDismiss: () -> Unit,
+    onNavigateToStatistics: () -> Unit,
+    onNavigateToPhotoWall: () -> Unit,
+    onNavigateToExport: () -> Unit,
+    onNavigateToAiSuggestions: () -> Unit,
+    onNavigateToAchievements: () -> Unit,
+    onNavigateToSyncStatus: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("更多工具") },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                MoreToolActionRow(icon = Icons.Default.BarChart, title = "数据统计", description = "查看事件统计和趋势", onClick = onNavigateToStatistics)
+                MoreToolActionRow(icon = Icons.Default.PhotoLibrary, title = "照片墙", description = "查看所有事件照片", onClick = onNavigateToPhotoWall)
+                MoreToolActionRow(icon = Icons.Default.Share, title = "导出分享", description = "导出数据和分享图片", onClick = onNavigateToExport)
+                MoreToolActionRow(icon = Icons.Default.AutoAwesome, title = "AI 智能建议", description = "整理事件和提醒状态", onClick = onNavigateToAiSuggestions)
+                MoreToolActionRow(icon = Icons.Default.EmojiEvents, title = "成就系统", description = "查看记录进度", onClick = onNavigateToAchievements)
+                MoreToolActionRow(icon = Icons.Default.CloudSync, title = "多设备同步", description = "查看同步状态和建议", onClick = onNavigateToSyncStatus)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("关闭") }
+        }
+    )
+}
+
+@Composable
+fun MoreToolActionRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    description: String,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 56.dp)
+            .clip(MaterialTheme.shapes.large)
+            .clickable(onClick = onClick),
+        color = Color.Transparent
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                modifier = Modifier.size(40.dp),
+                shape = MaterialTheme.shapes.medium,
+                color = MaterialTheme.colorScheme.primaryContainer
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(icon, contentDescription = title, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(title, style = MaterialTheme.typography.titleSmall)
+                Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.outline)
+        }
     }
 }
 
@@ -2324,8 +2343,8 @@ fun SettingsHeroCard() {
                 .padding(if (adaptiveUi.compact) 16.dp else 20.dp)
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("我的设置", color = Color.White, style = MaterialTheme.typography.headlineSmall)
-                Text("功能收纳清楚，颜色轻快一点，操作更顺手。", color = Color.White.copy(alpha = 0.88f), style = MaterialTheme.typography.bodyMedium)
+                Text("轻松设置", color = Color.White, style = MaterialTheme.typography.headlineSmall)
+                Text("把常用的留下，把低频工具收起来，界面就清爽很多。", color = Color.White.copy(alpha = 0.88f), style = MaterialTheme.typography.bodyMedium)
             }
         }
     }
@@ -2370,6 +2389,9 @@ private fun themePreviewBrush(mode: AppThemeMode): Brush {
         AppThemeMode.EYE_CARE -> Brush.linearGradient(listOf(Color(0xFF2E7D32), Color(0xFFFAFCF4)))
         AppThemeMode.PLAYFUL -> Brush.linearGradient(listOf(Color(0xFFFF6B6B), Color(0xFF7C5CFF)))
         AppThemeMode.WARM -> Brush.linearGradient(listOf(Color(0xFFFF7A00), Color(0xFFFFF6D8)))
+        AppThemeMode.CREAM -> Brush.linearGradient(listOf(Color(0xFFD97706), Color(0xFFFFF8EC)))
+        AppThemeMode.MINT -> Brush.linearGradient(listOf(Color(0xFF0F9F8E), Color(0xFFF7FFFC)))
+        AppThemeMode.LAVENDER -> Brush.linearGradient(listOf(Color(0xFF8B5CF6), Color(0xFFFCF8FF)))
     }
 }
 

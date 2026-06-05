@@ -4,7 +4,8 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    id("org.jetbrains.kotlin.kapt")
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.androidx.room)
 }
 
 val keystorePropertiesFile = rootProject.file("keystore.properties")
@@ -22,8 +23,8 @@ android {
         applicationId = "com.memoriabox"
         minSdk = 24
         targetSdk = 35
-        versionCode = 19
-        versionName = "3.2.3"
+        versionCode = 20
+        versionName = "3.2.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
@@ -71,6 +72,10 @@ android {
     }
 }
 
+room {
+    schemaDirectory("$projectDir/schemas")
+}
+
 dependencies {
     // Core library desugaring for Android 9-10
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
@@ -92,7 +97,7 @@ dependencies {
 
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
-    kapt(libs.androidx.room.compiler)
+    ksp(libs.androidx.room.compiler)
     implementation(libs.net.zetetic.sqlcipher)
 
     implementation(libs.kotlinx.coroutines.core)
