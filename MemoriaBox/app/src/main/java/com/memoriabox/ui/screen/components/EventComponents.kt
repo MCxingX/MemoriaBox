@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import coil.compose.AsyncImage
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -523,8 +524,9 @@ fun CalendarViewScreen(
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val horizontalPadding = if (adaptiveUi.compact) 6.dp else adaptiveUi.screenPadding
             val widthCell = (maxWidth - horizontalPadding * 2) / 7
-            val heightCell = ((maxHeight - 42.dp).coerceAtLeast(180.dp)) / 6
-            val cellSize = minOf(widthCell, heightCell).coerceAtLeast(30.dp)
+            val fontScale = LocalDensity.current.fontScale
+            val cellSize = (widthCell * (1f + (fontScale - 1f).coerceAtLeast(0f) * 0.35f))
+                .coerceIn(38.dp, 72.dp)
             CalendarGrid(
                 currentMonth = cal,
                 events = events,
@@ -769,9 +771,9 @@ fun CalendarDayCell(
                 if (isToday) Brush.linearGradient(listOf(Color(0xFFFF6B6B).copy(alpha = 0.22f), Color(0xFF7C5CFF).copy(alpha = 0.18f)))
                 else Brush.linearGradient(listOf(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.52f)))
             )
-            .padding(horizontal = 2.dp, vertical = 3.dp),
+            .padding(horizontal = 2.dp, vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically)
     ) {
         Text(
             text = day.toString(),
@@ -779,16 +781,15 @@ fun CalendarDayCell(
             color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
         )
         if (events.isNotEmpty() || diaries.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(2.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                 if (events.isNotEmpty()) {
                     repeat(minOf(events.size, 3)) {
                         val dotColor = listOf(Color(0xFFFF6B6B), Color(0xFF7C5CFF), Color(0xFF00B8D9))[it]
-                        Box(modifier = Modifier.size(5.dp).clip(RoundedCornerShape(3.dp)).background(dotColor))
+                        Box(modifier = Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(dotColor))
                     }
                 }
                 if (diaries.isNotEmpty()) {
-                    Box(modifier = Modifier.size(5.dp).clip(RoundedCornerShape(3.dp)).background(Color(0xFF42A5F5)))
+                    Box(modifier = Modifier.size(7.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFF42A5F5)))
                 }
             }
         }
