@@ -723,7 +723,8 @@ fun EventDialog(
             onDateSelected = { timestamp ->
                 selectedDate = timestamp
                 showDatePicker = false
-            }
+            },
+            initialDateMillis = selectedDate ?: System.currentTimeMillis()
         )
     }
 
@@ -733,7 +734,8 @@ fun EventDialog(
             onDateSelected = {
                 repeatEndDate = it
                 showRepeatEndPicker = false
-            }
+            },
+            initialDateMillis = repeatEndDate ?: selectedDate ?: System.currentTimeMillis()
         )
     }
 
@@ -858,30 +860,119 @@ fun DatePickerDialog(
     onDateSelected: (Long) -> Unit,
     initialDateMillis: Long = System.currentTimeMillis()
 ) {
-    val datePickerState = rememberDatePickerState(
-        initialSelectedDateMillis = initialDateMillis
-    )
+    var visibleMonth by remember(initialDateMillis) {
+        mutableStateOf(Calendar.getInstance().apply {
+            timeInMillis = initialDateMillis
+            set(Calendar.DAY_OF_MONTH, 1)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        })
+    }
+    var selectedDate by remember(initialDateMillis) { mutableLongStateOf(toLocalStartOfDay(initialDateMillis)) }
+    val monthTitle = remember(visibleMonth.timeInMillis) {
+        SimpleDateFormat("yyyy年M月", Locale.getDefault()).format(visibleMonth.time)
+    }
+    val selectedCal = remember(selectedDate) { Calendar.getInstance().apply { timeInMillis = selectedDate } }
+    val daysInMonth = visibleMonth.getActualMaximum(Calendar.DAY_OF_MONTH)
+    val firstDayOffset = (visibleMonth.get(Calendar.DAY_OF_WEEK) - Calendar.MONDAY + 7) % 7
+    val weekLabels = listOf("一", "二", "三", "四", "五", "六", "日")
 
-    DatePickerDialog(
+    AlertDialog(
         onDismissRequest = onDismiss,
+        title = { Text("选择日期") },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .widthIn(min = 320.dp, max = 360.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = {
+                        visibleMonth = (visibleMonth.clone() as Calendar).apply { add(Calendar.MONTH, -1) }
+                    }) {
+                        Icon(Icons.Default.ChevronLeft, contentDescription = "上个月")
+                    }
+                    Text(monthTitle, style = MaterialTheme.typography.titleMedium)
+                    IconButton(onClick = {
+                        visibleMonth = (visibleMonth.clone() as Calendar).apply { add(Calendar.MONTH, 1) }
+                    }) {
+                        Icon(Icons.Default.ChevronRight, contentDescription = "下个月")
+                    }
+                }
+
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    weekLabels.forEach { label ->
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(28.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                }
+
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    for (row in 0 until 6) {
+                        Row(modifier = Modifier.fillMaxWidth()) {
+                            for (col in 0 until 7) {
+                                val index = row * 7 + col
+                                val day = index - firstDayOffset + 1
+                                if (day in 1..daysInMonth) {
+                                    val dayMillis = Calendar.getInstance().apply {
+                                        clear()
+                                        set(
+                                            visibleMonth.get(Calendar.YEAR),
+                                            visibleMonth.get(Calendar.MONTH),
+                                            day,
+                                            0,
+                                            0,
+                                            0
+                                        )
+                                    }.timeInMillis
+                                    val isSelected = selectedCal.get(Calendar.YEAR) == visibleMonth.get(Calendar.YEAR) &&
+                                        selectedCal.get(Calendar.MONTH) == visibleMonth.get(Calendar.MONTH) &&
+                                        selectedCal.get(Calendar.DAY_OF_MONTH) == day
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(40.dp)
+                                            .padding(2.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent)
+                                            .clickable { selectedDate = dayMillis },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = day.toString(),
+                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                    }
+                                } else {
+                                    Spacer(modifier = Modifier.weight(1f).height(40.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         confirmButton = {
-            Button(
-                onClick = {
-                    datePickerState.selectedDateMillis?.let { onDateSelected(it) }
-                },
-                enabled = datePickerState.selectedDateMillis != null
-            ) { Text("确定") }
+            Button(onClick = { onDateSelected(selectedDate) }) { Text("确定") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("取消") }
         }
-    ) {
-        DatePicker(
-            state = datePickerState,
-            title = { Text("选择日期") },
-            showModeToggle = true
-        )
-    }
+    )
 }
 
 @Composable
@@ -980,4 +1071,21 @@ private fun approximateLunarSelectionDate(year: Int, month: Int, day: Int): Long
 private fun formatDate(timestamp: Long): String {
     val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
     return sdf.format(Date(timestamp))
+}
+
+private fun toLocalStartOfDay(timestamp: Long): Long {
+    return Calendar.getInstance().apply {
+        timeInMillis = timestamp
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+}
+
+private fun localDateMillis(year: Int, month: Int, day: Int): Long {
+    return Calendar.getInstance().apply {
+        clear()
+        set(year, month, day, 0, 0, 0)
+    }.timeInMillis
 }
