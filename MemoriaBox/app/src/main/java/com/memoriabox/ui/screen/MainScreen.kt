@@ -47,14 +47,20 @@ import com.memoriabox.ui.utils.rememberAdaptiveUiSize
 import com.memoriabox.data.model.*
 import com.memoriabox.ui.theme.AppThemeMode
 import com.memoriabox.utils.AppSettings
+import com.memoriabox.utils.MonthlySummaryHelper
+import com.memoriabox.utils.NotificationHelper
+import com.memoriabox.utils.startOfMonth
 import com.memoriabox.viewmodel.*
 import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
 import java.util.Locale
 
 @Composable
 fun MainScreen(
     application: Application,
+    initialMonthlySummaryMonth: Long? = null,
+    onMonthlySummaryIntentConsumed: () -> Unit = {},
     currentThemeMode: AppThemeMode = AppThemeMode.BLUE_WHITE,
     onThemeModeChange: (AppThemeMode) -> Unit = {},
     navController: NavHostController = rememberNavController()
@@ -62,12 +68,33 @@ fun MainScreen(
     val context = LocalContext.current
     val settingsVersion = AppSettings.settingsVersion
     var selectedTab by remember { mutableStateOf(0) }
+    var showNewMonthPrompt by remember { mutableStateOf(false) }
+    var newMonthTarget by remember { mutableStateOf<Long?>(null) }
+    var autoOpenCalendarSummary by remember { mutableStateOf<Long?>(null) }
     val mainViewModel = remember { createMainViewModel(application) }
+    LaunchedEffect(Unit) {
+        val now = System.currentTimeMillis()
+        if (AppSettings.getMonthlySummaryEnabled(context) &&
+            MonthlySummaryHelper.isNewMonthFirstOpenCandidate(now) &&
+            AppSettings.getMonthlySummaryAutoPromptEnabled(context)
+        ) {
+            val lastPrompt = AppSettings.getMonthlySummaryLastPromptMonth(context)
+            val currentMonthKey = MonthlySummaryHelper.monthKey(startOfMonth(now))
+            if (lastPrompt != currentMonthKey) {
+                showNewMonthPrompt = true
+                newMonthTarget = startOfMonth(now)
+                NotificationHelper(context).showMonthlySummaryNotification(MonthlySummaryHelper.previousMonthStart(now))
+                AppSettings.setMonthlySummaryLastPromptMonth(context, currentMonthKey)
+            }
+        }
+    }
+
     val boxes by mainViewModel.boxes.collectAsState(initial = emptyList())
     val logs by mainViewModel.recentLogs.collectAsState(initial = emptyList())
     var showQuickAdd by remember { mutableStateOf(false) }
     var pendingQuickAddType by remember { mutableStateOf<EventType?>(null) }
     var showDiaryEditor by remember { mutableStateOf(false) }
+    var quickExistingDiary by remember { mutableStateOf<DiaryEntry?>(null) }
     val cuteTexts = remember {
         listOf(
             "(=^.^=)", "(˶ᵔ ᵕ ᵔ˶)", "ฅ^•ﻌ•^ฅ", "(｡•̀ᴗ-)✧",
@@ -92,6 +119,16 @@ fun MainScreen(
             }
             launchSingleTop = true
             restoreState = false
+        }
+    }
+
+    LaunchedEffect(initialMonthlySummaryMonth) {
+        initialMonthlySummaryMonth?.let { targetMonth ->
+            if (AppSettings.getMonthlySummaryEnabled(context)) {
+                autoOpenCalendarSummary = targetMonth
+                navigateToRootTab(1, Screen.Calendar.route)
+            }
+            onMonthlySummaryIntentConsumed()
         }
     }
 
@@ -178,9 +215,28 @@ fun MainScreen(
                 val events by calendarVM.allEvents.collectAsState(initial = emptyList())
                 val diaries by calendarVM.allDiaries.collectAsState(initial = emptyList())
                 val diaryMedia by calendarVM.selectedDiaryMedia.collectAsState(initial = emptyList())
+                val monthlySummaryState by calendarVM.monthlySummary.collectAsState(initial = com.memoriabox.utils.MonthlySummaryUiState())
                 var addDateFromCalendar by remember { mutableStateOf<Long?>(null) }
                 var selectedCalendarEvent by remember { mutableStateOf<Event?>(null) }
                 var editCalendarEvent by remember { mutableStateOf<Event?>(null) }
+                var showSummaryOverride by remember { mutableStateOf(false) }
+                val calendarContext = androidx.compose.ui.platform.LocalContext.current
+                val monthlySummaryEnabled = remember(settingsVersion) { AppSettings.getMonthlySummaryEnabled(calendarContext) }
+
+                LaunchedEffect(autoOpenCalendarSummary) {
+                    autoOpenCalendarSummary?.let { targetMonth ->
+                        calendarVM.loadMonthlySummary(targetMonth)
+                        showSummaryOverride = true
+                        autoOpenCalendarSummary = null
+                    }
+                }
+
+                LaunchedEffect(showSummaryOverride) {
+                    if (showSummaryOverride) {
+                        kotlinx.coroutines.delay(100)
+                        showSummaryOverride = false
+                    }
+                }
 
                 val diaryMediaMap = remember(diaryMedia) {
                     diaryMedia.groupBy { it.diaryId }
@@ -193,11 +249,24 @@ fun MainScreen(
                         diaryMediaMap = diaryMediaMap,
                         onAddEvent = { date -> addDateFromCalendar = date },
                         onEventClick = { event -> selectedCalendarEvent = event },
-                        onSaveDiary = { date, content, mediaUris, backgroundUri ->
-                            calendarVM.saveDiary(date, content, mediaUris, backgroundUri)
+                        onSaveDiary = { existingDiary, date, content, media, backgroundUri ->
+                            calendarVM.saveDiaryWithMedia(existingDiary, date, content, media, backgroundUri)
                         },
                         onDeleteDiary = { diary -> calendarVM.deleteDiary(diary) },
-                        onLoadDiaryMedia = { diary -> calendarVM.loadDiaryMedia(diary.id) }
+                        onLoadDiaryMedia = { diary -> calendarVM.loadDiaryMedia(diary.id) },
+                        monthlySummaryEnabled = monthlySummaryEnabled,
+                        monthlySummaryState = monthlySummaryState,
+                        initialShowSummary = showSummaryOverride,
+                        onSummaryPlayModeChange = { /* play mode is local to panel */ },
+                        onSummarySpeedChange = { speed ->
+                            AppSettings.setMonthlySummaryPlaySpeedFactor(calendarContext, speed)
+                        },
+                        onSummaryTextEnabledChange = { enabled ->
+                            AppSettings.setMonthlySummaryTextEnabled(calendarContext, enabled)
+                        },
+                        onLoadMonthlySummary = { monthStart ->
+                            calendarVM.loadMonthlySummary(monthStart)
+                        }
                     )
                 }
                 addDateFromCalendar?.let { date ->
@@ -332,6 +401,45 @@ fun MainScreen(
         }
     }
 
+    if (showNewMonthPrompt) {
+        val promptMonthTarget = newMonthTarget
+        val monthText = SimpleDateFormat("yyyy年M月", Locale.getDefault()).format(Date(promptMonthTarget ?: System.currentTimeMillis()))
+        AlertDialog(
+            onDismissRequest = {
+                promptMonthTarget?.let {
+                    AppSettings.setMonthlySummaryLastPromptMonth(context, MonthlySummaryHelper.monthKey(it))
+                }
+                showNewMonthPrompt = false
+            },
+            title = { Text("新月度总结") },
+            text = {
+                Column {
+                    Text("欢迎进入 $monthText！")
+                    Spacer(Modifier.height(6.dp))
+                    Text("查看上个月的日记与照片总结，回顾属于你自己的时光。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showNewMonthPrompt = false
+                    promptMonthTarget?.let {
+                        AppSettings.setMonthlySummaryLastPromptMonth(context, MonthlySummaryHelper.monthKey(it))
+                    }
+                }) { Text("稍后") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showNewMonthPrompt = false
+                    promptMonthTarget?.let {
+                        AppSettings.setMonthlySummaryLastPromptMonth(context, MonthlySummaryHelper.monthKey(it))
+                        autoOpenCalendarSummary = MonthlySummaryHelper.previousMonthStart()
+                    }
+                    navigateToRootTab(1, Screen.Calendar.route)
+                }) { Text("查看总结") }
+            }
+        )
+    }
+
     if (showQuickAdd) {
         QuickAddEventDialog(
             boxes = boxes,
@@ -351,12 +459,25 @@ fun MainScreen(
 
     if (showDiaryEditor) {
         val calendarVM = remember { createCalendarViewModel(application) }
+        val allDiaries by calendarVM.allDiaries.collectAsState(initial = emptyList())
+        val selectedDiaryMedia by calendarVM.selectedDiaryMedia.collectAsState(initial = emptyList())
         DiaryEditorDialog(
+            existingDiary = quickExistingDiary,
+            existingMedia = quickExistingDiary?.let { diary -> selectedDiaryMedia.filter { it.diaryId == diary.id } }.orEmpty(),
+            allDiaries = allDiaries,
             dateStart = System.currentTimeMillis(),
-            onDismiss = { showDiaryEditor = false },
-            onSave = { content, mediaUris, bgUri ->
-                calendarVM.saveDiary(System.currentTimeMillis(), content, mediaUris, bgUri)
+            onDismiss = {
                 showDiaryEditor = false
+                quickExistingDiary = null
+            },
+            onSave = { selectedDate, content, media, bgUri ->
+                calendarVM.saveDiaryWithMedia(quickExistingDiary, selectedDate, content, media, bgUri)
+                showDiaryEditor = false
+                quickExistingDiary = null
+            },
+            onOpenExistingDiary = { diary ->
+                quickExistingDiary = diary
+                calendarVM.loadDiaryMedia(diary.id)
             }
         )
     }
@@ -516,6 +637,7 @@ fun BoxesScreen(
     var showQuickAdd by remember { mutableStateOf(false) }
     var pendingQuickAddType by remember { mutableStateOf<EventType?>(null) }
     var showDiaryEditor by remember { mutableStateOf(false) }
+    var quickExistingDiary by remember { mutableStateOf<DiaryEntry?>(null) }
     var selectedBoxId by rememberSaveable { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val adaptiveUi = rememberAdaptiveUiSize()
@@ -605,6 +727,7 @@ fun BoxesScreen(
             },
             onAddDiary = {
                 showQuickAdd = false
+                quickExistingDiary = null
                 showDiaryEditor = true
             }
         )
@@ -628,12 +751,25 @@ fun BoxesScreen(
 
     if (showDiaryEditor) {
         val calendarVM = remember { createCalendarViewModel(application) }
+        val allDiaries by calendarVM.allDiaries.collectAsState(initial = emptyList())
+        val selectedDiaryMedia by calendarVM.selectedDiaryMedia.collectAsState(initial = emptyList())
         DiaryEditorDialog(
+            existingDiary = quickExistingDiary,
+            existingMedia = quickExistingDiary?.let { diary -> selectedDiaryMedia.filter { it.diaryId == diary.id } }.orEmpty(),
+            allDiaries = allDiaries,
             dateStart = System.currentTimeMillis(),
-            onDismiss = { showDiaryEditor = false },
-            onSave = { content, mediaUris, bgUri ->
-                calendarVM.saveDiary(System.currentTimeMillis(), content, mediaUris, bgUri)
+            onDismiss = {
                 showDiaryEditor = false
+                quickExistingDiary = null
+            },
+            onSave = { selectedDate, content, media, bgUri ->
+                calendarVM.saveDiaryWithMedia(quickExistingDiary, selectedDate, content, media, bgUri)
+                showDiaryEditor = false
+                quickExistingDiary = null
+            },
+            onOpenExistingDiary = { diary ->
+                quickExistingDiary = diary
+                calendarVM.loadDiaryMedia(diary.id)
             }
         )
     }
@@ -1985,6 +2121,7 @@ fun SettingsScreen(
     var pushPlusChannel by remember { mutableStateOf(pushPlusHelper.getPushPlusChannel()) }
     var showAboutDialog by remember { mutableStateOf(false) }
     var showDiarySettings by remember { mutableStateOf(false) }
+    var showMonthlySummarySettings by remember { mutableStateOf(false) }
     val adaptiveUi = rememberAdaptiveUiSize()
 
     Column(
@@ -2071,6 +2208,12 @@ fun SettingsScreen(
             title = "日记设置",
             description = "滚动动画速度、开关",
             onClick = { showDiarySettings = true }
+        )
+        SettingsItem(
+            icon = Icons.Default.AutoStories,
+            title = "月度总结",
+            description = "开关、自动推送、播放速度",
+            onClick = { showMonthlySummarySettings = true }
         )
         
         SettingsSectionTitle("推送提醒", "生日、纪念日和待办都能乖乖提醒")
@@ -2160,6 +2303,9 @@ fun SettingsScreen(
 
     if (showDiarySettings) {
         DiarySettingsDialog(onDismiss = { showDiarySettings = false })
+    }
+    if (showMonthlySummarySettings) {
+        MonthlySummarySettingsDialog(onDismiss = { showMonthlySummarySettings = false })
     }
 }
 

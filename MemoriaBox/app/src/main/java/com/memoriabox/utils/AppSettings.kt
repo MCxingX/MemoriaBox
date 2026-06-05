@@ -30,6 +30,11 @@ object AppSettings {
         settingsVersion++
     }
 
+    private fun saveFloat(context: Context, key: String, value: Float) {
+        getPrefs(context).edit().putFloat(key, value).apply()
+        settingsVersion++
+    }
+
     const val HOME_BG_URI = "home_bg_uri"
     const val CALENDAR_BG_URI = "calendar_bg_uri"
     const val TODO_BG_URI = "todo_bg_uri"
@@ -43,6 +48,12 @@ object AppSettings {
     const val USE_CUSTOM_QUOTE = "use_custom_daily_quote"
     const val DIARY_SCROLL_ENABLED = "diary_scroll_enabled"
     const val DIARY_SCROLL_SPEED = "diary_scroll_speed"
+    const val MONTHLY_SUMMARY_ENABLED = "monthly_summary_enabled"
+    const val MONTHLY_SUMMARY_AUTO_PROMPT_ENABLED = "monthly_summary_auto_prompt_enabled"
+    const val MONTHLY_SUMMARY_TEXT_ENABLED = "monthly_summary_text_enabled"
+    const val MONTHLY_SUMMARY_PLAY_MODE = "monthly_summary_play_mode"
+    const val MONTHLY_SUMMARY_PLAY_SPEED_FACTOR = "monthly_summary_play_speed_factor"
+    const val MONTHLY_SUMMARY_LAST_PROMPT_MONTH = "monthly_summary_last_prompt_month"
 
     fun getHomeBgUri(context: Context) = getPrefs(context).getString(HOME_BG_URI, null)
     fun setHomeBgUri(context: Context, uri: String?) = saveString(context, HOME_BG_URI, uri)
@@ -115,4 +126,22 @@ object AppSettings {
         getPrefs(context).edit().putInt(DIARY_SCROLL_SPEED, speed.coerceIn(10, 200)).apply()
         settingsVersion++
     }
+
+    fun getMonthlySummaryEnabled(context: Context) = getPrefs(context).getBoolean(MONTHLY_SUMMARY_ENABLED, true)
+    fun setMonthlySummaryEnabled(context: Context, enabled: Boolean) = saveBoolean(context, MONTHLY_SUMMARY_ENABLED, enabled)
+
+    fun getMonthlySummaryAutoPromptEnabled(context: Context) = getPrefs(context).getBoolean(MONTHLY_SUMMARY_AUTO_PROMPT_ENABLED, true)
+    fun setMonthlySummaryAutoPromptEnabled(context: Context, enabled: Boolean) = saveBoolean(context, MONTHLY_SUMMARY_AUTO_PROMPT_ENABLED, enabled)
+
+    fun getMonthlySummaryTextEnabled(context: Context) = getPrefs(context).getBoolean(MONTHLY_SUMMARY_TEXT_ENABLED, true)
+    fun setMonthlySummaryTextEnabled(context: Context, enabled: Boolean) = saveBoolean(context, MONTHLY_SUMMARY_TEXT_ENABLED, enabled)
+
+    fun getMonthlySummaryPlayMode(context: Context) = getPrefs(context).getBoolean(MONTHLY_SUMMARY_PLAY_MODE, false)
+    fun setMonthlySummaryPlayMode(context: Context, enabled: Boolean) = saveBoolean(context, MONTHLY_SUMMARY_PLAY_MODE, enabled)
+
+    fun getMonthlySummaryPlaySpeedFactor(context: Context) = getPrefs(context).getFloat(MONTHLY_SUMMARY_PLAY_SPEED_FACTOR, 1.0f)
+    fun setMonthlySummaryPlaySpeedFactor(context: Context, factor: Float) = saveFloat(context, MONTHLY_SUMMARY_PLAY_SPEED_FACTOR, factor.coerceIn(0.5f, 2.0f))
+
+    fun getMonthlySummaryLastPromptMonth(context: Context) = getPrefs(context).getString(MONTHLY_SUMMARY_LAST_PROMPT_MONTH, null)
+    fun setMonthlySummaryLastPromptMonth(context: Context, month: String) = saveString(context, MONTHLY_SUMMARY_LAST_PROMPT_MONTH, month)
 }

@@ -17,7 +17,7 @@ import javax.crypto.SecretKeyFactory
         FriendRelation::class, EventLabel::class, LogEntry::class,
         DiaryEntry::class, DiaryMedia::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -50,7 +50,8 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_2_3,
                     MIGRATION_3_4,
                     MIGRATION_4_5,
-                    MIGRATION_5_6
+                    MIGRATION_5_6,
+                    MIGRATION_6_7
                 )
                 
                 dbBuilder.addCallback(object : Callback() {
@@ -108,9 +109,11 @@ abstract class AppDatabase : RoomDatabase() {
             db.execSQL("UPDATE boxes SET is_archived = 0 WHERE is_archived IS NULL")
             ensureColumnExists(db, "events", "is_pinned", "INTEGER NOT NULL DEFAULT 0")
             ensureColumnExists(db, "events", "pushplus_enabled", "INTEGER NOT NULL DEFAULT 0")
+            ensureColumnExists(db, "events", "calendar_sync_enabled", "INTEGER NOT NULL DEFAULT 0")
             ensureEventStyleColumns(db)
             ensureEventRepeatColumns(db)
             ensureDiaryTables(db)
+            ensureColumnExists(db, "diary_media", "aspect_ratio", "TEXT NOT NULL DEFAULT '16:9'")
             db.execSQL("UPDATE events SET repeat_mode = 'NONE' WHERE repeat_mode NOT IN ('NONE', 'YEARLY', 'MONTHLY', 'CUSTOM_DAYS', 'CUSTOM_WEEKS', 'CUSTOM_MONTHS')")
             db.execSQL("""
                 INSERT OR IGNORE INTO boxes (id, name, icon, bg_type, bg_value, sort_order, is_archived, created_at)
@@ -181,6 +184,13 @@ val MIGRATION_5_6 = object : Migration(5, 6) {
     }
 }
 
+val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        ensureColumnExists(database, "events", "calendar_sync_enabled", "INTEGER NOT NULL DEFAULT 0")
+        ensureColumnExists(database, "diary_media", "aspect_ratio", "TEXT NOT NULL DEFAULT '16:9'")
+    }
+}
+
 private fun ensureEventStyleColumns(database: SupportSQLiteDatabase) {
     ensureColumnExists(database, "events", "repeat_mode", "TEXT NOT NULL DEFAULT 'NONE'")
     ensureColumnExists(database, "events", "repeat_interval", "INTEGER NOT NULL DEFAULT 1")
@@ -216,7 +226,8 @@ private fun ensureDiaryTables(database: SupportSQLiteDatabase) {
             diary_id TEXT NOT NULL,
             media_uri TEXT NOT NULL,
             media_type TEXT NOT NULL,
-            sort_order INTEGER NOT NULL DEFAULT 0
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            aspect_ratio TEXT NOT NULL DEFAULT '16:9'
         )
     """.trimIndent())
     database.execSQL("CREATE INDEX IF NOT EXISTS index_diary_media_diary_id ON diary_media(diary_id)")

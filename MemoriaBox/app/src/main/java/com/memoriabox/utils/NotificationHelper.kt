@@ -1,14 +1,19 @@
 package com.memoriabox.utils
 
 import android.app.AlarmManager
+import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import com.memoriabox.MainActivity
 import com.memoriabox.data.model.Event
 import com.memoriabox.data.model.RepeatMode
 import com.memoriabox.receiver.ReminderReceiver
@@ -227,6 +232,38 @@ class NotificationHelper(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to cancel reminder", e)
         }
+    }
+
+    fun showMonthlySummaryNotification(monthStart: Long) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            Log.w(TAG, "Post notifications permission not granted")
+            return
+        }
+
+        val monthText = java.text.SimpleDateFormat("yyyy年M月", java.util.Locale.getDefault()).format(java.util.Date(monthStart))
+        val notificationIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra(MainActivity.EXTRA_OPEN_MONTHLY_SUMMARY, true)
+            putExtra(MainActivity.EXTRA_MONTHLY_SUMMARY_MONTH_START, monthStart)
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            MonthlySummaryHelper.monthKey(monthStart).hashCode(),
+            notificationIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle("$monthText 月度总结已准备好")
+            .setContentText("查看上个月的日记与照片回顾。")
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+
+        NotificationManagerCompat.from(context).notify("monthly_summary_${MonthlySummaryHelper.monthKey(monthStart)}".hashCode(), notification)
     }
 
     fun getPushPlusToken(): String {

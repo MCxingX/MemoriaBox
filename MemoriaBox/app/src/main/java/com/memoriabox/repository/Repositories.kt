@@ -106,7 +106,9 @@ class DiaryRepository(private val diaryDao: DiaryDao) {
     fun getMediaForDiary(diaryId: String): Flow<List<DiaryMedia>> = diaryDao.getMediaForDiary(diaryId)
     fun getMediaForDiaries(diaryIds: List<String>): Flow<List<DiaryMedia>> = diaryDao.getMediaForDiaries(diaryIds)
     suspend fun getDiaryByDateStart(dateStart: Long): DiaryEntry? = diaryDao.getDiaryByDateStart(dateStart)
+    suspend fun getDiariesBetweenOnce(start: Long, end: Long): List<DiaryEntry> = diaryDao.getDiariesBetweenOnce(start, end)
     suspend fun getMediaForDiaryOnce(diaryId: String): List<DiaryMedia> = diaryDao.getMediaForDiaryOnce(diaryId)
+    suspend fun getMediaForDiariesOnce(diaryIds: List<String>): List<DiaryMedia> = diaryDao.getMediaForDiariesOnce(diaryIds)
 
     suspend fun saveDiary(diary: DiaryEntry, media: List<DiaryMedia>) {
         diaryDao.upsertDiary(diary)

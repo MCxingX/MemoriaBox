@@ -77,6 +77,8 @@ data class Event(
     val isPinned: Boolean = false,
     @ColumnInfo(name = "pushplus_enabled")
     val pushPlusEnabled: Boolean = false,
+    @ColumnInfo(name = "calendar_sync_enabled")
+    val calendarSyncEnabled: Boolean = false,
     @ColumnInfo(name = "repeat_mode")
     val repeatMode: RepeatMode = RepeatMode.NONE,
     @ColumnInfo(name = "repeat_interval")
@@ -187,7 +189,9 @@ data class DiaryMedia(
     @ColumnInfo(name = "media_type")
     val mediaType: DiaryMediaType,
     @ColumnInfo(name = "sort_order")
-    val sortOrder: Int = 0
+    val sortOrder: Int = 0,
+    @ColumnInfo(name = "aspect_ratio")
+    val aspectRatio: String = "16:9"
 )
 
 data class CardStyle(

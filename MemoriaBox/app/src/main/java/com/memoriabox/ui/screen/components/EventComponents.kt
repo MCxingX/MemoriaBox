@@ -35,6 +35,8 @@ import androidx.compose.ui.unit.dp
 import com.memoriabox.data.model.*
 import com.memoriabox.ui.utils.rememberAdaptiveUiSize
 import com.memoriabox.utils.ColorUtils
+import com.memoriabox.utils.MonthlySummaryUiState
+import com.memoriabox.utils.startOfMonth
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.TimeUnit
@@ -445,13 +447,25 @@ fun CalendarViewScreen(
     onAddEvent: (Long) -> Unit = {},
     onEventClick: (Event) -> Unit = {},
     diaries: List<DiaryEntry> = emptyList(),
-    onSaveDiary: (Long, String, List<String>, String?) -> Unit = { _, _, _, _ -> },
+    onSaveDiary: (DiaryEntry?, Long, String, List<DiaryMedia>, String?) -> Unit = { _, _, _, _, _ -> },
     onDeleteDiary: (DiaryEntry) -> Unit = {},
     onLoadDiaryMedia: (DiaryEntry) -> Unit = {},
-    diaryMediaMap: Map<String, List<DiaryMedia>> = emptyMap()
+    diaryMediaMap: Map<String, List<DiaryMedia>> = emptyMap(),
+    monthlySummaryEnabled: Boolean = true,
+    monthlySummaryState: MonthlySummaryUiState = MonthlySummaryUiState(),
+    initialShowSummary: Boolean = false,
+    onOpenMonthlySummary: () -> Unit = {},
+    onSummaryPlayModeChange: (Boolean) -> Unit = {},
+    onSummarySpeedChange: (Float) -> Unit = {},
+    onSummaryTextEnabledChange: (Boolean) -> Unit = {},
+    onLoadMonthlySummary: (Long) -> Unit = {}
 ) {
     val adaptiveUi = rememberAdaptiveUiSize()
     var currentMonthYear by remember { mutableStateOf("${Calendar.getInstance().get(Calendar.YEAR)}-${Calendar.getInstance().get(Calendar.MONTH) + 1}") }
+    var showMonthlySummary by remember { mutableStateOf(initialShowSummary) }
+    LaunchedEffect(initialShowSummary) {
+        if (initialShowSummary) showMonthlySummary = true
+    }
     val monthFormat = SimpleDateFormat("yyyy年MM月", Locale.getDefault())
     val cal = remember(currentMonthYear) {
         Calendar.getInstance().apply {
@@ -486,7 +500,20 @@ fun CalendarViewScreen(
             modifier = Modifier.height(adaptiveUi.topBarHeight),
             title = { Text("日历视图") },
             windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+            actions = {
+                if (monthlySummaryEnabled) {
+                    IconButton(onClick = {
+                        showMonthlySummary = true
+                        val parts = currentMonthYear.split("-").map { it.toInt() }
+                        val monthCal = Calendar.getInstance().apply {
+                            set(parts[0], parts[1] - 1, 1, 0, 0, 0)
+                            set(Calendar.MILLISECOND, 0)
+                        }
+                        onLoadMonthlySummary(startOfMonth(monthCal.timeInMillis))
+                    }) { Icon(Icons.Default.AutoStories, contentDescription = "月度总结") }
+                }
+            }
         )
         CalendarBoardSummary(
             totalCount = events.size,
@@ -594,27 +621,52 @@ fun CalendarViewScreen(
     editingDiary?.let { diary ->
         DiaryEditorDialog(
             existingDiary = diary,
+            existingMedia = diaryMediaMap[diary.id] ?: emptyList(),
+            allDiaries = diaries,
             dateStart = diary.dateStart,
             onDismiss = { editingDiary = null },
-            onSave = { content, mediaUris, bgUri ->
-                onSaveDiary(diary.dateStart, content, mediaUris, bgUri)
+            onSave = { selectedDate, content, media, bgUri ->
+                onSaveDiary(diary, selectedDate, content, media, bgUri)
                 editingDiary = null
             },
             onDelete = {
                 editingDiary = null
                 onDeleteDiary(diary)
+            },
+            onOpenExistingDiary = { targetDiary ->
+                onLoadDiaryMedia(targetDiary)
+                editingDiary = targetDiary
             }
         )
     }
 
     editingDiaryDate?.let { date ->
         DiaryEditorDialog(
+            allDiaries = diaries,
             dateStart = date,
             onDismiss = { editingDiaryDate = null },
-            onSave = { content, mediaUris, bgUri ->
-                onSaveDiary(date, content, mediaUris, bgUri)
+            onSave = { selectedDate, content, media, bgUri ->
+                onSaveDiary(null, selectedDate, content, media, bgUri)
                 editingDiaryDate = null
+            },
+            onOpenExistingDiary = { targetDiary ->
+                onLoadDiaryMedia(targetDiary)
+                editingDiaryDate = null
+                editingDiary = targetDiary
             }
+        )
+    }
+
+    if (monthlySummaryEnabled && showMonthlySummary) {
+        MonthlySummaryPanel(
+            state = monthlySummaryState,
+            onDismiss = { showMonthlySummary = false },
+            onMonthChange = { newMonth ->
+                onLoadMonthlySummary(newMonth)
+            },
+            onPlayModeChange = onSummaryPlayModeChange,
+            onSpeedChange = onSummarySpeedChange,
+            onTextEnabledChange = onSummaryTextEnabledChange
         )
     }
 }

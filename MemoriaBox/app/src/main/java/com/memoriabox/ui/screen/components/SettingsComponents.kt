@@ -54,7 +54,6 @@ fun SettingsList(
         )
     }
 }
-
 @Composable
 fun SettingsItem(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -257,6 +256,106 @@ fun DiarySettingsDialog(
                             Text("快", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text("慢", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("完成") }
+        }
+    )
+}
+
+@Composable
+fun MonthlySummarySettingsDialog(
+    onDismiss: () -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var summaryEnabled by remember { mutableStateOf(com.memoriabox.utils.AppSettings.getMonthlySummaryEnabled(context)) }
+    var autoPromptEnabled by remember { mutableStateOf(com.memoriabox.utils.AppSettings.getMonthlySummaryAutoPromptEnabled(context)) }
+    var textEnabled by remember { mutableStateOf(com.memoriabox.utils.AppSettings.getMonthlySummaryTextEnabled(context)) }
+    var playSpeed by remember { mutableFloatStateOf(com.memoriabox.utils.AppSettings.getMonthlySummaryPlaySpeedFactor(context)) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("月度总结设置") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text("启用月度总结", style = MaterialTheme.typography.titleSmall)
+                        Text("在日历视图中查看月度照片与日记总结", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(
+                        checked = summaryEnabled,
+                        onCheckedChange = {
+                            summaryEnabled = it
+                            com.memoriabox.utils.AppSettings.setMonthlySummaryEnabled(context, it)
+                        }
+                    )
+                }
+                HorizontalDivider()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text("新月自动提醒", style = MaterialTheme.typography.titleSmall)
+                        Text("进入新月份时弹出总结预览", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(
+                        checked = autoPromptEnabled,
+                        onCheckedChange = {
+                            autoPromptEnabled = it
+                            com.memoriabox.utils.AppSettings.setMonthlySummaryAutoPromptEnabled(context, it)
+                        }
+                    )
+                }
+                HorizontalDivider()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text("显示文字摘要", style = MaterialTheme.typography.titleSmall)
+                        Text("在月度总结中展示文字描述", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(
+                        checked = textEnabled,
+                        onCheckedChange = {
+                            textEnabled = it
+                            com.memoriabox.utils.AppSettings.setMonthlySummaryTextEnabled(context, it)
+                        }
+                    )
+                }
+                HorizontalDivider()
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("播放速度", style = MaterialTheme.typography.titleSmall)
+                        Text("${"%.1f".format(playSpeed)}x", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Slider(
+                        value = playSpeed,
+                        onValueChange = {
+                            playSpeed = it
+                            com.memoriabox.utils.AppSettings.setMonthlySummaryPlaySpeedFactor(context, it)
+                        },
+                        valueRange = 0.5f..2.0f,
+                        steps = 4,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("慢", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("快", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }

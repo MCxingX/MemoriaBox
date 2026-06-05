@@ -14,7 +14,12 @@ import com.memoriabox.repository.FriendRepository
 import com.memoriabox.repository.LabelRepository
 import com.memoriabox.repository.DiaryRepository
 import com.memoriabox.utils.BackupManager
+import com.memoriabox.utils.AppSettings
+import com.memoriabox.utils.MonthlySummaryHelper
+import com.memoriabox.utils.MonthlySummaryUiState
 import com.memoriabox.utils.NotificationHelper
+import com.memoriabox.utils.SystemCalendarHelper
+import com.memoriabox.utils.startOfMonth
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -111,6 +116,7 @@ class MainViewModel(
             if (targetEvent.reminderEnabled) {
                 notificationHelper.scheduleReminder(targetEvent)
             }
+            syncSystemCalendarIfNeeded(targetEvent)
             syncAnniversaryMilestones(targetEvent, eventRepository, notificationHelper)
             logRepository.logEventOperation("QUICK_CREATE", targetEvent.id, targetEvent.name)
             backupManager.onDataChanged()
@@ -126,6 +132,7 @@ class MainViewModel(
             if (event.reminderEnabled) {
                 notificationHelper.scheduleReminder(event)
             }
+            syncSystemCalendarIfNeeded(event)
             syncAnniversaryMilestones(event, eventRepository, notificationHelper)
             logRepository.logEventOperation("QUICK_UPDATE", event.id, event.name)
             backupManager.onDataChanged()
@@ -195,6 +202,7 @@ class BoxDetailViewModel(
             if (event.reminderEnabled) {
                 notificationHelper.scheduleReminder(event)
             }
+            syncSystemCalendarIfNeeded(event)
             syncAnniversaryMilestones(event, eventRepository, notificationHelper)
             logRepository.logEventOperation("CREATE", event.id, event.name)
             backupManager.onDataChanged()
@@ -210,6 +218,7 @@ class BoxDetailViewModel(
             if (event.reminderEnabled) {
                 notificationHelper.scheduleReminder(event)
             }
+            syncSystemCalendarIfNeeded(event)
             syncAnniversaryMilestones(event, eventRepository, notificationHelper)
             logRepository.logEventOperation("UPDATE", event.id, event.name)
             backupManager.onDataChanged()
@@ -269,6 +278,9 @@ class CalendarViewModel(
     private val _selectedDiaryMedia = MutableStateFlow<List<DiaryMedia>>(emptyList())
     val selectedDiaryMedia = _selectedDiaryMedia.asStateFlow()
 
+    private val _monthlySummary = MutableStateFlow(MonthlySummaryUiState())
+    val monthlySummary = _monthlySummary.asStateFlow()
+
     fun getEventsForDay(timestamp: Long, events: List<Event>): List<Event> {
         val dayStart = (timestamp / 86400000) * 86400000
         val dayEnd = dayStart + 86400000 - 1
@@ -280,22 +292,52 @@ class CalendarViewModel(
     }
 
     fun saveDiary(date: Long, content: String, mediaUris: List<String>, backgroundUri: String?) = viewModelScope.launch {
+        saveDiaryInternal(null, date, content, mediaUris.mapIndexed { index, uri ->
+            DiaryMedia(
+                diaryId = "",
+                mediaUri = uri,
+                mediaType = inferDiaryMediaType(uri),
+                sortOrder = index
+            )
+        }, backgroundUri)
+    }
+
+    fun saveDiaryWithMedia(existingDiary: DiaryEntry?, date: Long, content: String, mediaItems: List<DiaryMedia>, backgroundUri: String?) = viewModelScope.launch {
+        saveDiaryInternal(existingDiary, date, content, mediaItems, backgroundUri)
+    }
+
+    fun loadMonthlySummary(monthStart: Long) = viewModelScope.launch {
+        val context = getApplication<Application>()
+        val normalizedMonth = startOfMonth(monthStart)
+        _monthlySummary.value = _monthlySummary.value.copy(monthStart = normalizedMonth, isLoading = true)
+        val (start, end) = MonthlySummaryHelper.monthRange(normalizedMonth)
+        val diaries = diaryRepository.getDiariesBetweenOnce(start, end)
+        val media = if (diaries.isEmpty()) emptyList() else diaryRepository.getMediaForDiariesOnce(diaries.map { it.id })
+        _monthlySummary.value = MonthlySummaryHelper.buildSummary(
+            monthStart = normalizedMonth,
+            diaries = diaries,
+            media = media,
+            summaryEnabled = AppSettings.getMonthlySummaryTextEnabled(context),
+            playMode = AppSettings.getMonthlySummaryPlayMode(context),
+            playSpeedFactor = AppSettings.getMonthlySummaryPlaySpeedFactor(context)
+        )
+    }
+
+    private suspend fun saveDiaryInternal(existingDiary: DiaryEntry?, date: Long, content: String, mediaItems: List<DiaryMedia>, backgroundUri: String?) {
         val dayStart = startOfDay(date)
-        val existing = diaryRepository.getDiaryByDateStart(dayStart)
         val diary = DiaryEntry(
-            id = existing?.id ?: java.util.UUID.randomUUID().toString(),
+            id = existingDiary?.id ?: java.util.UUID.randomUUID().toString(),
             dateStart = dayStart,
             content = content.trim(),
             backgroundMediaUri = backgroundUri,
             backgroundMediaType = backgroundUri?.let { inferDiaryMediaType(it) },
-            createdAt = existing?.createdAt ?: System.currentTimeMillis(),
+            createdAt = existingDiary?.createdAt ?: System.currentTimeMillis(),
             updatedAt = System.currentTimeMillis()
         )
-        val media = mediaUris.mapIndexed { index, uri ->
-            DiaryMedia(
+        val media = mediaItems.mapIndexed { index, item ->
+            item.copy(
                 diaryId = diary.id,
-                mediaUri = uri,
-                mediaType = inferDiaryMediaType(uri),
+                mediaType = inferDiaryMediaType(item.mediaUri),
                 sortOrder = index
             )
         }
@@ -500,6 +542,12 @@ class FriendViewModel(
     }
 
     private fun friendBirthdayEventId(friendId: String): String = "friend_birthday_$friendId"
+}
+
+private fun AndroidViewModel.syncSystemCalendarIfNeeded(event: Event) {
+    if (event.calendarSyncEnabled && event.reminderEnabled) {
+        SystemCalendarHelper(getApplication()).insertEvent(event)
+    }
 }
 
 class LabelViewModel(

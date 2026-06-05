@@ -271,6 +271,7 @@ fun EventDialog(
     var note by remember { mutableStateOf(existingEvent?.note ?: "") }
     var reminderEnabled by remember { mutableStateOf(existingEvent?.reminderEnabled ?: defaultReminderEnabled) }
     var pushPlusEnabled by remember { mutableStateOf(existingEvent?.pushPlusEnabled ?: defaultPushPlusEnabled) }
+    var calendarSyncEnabled by remember { mutableStateOf(existingEvent?.calendarSyncEnabled ?: false) }
     var backgroundUri by remember { mutableStateOf(existingEvent?.avatarUri) }
     var repeatMode by remember {
         mutableStateOf(
@@ -652,6 +653,20 @@ fun EventDialog(
                                 )
                             }
                         }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(
+                                checked = calendarSyncEnabled,
+                                onCheckedChange = { calendarSyncEnabled = it }
+                            )
+                            Column(modifier = Modifier.clickable { calendarSyncEnabled = !calendarSyncEnabled }) {
+                                Text("写入系统日历")
+                                Text(
+                                    "开启后保存时尝试同步到系统日历，软件通知仍会兜底提醒",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -673,6 +688,7 @@ fun EventDialog(
                         avatarUri = backgroundUri,
                         isPinned = existingEvent?.isPinned ?: false,
                         pushPlusEnabled = pushPlusEnabled && reminderEnabled,
+                        calendarSyncEnabled = calendarSyncEnabled && reminderEnabled,
                         repeatMode = if (selectedType == EventType.BIRTHDAY) RepeatMode.YEARLY else repeatMode,
                         repeatInterval = repeatInterval.coerceAtLeast(1),
                         repeatEndDate = repeatEndDate,
@@ -843,10 +859,11 @@ private fun safeDialogColor(value: String): Color = runCatching {
 @Composable
 fun DatePickerDialog(
     onDismiss: () -> Unit,
-    onDateSelected: (Long) -> Unit
+    onDateSelected: (Long) -> Unit,
+    initialDateMillis: Long = System.currentTimeMillis()
 ) {
     val datePickerState = rememberDatePickerState(
-        initialSelectedDateMillis = System.currentTimeMillis()
+        initialSelectedDateMillis = initialDateMillis
     )
 
     Dialog(onDismissRequest = onDismiss) {

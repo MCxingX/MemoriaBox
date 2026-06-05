@@ -35,8 +35,11 @@ import com.memoriabox.data.model.DiaryMedia
 import com.memoriabox.data.model.DiaryMediaType
 import com.memoriabox.utils.ColorUtils
 import com.memoriabox.utils.ImageImportUtils
+import com.memoriabox.ui.screen.dialogs.DatePickerDialog
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 @Composable
 fun ScrollingTextAnimation(
@@ -211,7 +214,7 @@ fun DiaryDetailDialog(
                                             contentScale = ContentScale.Crop,
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .height(200.dp)
+                                                .aspectRatio(media.aspectRatio.toFloatRatio())
                                                 .clip(RoundedCornerShape(12.dp))
                                         )
                                     }
@@ -219,7 +222,7 @@ fun DiaryDetailDialog(
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .height(200.dp)
+                                                .aspectRatio(media.aspectRatio.toFloatRatio())
                                                 .clip(RoundedCornerShape(12.dp))
                                                 .background(Color.Black.copy(alpha = 0.6f)),
                                             contentAlignment = Alignment.Center
@@ -275,17 +278,29 @@ fun DiaryDetailDialog(
 @Composable
 fun DiaryEditorDialog(
     existingDiary: DiaryEntry? = null,
+    existingMedia: List<DiaryMedia> = emptyList(),
+    allDiaries: List<DiaryEntry> = emptyList(),
     dateStart: Long,
     onDismiss: () -> Unit,
-    onSave: (content: String, mediaUris: List<String>, backgroundUri: String?) -> Unit,
+    onSave: (dateStart: Long, content: String, media: List<DiaryMedia>, backgroundUri: String?) -> Unit,
     onDelete: () -> Unit = {},
+    onOpenExistingDiary: (DiaryEntry) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val dateFormatter = remember { SimpleDateFormat("yyyy年M月d日", Locale.getDefault()) }
+    var selectedDateStart by remember(existingDiary?.id, dateStart) { mutableLongStateOf(existingDiary?.dateStart ?: startOfDayForEditor(dateStart)) }
     var content by remember { mutableStateOf(existingDiary?.content ?: "") }
     var backgroundUri by remember { mutableStateOf(existingDiary?.backgroundMediaUri) }
-    var mediaUris by remember { mutableStateOf(mutableListOf<String>()) }
+    val mediaItems = remember(existingDiary?.id, existingMedia) { mutableStateListOf<DiaryMedia>().apply { addAll(existingMedia) } }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var replacingMediaIndex by remember { mutableStateOf<Int?>(null) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    val sameDateDiaries = remember(allDiaries, selectedDateStart, existingDiary?.id) {
+        allDiaries
+            .filter { it.dateStart == selectedDateStart && it.id != existingDiary?.id }
+            .sortedBy { it.createdAt }
+    }
 
     // Image picker
     val imagePicker = rememberLauncherForActivityResult(
@@ -295,7 +310,14 @@ fun DiaryEditorDialog(
             val copied = uris.mapNotNull { uri ->
                 ImageImportUtils.copyImageToPrivateStorage(context, uri, "diary_images")
             }
-            mediaUris.addAll(copied)
+            mediaItems.addAll(copied.mapIndexed { index, uri ->
+                DiaryMedia(
+                    diaryId = existingDiary?.id ?: "",
+                    mediaUri = uri,
+                    mediaType = DiaryMediaType.IMAGE,
+                    sortOrder = mediaItems.size + index
+                )
+            })
         }
     }
 
@@ -305,7 +327,30 @@ fun DiaryEditorDialog(
     ) { uri ->
         uri?.let {
             val copied = ImageImportUtils.copyImageToPrivateStorage(context, it, "diary_videos")
-            copied?.let { mediaUris.add(it) }
+            copied?.let { uri ->
+                mediaItems.add(
+                    DiaryMedia(
+                        diaryId = existingDiary?.id ?: "",
+                        mediaUri = uri,
+                        mediaType = inferDiaryMediaTypeForEditor(uri),
+                        sortOrder = mediaItems.size
+                    )
+                )
+            }
+        }
+    }
+
+    val replacePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        val index = replacingMediaIndex
+        replacingMediaIndex = null
+        if (uri != null && index != null && index in mediaItems.indices) {
+            val copied = ImageImportUtils.copyImageToPrivateStorage(context, uri, "diary_images") ?: return@rememberLauncherForActivityResult
+            mediaItems[index] = mediaItems[index].copy(
+                mediaUri = copied,
+                mediaType = inferDiaryMediaTypeForEditor(copied)
+            )
         }
     }
 
@@ -320,7 +365,17 @@ fun DiaryEditorDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (existingDiary == null) "写日记" else "编辑日记") },
+        title = {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Column {
+                    Text(if (existingDiary == null) "写日记" else "编辑日记")
+                    Text(dateFormatter.format(selectedDateStart), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                IconButton(onClick = { showDatePicker = true }) {
+                    Icon(Icons.Default.CalendarMonth, contentDescription = "选择日记日期")
+                }
+            }
+        },
         text = {
             Column(
                 modifier = Modifier
@@ -328,6 +383,39 @@ fun DiaryEditorDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                if (sameDateDiaries.isNotEmpty()) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f)),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("这一天已有 ${sameDateDiaries.size} 篇日记", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            Text("可以继续新建，也可以切换编辑已有日记。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f))
+                            sameDateDiaries.forEachIndexed { index, diary ->
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth().clickable { onOpenExistingDiary(diary) },
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text("已有日记 ${index + 1}", style = MaterialTheme.typography.labelLarge)
+                                            Text(diary.content.ifBlank { "无文字内容" }.take(42), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                                        }
+                                        Icon(Icons.Default.ChevronRight, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 OutlinedTextField(
                     value = content,
                     onValueChange = { content = it },
@@ -391,8 +479,21 @@ fun DiaryEditorDialog(
                 }
 
                 // Preview media attachments
-                if (mediaUris.isNotEmpty()) {
-                    Text("已添加 ${mediaUris.size} 个媒体文件", style = MaterialTheme.typography.bodySmall)
+                if (mediaItems.isNotEmpty()) {
+                    Text("已添加 ${mediaItems.size} 个媒体文件", style = MaterialTheme.typography.bodySmall)
+                    mediaItems.forEachIndexed { index, media ->
+                        DiaryMediaEditorRow(
+                            media = media,
+                            onDelete = { mediaItems.removeAt(index) },
+                            onReplace = {
+                                replacingMediaIndex = index
+                                replacePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+                            },
+                            onAspectRatioChange = { ratio ->
+                                mediaItems[index] = media.copy(aspectRatio = ratio)
+                            }
+                        )
+                    }
                 }
             }
         },
@@ -408,10 +509,15 @@ fun DiaryEditorDialog(
                 }
                 Button(
                     onClick = {
-                        onSave(content, mediaUris.toList(), backgroundUri)
+                        onSave(
+                            selectedDateStart,
+                            content,
+                            mediaItems.mapIndexed { index, media -> media.copy(sortOrder = index) },
+                            backgroundUri
+                        )
                         onDismiss()
                     },
-                    enabled = content.trim().isNotEmpty()
+                    enabled = content.trim().isNotEmpty() || mediaItems.isNotEmpty() || backgroundUri != null
                 ) {
                     Text("保存")
                 }
@@ -434,6 +540,17 @@ fun DiaryEditorDialog(
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) { Text("取消") }
             }
+        )
+    }
+
+    if (showDatePicker) {
+        DatePickerDialog(
+            onDismiss = { showDatePicker = false },
+            onDateSelected = { selected ->
+                selectedDateStart = startOfDayForEditor(selected)
+                showDatePicker = false
+            },
+            initialDateMillis = selectedDateStart
         )
     }
 }
@@ -488,3 +605,72 @@ fun DiaryIndicator(
     }
 }
 
+@Composable
+private fun DiaryMediaEditorRow(
+    media: DiaryMedia,
+    onDelete: () -> Unit,
+    onReplace: () -> Unit,
+    onAspectRatioChange: (String) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (media.mediaType == DiaryMediaType.IMAGE) {
+                    AsyncImage(
+                        model = media.mediaUri,
+                        contentDescription = "媒体预览",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.size(64.dp).clip(RoundedCornerShape(10.dp))
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.secondaryContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Videocam, contentDescription = null)
+                    }
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(if (media.mediaType == DiaryMediaType.IMAGE) "图片" else "视频", style = MaterialTheme.typography.titleSmall)
+                    Text("比例：${media.aspectRatio}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                TextButton(onClick = onReplace) { Text("替换") }
+                TextButton(onClick = onDelete) { Text("删除", color = Color(0xFFFF6B6B)) }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                listOf("1:1", "4:3", "16:9", "3:4", "9:16").forEach { ratio ->
+                    FilterChip(
+                        selected = media.aspectRatio == ratio,
+                        onClick = { onAspectRatioChange(ratio) },
+                        label = { Text(ratio) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun inferDiaryMediaTypeForEditor(uri: String): DiaryMediaType {
+    val videoExtensions = listOf(".mp4", ".mkv", ".webm", ".3gp", ".mov")
+    return if (videoExtensions.any { uri.endsWith(it, ignoreCase = true) }) DiaryMediaType.VIDEO else DiaryMediaType.IMAGE
+}
+
+private fun String.toFloatRatio(): Float {
+    val parts = split(":")
+    val width = parts.getOrNull(0)?.toFloatOrNull()
+    val height = parts.getOrNull(1)?.toFloatOrNull()
+    return if (width != null && height != null && height > 0f) width / height else 16f / 9f
+}
+
+private fun startOfDayForEditor(timestamp: Long): Long {
+    val cal = java.util.Calendar.getInstance()
+    cal.timeInMillis = timestamp
+    cal.set(java.util.Calendar.HOUR_OF_DAY, 0)
+    cal.set(java.util.Calendar.MINUTE, 0)
+    cal.set(java.util.Calendar.SECOND, 0)
+    cal.set(java.util.Calendar.MILLISECOND, 0)
+    return cal.timeInMillis
+}

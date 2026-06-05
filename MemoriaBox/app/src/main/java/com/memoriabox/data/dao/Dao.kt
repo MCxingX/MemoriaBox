@@ -174,6 +174,9 @@ interface DiaryDao {
     @Query("SELECT * FROM diary_entries WHERE date_start BETWEEN :start AND :end ORDER BY date_start ASC")
     fun getDiariesBetween(start: Long, end: Long): Flow<List<DiaryEntry>>
 
+    @Query("SELECT * FROM diary_entries WHERE date_start BETWEEN :start AND :end ORDER BY date_start ASC, created_at ASC")
+    suspend fun getDiariesBetweenOnce(start: Long, end: Long): List<DiaryEntry>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertDiary(diary: DiaryEntry)
 
@@ -185,6 +188,9 @@ interface DiaryDao {
 
     @Query("SELECT * FROM diary_media WHERE diary_id IN (:diaryIds) ORDER BY sort_order ASC")
     fun getMediaForDiaries(diaryIds: List<String>): Flow<List<DiaryMedia>>
+
+    @Query("SELECT * FROM diary_media WHERE diary_id IN (:diaryIds) ORDER BY diary_id ASC, sort_order ASC")
+    suspend fun getMediaForDiariesOnce(diaryIds: List<String>): List<DiaryMedia>
 
     @Query("SELECT * FROM diary_media WHERE diary_id = :diaryId ORDER BY sort_order ASC")
     suspend fun getMediaForDiaryOnce(diaryId: String): List<DiaryMedia>

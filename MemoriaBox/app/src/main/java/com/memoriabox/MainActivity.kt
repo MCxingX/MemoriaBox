@@ -1,6 +1,7 @@
 package com.memoriabox
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -24,11 +25,18 @@ import com.memoriabox.ui.screen.MainScreen
 class MainActivity : ComponentActivity() {
     
     private val TAG = "MainActivity"
+    private var pendingMonthlySummaryMonth by mutableStateOf<Long?>(null)
+
+    companion object {
+        const val EXTRA_OPEN_MONTHLY_SUMMARY = "open_monthly_summary"
+        const val EXTRA_MONTHLY_SUMMARY_MONTH_START = "monthly_summary_month_start"
+    }
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
         Log.d(TAG, "onCreate called")
+        pendingMonthlySummaryMonth = extractMonthlySummaryMonth(intent)
         
         try {
             requestRequiredPermissions()
@@ -51,6 +59,8 @@ class MainActivity : ComponentActivity() {
                     ) {
                         MainScreen(
                             application = application,
+                            initialMonthlySummaryMonth = pendingMonthlySummaryMonth,
+                            onMonthlySummaryIntentConsumed = { pendingMonthlySummaryMonth = null },
                             currentThemeMode = themeMode,
                             onThemeModeChange = { mode ->
                                 themeMode = mode
@@ -66,6 +76,12 @@ class MainActivity : ComponentActivity() {
             throw e
         }
     }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        pendingMonthlySummaryMonth = extractMonthlySummaryMonth(intent)
+    }
     
     private fun requestRequiredPermissions() {
         val permissionsToRequest = mutableListOf<String>()
@@ -79,7 +95,16 @@ class MainActivity : ComponentActivity() {
                 permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
-        
+
+        listOf(
+            Manifest.permission.READ_CALENDAR,
+            Manifest.permission.WRITE_CALENDAR
+        ).forEach { permission ->
+            if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
+                permissionsToRequest.add(permission)
+            }
+        }
+
         if (permissionsToRequest.isNotEmpty()) {
             try {
                 permissionLauncher.launch(permissionsToRequest.toTypedArray())
@@ -112,5 +137,10 @@ class MainActivity : ComponentActivity() {
     override fun onPause() {
         super.onPause()
         Log.d(TAG, "onPause called")
+    }
+
+    private fun extractMonthlySummaryMonth(intent: Intent?): Long? {
+        if (intent?.getBooleanExtra(EXTRA_OPEN_MONTHLY_SUMMARY, false) != true) return null
+        return intent.getLongExtra(EXTRA_MONTHLY_SUMMARY_MONTH_START, 0L).takeIf { it > 0L }
     }
 }
