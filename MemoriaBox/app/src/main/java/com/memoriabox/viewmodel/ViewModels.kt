@@ -121,8 +121,8 @@ class MainViewModel(
 
     fun updateQuickEvent(event: Event) = viewModelScope.launch {
         try {
+            eventRepository.getEventById(event.id)?.let { notificationHelper.cancelReminder(it) }
             eventRepository.updateEvent(event)
-            notificationHelper.cancelReminder(event)
             runEventSideEffects(event, notificationHelper, backupManager)
             logRepository.logEventOperation("QUICK_UPDATE", event.id, event.name)
         } catch (e: Exception) {
@@ -193,8 +193,8 @@ class BoxDetailViewModel(
 
     fun updateEvent(event: Event) = viewModelScope.launch {
         try {
+            eventRepository.getEventById(event.id)?.let { notificationHelper.cancelReminder(it) }
             eventRepository.updateEvent(event)
-            notificationHelper.cancelReminder(event)
             runEventSideEffects(event, notificationHelper, backupManager)
             logRepository.logEventOperation("UPDATE", event.id, event.name)
         } catch (e: Exception) {

@@ -2355,31 +2355,44 @@ fun BackupSettingsScreen(
     onNavigateBack: () -> Unit
 ) {
     val viewModel = remember { createBackupViewModel(application) }
-    var showDirPicker by remember { mutableStateOf(false) }
-    var showExportPicker by remember { mutableStateOf(false) }
-    var showImportPicker by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val snackbarScope = rememberCoroutineScope()
 
     val dirPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
     ) { uri ->
-        uri?.let { viewModel.saveBackupDirUri(it) }
+        if (uri != null) {
+            viewModel.saveBackupDirUri(uri)
+            snackbarScope.launch { snackbarHostState.showSnackbar("已选择备份目录") }
+        } else {
+            snackbarScope.launch { snackbarHostState.showSnackbar("未选择备份目录") }
+        }
     }
 
     val exportPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
     ) { uri ->
-        uri?.let { 
-            viewModel.triggerManualBackup(it)
+        if (uri != null) {
+            viewModel.triggerManualBackup(uri)
+            snackbarScope.launch { snackbarHostState.showSnackbar("正在备份到所选目录") }
+        } else {
+            snackbarScope.launch { snackbarHostState.showSnackbar("未选择备份目录") }
         }
     }
 
     val importPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
-        uri?.let { viewModel.importBackup(it) }
+        if (uri != null) {
+            viewModel.importBackup(uri)
+            snackbarScope.launch { snackbarHostState.showSnackbar("正在导入备份") }
+        } else {
+            snackbarScope.launch { snackbarHostState.showSnackbar("未选择备份文件") }
+        }
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("备份设置") },
@@ -2393,9 +2406,9 @@ fun BackupSettingsScreen(
     ) { paddingValues ->
         BackupSettingsContent(
             modifier = Modifier.padding(paddingValues),
-            onSelectDir = { showDirPicker = true },
-            onManualBackup = { showExportPicker = true },
-            onImport = { showImportPicker = true }
+            onSelectDir = { dirPicker.launch(null) },
+            onManualBackup = { exportPicker.launch(null) },
+            onImport = { importPicker.launch(arrayOf("application/octet-stream", "application/x-sqlite3", "application/vnd.sqlite3", "*/*")) }
         )
     }
 }

@@ -699,6 +699,7 @@ fun EventDialog(
                         textColor = textColor,
                         cardTemplate = cardTemplate,
                         displayFields = displayFieldSet.filterValues { it }.keys.joinToString(","),
+                        isBirthday = selectedType == EventType.BIRTHDAY,
                         repeatYearly = selectedType == EventType.BIRTHDAY || repeatMode == RepeatMode.YEARLY,
                         createdAt = existingEvent?.createdAt ?: System.currentTimeMillis()
                     )
@@ -744,6 +745,8 @@ fun EventDialog(
     if (showLunarCalendar) {
         LunarCalendarDialog(
             onDismiss = { showLunarCalendar = false },
+            initialLunar = selectedLunar,
+            initialDateMillis = selectedDate,
             onSelected = { lunar, gregorianDate ->
                 selectedLunar = lunar
                 selectedDate = gregorianDate
@@ -885,10 +888,16 @@ fun DatePickerDialog(
     val monthLabels = (1..12).map { "${it}月" }
 
     fun updateVisibleMonth(year: Int, month: Int) {
+        val selectedDay = Calendar.getInstance().apply { timeInMillis = selectedDate }.get(Calendar.DAY_OF_MONTH)
         visibleMonth = Calendar.getInstance().apply {
             clear()
             set(year.coerceIn(1900, 2100), month.coerceIn(0, 11), 1, 0, 0, 0)
         }
+        selectedDate = Calendar.getInstance().apply {
+            clear()
+            set(visibleMonth.get(Calendar.YEAR), visibleMonth.get(Calendar.MONTH), 1, 0, 0, 0)
+            set(Calendar.DAY_OF_MONTH, selectedDay.coerceIn(1, getActualMaximum(Calendar.DAY_OF_MONTH)))
+        }.timeInMillis
         yearText = visibleMonth.get(Calendar.YEAR).toString()
     }
 
@@ -935,7 +944,9 @@ fun DatePickerDialog(
                         value = yearText,
                         onValueChange = { value ->
                             yearText = value.filter { it.isDigit() }.take(4)
-                            yearText.toIntOrNull()?.let { updateVisibleMonth(it, visibleMonth.get(Calendar.MONTH)) }
+                            if (yearText.length == 4) {
+                                yearText.toIntOrNull()?.let { updateVisibleMonth(it, visibleMonth.get(Calendar.MONTH)) }
+                            }
                         },
                         label = { Text("年份") },
                         singleLine = true,
@@ -1033,19 +1044,25 @@ fun DatePickerDialog(
 @OptIn(ExperimentalLayoutApi::class)
 fun LunarCalendarDialog(
     onDismiss: () -> Unit,
+    initialLunar: String? = null,
+    initialDateMillis: Long? = null,
     onSelected: (String, Long) -> Unit
 ) {
-    val currentYear = Calendar.getInstance().get(Calendar.YEAR)
-    var selectedYear by remember { mutableIntStateOf(currentYear) }
-    var selectedMonth by remember { mutableIntStateOf(1) }
-    var selectedDay by remember { mutableIntStateOf(1) }
-
     val lunarMonths = listOf(
         "正月", "二月", "三月", "四月", "五月", "六月",
         "七月", "八月", "九月", "十月", "十一月", "腊月"
     )
     val lunarDays = (1..30).toList()
-    var yearText by remember { mutableStateOf(currentYear.toString()) }
+    val initialSelection = remember(initialLunar, initialDateMillis) {
+        parseLunarSelection(initialLunar, lunarMonths) ?: run {
+            val cal = Calendar.getInstance().apply { timeInMillis = initialDateMillis ?: System.currentTimeMillis() }
+            Triple(cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.DAY_OF_MONTH).coerceIn(1, 30))
+        }
+    }
+    var selectedYear by remember(initialSelection) { mutableIntStateOf(initialSelection.first) }
+    var selectedMonth by remember(initialSelection) { mutableIntStateOf(initialSelection.second) }
+    var selectedDay by remember(initialSelection) { mutableIntStateOf(initialSelection.third) }
+    var yearText by remember(initialSelection) { mutableStateOf(initialSelection.first.toString()) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1071,7 +1088,9 @@ fun LunarCalendarDialog(
                         value = yearText,
                         onValueChange = { value ->
                             yearText = value.filter { it.isDigit() }.take(4)
-                            selectedYear = yearText.toIntOrNull()?.coerceIn(1900, 2100) ?: selectedYear
+                            if (yearText.length == 4) {
+                                selectedYear = yearText.toIntOrNull()?.coerceIn(1900, 2100) ?: selectedYear
+                            }
                         },
                         label = { Text("年份") },
                         singleLine = true,
@@ -1144,6 +1163,14 @@ private fun approximateLunarSelectionDate(year: Int, month: Int, day: Int): Long
         candidate.add(Calendar.YEAR, 1)
     }
     return candidate.timeInMillis
+}
+
+private fun parseLunarSelection(lunar: String?, lunarMonths: List<String>): Triple<Int, Int, Int>? {
+    if (lunar.isNullOrBlank()) return null
+    val year = Regex("(\\d{4})年").find(lunar)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: return null
+    val month = lunarMonths.indexOfFirst { lunar.contains(it) }.takeIf { it >= 0 }?.plus(1) ?: return null
+    val day = Regex("(\\d{1,2})日").find(lunar)?.groupValues?.getOrNull(1)?.toIntOrNull()?.coerceIn(1, 30) ?: return null
+    return Triple(year.coerceIn(1900, 2100), month, day)
 }
 
 private fun formatDate(timestamp: Long): String {
