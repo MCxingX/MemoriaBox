@@ -89,12 +89,16 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
     val styleOptions = remember {
         listOf(
             CardVisualStyle.HeroWide,
+            CardVisualStyle.PosterTall,
+            CardVisualStyle.GlassCompact,
             CardVisualStyle.SplitPanel,
             CardVisualStyle.NeonRail,
             CardVisualStyle.MinimalBadge
         )
     }
     val initialStyle = when (event.cardTemplate) {
+        "POSTER" -> CardVisualStyle.PosterTall
+        "GLASS" -> CardVisualStyle.GlassCompact
         "SPLIT" -> CardVisualStyle.SplitPanel
         "NEON" -> CardVisualStyle.NeonRail
         "MINIMAL" -> CardVisualStyle.MinimalBadge
@@ -112,6 +116,8 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
     val eventTextColor = ColorUtils.hexToColor(event.textColor)
     val cardHeight = when (style) {
         CardVisualStyle.HeroWide -> 172.dp
+        CardVisualStyle.PosterTall -> 236.dp
+        CardVisualStyle.GlassCompact -> 138.dp
         CardVisualStyle.SplitPanel -> 196.dp
         CardVisualStyle.NeonRail -> 184.dp
         CardVisualStyle.MinimalBadge -> 152.dp
@@ -145,6 +151,8 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
                             }
                             styleIndex = newIndex
                             val newTemplate = when (styleOptions[newIndex]) {
+                                CardVisualStyle.PosterTall -> "POSTER"
+                                CardVisualStyle.GlassCompact -> "GLASS"
                                 CardVisualStyle.SplitPanel -> "SPLIT"
                                 CardVisualStyle.NeonRail -> "NEON"
                                 CardVisualStyle.MinimalBadge -> "MINIMAL"
@@ -243,6 +251,8 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
 
             when (style) {
                 CardVisualStyle.SplitPanel -> EventCardSplitContent(event, daysRemaining, displayFields, eventTextColor)
+                CardVisualStyle.GlassCompact -> EventCardGlassContent(event, daysRemaining, displayFields, eventTextColor)
+                CardVisualStyle.PosterTall -> EventCardPosterContent(event, daysRemaining, displayFields, eventTextColor)
                 CardVisualStyle.MinimalBadge -> EventCardMinimalContent(event, daysRemaining, displayFields, eventTextColor)
                 else -> EventCardHeroContent(event, daysRemaining, displayFields, eventTextColor, style == CardVisualStyle.NeonRail)
             }
@@ -279,6 +289,47 @@ private fun EventCardHeroContent(event: Event, daysRemaining: Long, displayField
         Text(text = event.name, style = MaterialTheme.typography.titleLarge, color = color, maxLines = 2)
         Text(text = "$daysRemaining 天", style = MaterialTheme.typography.headlineMedium, color = color)
         EventMetaLines(event, displayFields, color)
+    }
+}
+
+@Composable
+private fun EventCardPosterContent(event: Event, daysRemaining: Long, displayFields: Set<String>, color: Color) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(18.dp),
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            EventTypePill(event.type, color)
+            Text(formatDate(event.date), style = MaterialTheme.typography.labelSmall, color = color.copy(alpha = 0.86f), maxLines = 1)
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+            Text(text = "$daysRemaining", style = MaterialTheme.typography.displayMedium, color = color)
+            Text(text = "天", style = MaterialTheme.typography.titleMedium, color = color.copy(alpha = 0.88f))
+        }
+        Column {
+            Text(text = event.name, style = MaterialTheme.typography.titleLarge, color = color, maxLines = 2)
+            EventMetaLines(event, displayFields - "date", color)
+        }
+    }
+}
+
+@Composable
+private fun BoxScope.EventCardGlassContent(event: Event, daysRemaining: Long, displayFields: Set<String>, color: Color) {
+    Surface(
+        modifier = Modifier
+            .align(Alignment.BottomStart)
+            .padding(14.dp)
+            .fillMaxWidth(0.88f),
+        color = Color.White.copy(alpha = 0.18f),
+        shape = RoundedCornerShape(18.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(text = event.name, style = MaterialTheme.typography.titleMedium, color = color, maxLines = 1)
+            Text(text = "$daysRemaining 天", style = MaterialTheme.typography.headlineSmall, color = color)
+            EventMetaLines(event, displayFields, color)
+        }
     }
 }
 
@@ -330,16 +381,19 @@ private fun EventMetaLines(event: Event, displayFields: Set<String>, color: Colo
     if ("reminder" in displayFields && event.reminderEnabled) Text(text = "提前 ${event.reminderDays} 天提醒", style = MaterialTheme.typography.labelSmall, color = color.copy(alpha = 0.82f), maxLines = 1)
 }
 
-private enum class CardVisualStyle { HeroWide, SplitPanel, NeonRail, MinimalBadge }
+private enum class CardVisualStyle { HeroWide, PosterTall, GlassCompact, SplitPanel, NeonRail, MinimalBadge }
 
 private fun cardStyleLabel(style: CardVisualStyle): String = when (style) {
     CardVisualStyle.HeroWide -> "封面"
+    CardVisualStyle.PosterTall -> "海报"
+    CardVisualStyle.GlassCompact -> "玻璃"
     CardVisualStyle.SplitPanel -> "分栏"
     CardVisualStyle.NeonRail -> "光轨"
     CardVisualStyle.MinimalBadge -> "徽章"
 }
 
 private fun cardOverlayBrush(style: CardVisualStyle): Brush = when (style) {
+    CardVisualStyle.GlassCompact -> Brush.linearGradient(listOf(Color.White.copy(alpha = 0.18f), Color.Black.copy(alpha = 0.50f)))
     CardVisualStyle.SplitPanel -> Brush.horizontalGradient(listOf(Color.Black.copy(alpha = 0.70f), Color.Black.copy(alpha = 0.18f)))
     CardVisualStyle.NeonRail -> Brush.linearGradient(listOf(Color.Black.copy(alpha = 0.68f), Color.Black.copy(alpha = 0.18f), Color.Black.copy(alpha = 0.60f)))
     CardVisualStyle.MinimalBadge -> Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.18f), Color.Black.copy(alpha = 0.46f)))

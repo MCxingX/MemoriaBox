@@ -535,7 +535,7 @@ fun EventDialog(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    listOf("HERO" to "大图", "SPLIT" to "分栏", "NEON" to "光轨", "MINIMAL" to "徽章").forEach { (template, label) ->
+                    listOf("HERO" to "大图", "POSTER" to "海报", "GLASS" to "玻璃", "SPLIT" to "分栏", "NEON" to "光轨", "MINIMAL" to "徽章").forEach { (template, label) ->
                         ElevatedFilterChip(
                             selected = cardTemplate == template,
                             onClick = { cardTemplate = template },

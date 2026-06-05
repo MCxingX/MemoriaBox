@@ -862,10 +862,7 @@ fun HomeDashboard(
     val settingsVersion = AppSettings.settingsVersion
     val upcomingEnabled = remember(settingsVersion) { AppSettings.getUpcomingEventsEnabled(context) }
     val upcomingDays = remember(settingsVersion) { AppSettings.getUpcomingEventsDays(context) }
-    val urgentDays = remember(settingsVersion) { AppSettings.getUpcomingEventsUrgentDays(context) }
     val upcomingReminderEnabled = remember(settingsVersion) { AppSettings.getUpcomingEventsReminderEnabled(context) }
-    val urgentColor = remember(settingsVersion) { com.memoriabox.utils.ColorUtils.hexToColor(AppSettings.getUpcomingEventsUrgentColor(context)) }
-    val normalColor = remember(settingsVersion) { com.memoriabox.utils.ColorUtils.hexToColor(AppSettings.getUpcomingEventsNormalColor(context)) }
     val now = remember(events, settingsVersion) { System.currentTimeMillis() }
     val upcomingEvents = remember(events, upcomingEnabled, upcomingDays, now) {
         events.mapNotNull { event ->
@@ -931,9 +928,6 @@ fun HomeDashboard(
             events = visibleEvents,
             upcomingEnabled = upcomingEnabled,
             upcomingDays = upcomingDays,
-            urgentDays = urgentDays,
-            urgentColor = urgentColor,
-            normalColor = normalColor,
             now = now,
             onEventClick = onEventClick,
             onEventLongClick = onEventLongClick
@@ -1085,9 +1079,6 @@ fun AllEventsTab(
     events: List<Event>,
     upcomingEnabled: Boolean,
     upcomingDays: Int,
-    urgentDays: Int,
-    urgentColor: Color,
-    normalColor: Color,
     now: Long,
     onEventClick: (Event) -> Unit,
     onEventLongClick: (Event) -> Unit
@@ -1103,14 +1094,7 @@ fun AllEventsTab(
         }
     } else if (upcomingEnabled) {
         events.forEach { event ->
-            val daysLeft = daysUntilNextOccurrence(event, now) ?: 0
-            HomeEventRow(
-                event = event,
-                daysLeft = daysLeft,
-                accentColor = upcomingAccentColor(daysLeft, urgentDays, urgentColor, normalColor),
-                onClick = { onEventClick(event) },
-                onLongClick = { onEventLongClick(event) }
-            )
+            EnhancedEventCard(event = event, onClick = { onEventClick(event) }, onLongPress = { onEventLongClick(event) })
             Spacer(Modifier.height(6.dp))
         }
     } else if (pinnedEvents.isNotEmpty()) {
@@ -1145,9 +1129,6 @@ fun EmptyUpcomingEventHint(upcomingDays: Int) {
 }
 
 private data class UpcomingEvent(val event: Event, val daysLeft: Long)
-
-private fun upcomingAccentColor(daysLeft: Long, urgentDays: Int, urgentColor: Color, normalColor: Color): Color =
-    if (daysLeft in 0..urgentDays) urgentColor else normalColor
 
 @Composable
 fun CategoryFoldersTab(
@@ -1224,67 +1205,6 @@ fun EmptyEventListHint() {
             Text("这里还很清爽", style = MaterialTheme.typography.titleSmall)
             Spacer(Modifier.height(4.dp))
             Text("点底部中间按钮，先记录一个真正重要的日子。", style = MaterialTheme.typography.bodyMedium)
-        }
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-fun HomeEventRow(
-    event: Event,
-    daysLeft: Long,
-    accentColor: Color,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Surface(
-                color = accentColor.copy(alpha = 0.14f),
-                shape = MaterialTheme.shapes.large,
-                modifier = Modifier.size(56.dp)
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Text(daysLeft.toString(), style = MaterialTheme.typography.titleMedium, color = accentColor)
-                    Text("天", style = MaterialTheme.typography.labelSmall, color = accentColor)
-                }
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(event.name, style = MaterialTheme.typography.titleMedium, maxLines = 1)
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = listOfNotNull(
-                        if (event.isPinned) "置顶" else null,
-                        eventTypeLabel(event.type),
-                        upcomingDisplayDate(event)
-                    ).joinToString(" · "),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Surface(color = accentColor.copy(alpha = 0.14f), shape = MaterialTheme.shapes.large) {
-                Text(
-                    text = if (daysLeft == 0L) "今天" else "还剩${daysLeft}天",
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = accentColor
-                )
-            }
         }
     }
 }
@@ -1467,6 +1387,8 @@ fun repeatModeLabel(event: Event): String = when {
 }
 
 fun cardTemplateLabel(template: String): String = when (template) {
+    "POSTER" -> "海报"
+    "GLASS" -> "玻璃"
     "SPLIT" -> "分栏"
     "NEON" -> "光轨"
     "MINIMAL" -> "徽章"
@@ -2192,7 +2114,7 @@ fun SettingsScreen(
         SettingsItem(
             icon = Icons.Default.Info,
             title = "关于",
-            description = "版本 3.2.4 · MemoriaBox",
+            description = "版本 3.2.5 · MemoriaBox",
             onClick = { showAboutDialog = true }
         )
     }
@@ -2203,7 +2125,7 @@ fun SettingsScreen(
             title = { Text("关于 MemoriaBox") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("版本：3.2.4", style = MaterialTheme.typography.bodyMedium)
+                    Text("版本：3.2.5", style = MaterialTheme.typography.bodyMedium)
                     Text("MemoriaBox 是一个本地优先的日子、纪念日、待办和照片记录工具。", style = MaterialTheme.typography.bodyMedium)
                     Text("数据默认保存在本机，可通过备份和 WebDAV 功能进行迁移或同步。", style = MaterialTheme.typography.bodyMedium)
                     Text("著名木羽制作", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
