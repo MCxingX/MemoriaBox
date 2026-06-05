@@ -2138,7 +2138,7 @@ fun SettingsScreen(
         SettingsItem(
             icon = Icons.Default.Info,
             title = "关于",
-            description = "版本 3.2.10 · MemoriaBox",
+            description = "版本 3.2.11 · MemoriaBox",
             onClick = { showAboutDialog = true }
         )
     }
@@ -2149,7 +2149,7 @@ fun SettingsScreen(
             title = { Text("关于 MemoriaBox") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("版本：3.2.10", style = MaterialTheme.typography.bodyMedium)
+                    Text("版本：3.2.11", style = MaterialTheme.typography.bodyMedium)
                     Text("MemoriaBox 是一个本地优先的日子、纪念日、待办和照片记录工具。", style = MaterialTheme.typography.bodyMedium)
                     Text("数据默认保存在本机，可通过备份和 WebDAV 功能进行迁移或同步。", style = MaterialTheme.typography.bodyMedium)
                     Text("著名木羽制作", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
