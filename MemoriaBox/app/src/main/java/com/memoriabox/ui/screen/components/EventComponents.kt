@@ -714,7 +714,7 @@ fun CalendarGrid(
             }
         }
 
-        val daysToFirst = (firstDayOfWeek - Calendar.SUNDAY + 7) % 7
+        val daysToFirst = (firstDayOfWeek - Calendar.MONDAY + 7) % 7
         val totalCells = daysToFirst + daysInMonth
         val rows = (totalCells + 6) / 7
 

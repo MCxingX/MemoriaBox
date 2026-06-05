@@ -315,6 +315,11 @@ class CalendarViewModel(
     }
 
     private suspend fun saveDiaryInternal(existingDiary: DiaryEntry?, date: Long, content: String, mediaItems: List<DiaryMedia>, backgroundUri: String?) {
+        if (existingDiary != null && content.isBlank() && mediaItems.isEmpty() && backgroundUri == null) {
+            diaryRepository.deleteDiary(existingDiary)
+            _selectedDiaryMedia.value = emptyList()
+            return
+        }
         val dayStart = startOfDay(date)
         val diary = DiaryEntry(
             id = existingDiary?.id ?: java.util.UUID.randomUUID().toString(),

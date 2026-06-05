@@ -298,7 +298,7 @@ fun DiaryEditorDialog(
     var showDatePicker by remember { mutableStateOf(false) }
     val sameDateDiaries = remember(allDiaries, selectedDateStart, existingDiary?.id) {
         allDiaries
-            .filter { it.dateStart == selectedDateStart && it.id != existingDiary?.id }
+            .filter { startOfDayForEditor(it.dateStart) == selectedDateStart && it.id != existingDiary?.id }
             .sortedBy { it.createdAt }
     }
 

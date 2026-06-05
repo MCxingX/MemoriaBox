@@ -54,9 +54,9 @@ object MonthlySummaryHelper {
         playMode: Boolean,
         playSpeedFactor: Float
     ): MonthlySummaryUiState {
-        val sortedDiaries = diaries.sortedWith(compareBy<DiaryEntry> { it.dateStart }.thenBy { it.createdAt })
+        val sortedDiaries = diaries.sortedWith(compareBy<DiaryEntry> { startOfDay(it.dateStart) }.thenBy { it.createdAt })
         val mediaByDiary = media.filter { it.mediaType == DiaryMediaType.IMAGE }.groupBy { it.diaryId }
-        val slides = sortedDiaries.groupBy { it.dateStart }.toSortedMap().map { (dateStart, dayDiaries) ->
+        val slides = sortedDiaries.groupBy { startOfDay(it.dateStart) }.toSortedMap().map { (dateStart, dayDiaries) ->
             val photos = dayDiaries.flatMap { diary ->
                 mediaByDiary[diary.id].orEmpty().sortedBy { it.sortOrder }.map { item ->
                     MonthlyPhotoItem(
@@ -149,6 +149,16 @@ object MonthlySummaryHelper {
             else -> "这一天留下了一篇日记。"
         }
     }
+}
+
+private fun startOfDay(timestamp: Long): Long {
+    return Calendar.getInstance().apply {
+        timeInMillis = timestamp
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
 }
 
 fun startOfMonth(timestamp: Long): Long {
