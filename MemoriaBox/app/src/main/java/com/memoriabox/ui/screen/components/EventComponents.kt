@@ -460,7 +460,7 @@ fun CalendarViewScreen(
     var editingDiaryDate by remember { mutableStateOf<Long?>(null) }
 
     val diaryMap = remember(diaries) {
-        diaries.groupBy { it.dateStart }
+        diaries.groupBy { startOfDayMillis(it.dateStart) }
     }
 
     Column(modifier = modifier.fillMaxSize()) {
@@ -726,10 +726,14 @@ fun CalendarGrid(
                     if (dayNumber in 1..daysInMonth) {
                         val dayCal = calendar.clone() as Calendar
                         dayCal.set(Calendar.DAY_OF_MONTH, dayNumber)
+                        dayCal.set(Calendar.HOUR_OF_DAY, 0)
+                        dayCal.set(Calendar.MINUTE, 0)
+                        dayCal.set(Calendar.SECOND, 0)
+                        dayCal.set(Calendar.MILLISECOND, 0)
                         val isToday = dayNumber == todayDay && currentMonth.get(Calendar.MONTH) == todayMonth && currentMonth.get(Calendar.YEAR) == todayYear
 
                         val dayEvents = events.filter { event -> occursOnDay(event, dayCal) }
-                        val dayDiaries = diaryMap[dayCal.timeInMillis] ?: emptyList()
+                        val dayDiaries = diaryMap[startOfDayMillis(dayCal.timeInMillis)] ?: emptyList()
                         CalendarDayCell(
                             day = dayNumber,
                             isToday = isToday,
