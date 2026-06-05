@@ -12,9 +12,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import android.net.Uri
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -22,8 +24,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.TextFieldValue
@@ -302,6 +306,7 @@ fun EventDialog(
     var showDatePicker by remember { mutableStateOf(false) }
     var showLunarCalendar by remember { mutableStateOf(false) }
     var selectedLunar by remember { mutableStateOf(existingEvent?.lunar) }
+    var pendingCropUri by remember { mutableStateOf<Uri?>(null) }
     var selectedBoxId by remember { mutableStateOf(existingEvent?.boxId ?: defaultBoxId ?: (availableBoxes.firstOrNull()?.id ?: "")) }
     var showColorPickerFor by remember { mutableStateOf<String?>(null) }
     var reminderOffsetsText by remember { mutableStateOf(existingEvent?.reminderOffsets ?: (existingEvent?.reminderDays ?: 1).toString()) }
@@ -310,7 +315,7 @@ fun EventDialog(
     var showRepeatEndPicker by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        backgroundUri = uri?.let { ImageImportUtils.copyImageToPrivateStorage(context, it, "event_images") } ?: backgroundUri
+        pendingCropUri = uri
     }
 
     AlertDialog(
@@ -775,6 +780,90 @@ fun EventDialog(
             }
         )
     }
+
+    pendingCropUri?.let { uri ->
+        EventImageCropDialog(
+            sourceUri = uri,
+            onDismiss = { pendingCropUri = null },
+            onSave = { scale, offsetX, offsetY ->
+                backgroundUri = ImageImportUtils.cropImageToPrivateStorage(
+                    context = context,
+                    sourceUri = uri,
+                    folder = "event_images",
+                    cropAspectRatio = 16f / 9f,
+                    scale = scale,
+                    offsetX = offsetX,
+                    offsetY = offsetY
+                ) ?: ImageImportUtils.copyImageToPrivateStorage(context, uri, "event_images") ?: backgroundUri
+                pendingCropUri = null
+            }
+        )
+    }
+}
+
+@Composable
+private fun EventImageCropDialog(
+    sourceUri: Uri,
+    onDismiss: () -> Unit,
+    onSave: (scale: Float, offsetX: Float, offsetY: Float) -> Unit
+) {
+    var scale by remember(sourceUri) { mutableFloatStateOf(1f) }
+    var offsetX by remember(sourceUri) { mutableFloatStateOf(0f) }
+    var offsetY by remember(sourceUri) { mutableFloatStateOf(0f) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("调整卡片背景") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("拖动图片调整位置，双指缩放后保存。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(220.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .pointerInput(sourceUri) {
+                            detectTransformGestures { _, pan, zoom, _ ->
+                                scale = (scale * zoom).coerceIn(1f, 3.5f)
+                                offsetX = (offsetX + pan.x / 180f).coerceIn(-1f, 1f)
+                                offsetY = (offsetY + pan.y / 180f).coerceIn(-1f, 1f)
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    AsyncImage(
+                        model = sourceUri,
+                        contentDescription = "裁剪预览",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .matchParentSize()
+                            .graphicsLayer {
+                                scaleX = scale
+                                scaleY = scale
+                                translationX = offsetX * 120f
+                                translationY = offsetY * 120f
+                            }
+                    )
+                    Box(modifier = Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.08f)))
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = {
+                        scale = 1f
+                        offsetX = 0f
+                        offsetY = 0f
+                    }) { Text("重置") }
+                    OutlinedButton(onClick = { scale = (scale + 0.2f).coerceAtMost(3.5f) }) { Text("放大") }
+                    OutlinedButton(onClick = { scale = (scale - 0.2f).coerceAtLeast(1f) }) { Text("缩小") }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onSave(scale, offsetX, offsetY) }) { Text("保存裁剪") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        }
+    )
 }
 
 @Composable

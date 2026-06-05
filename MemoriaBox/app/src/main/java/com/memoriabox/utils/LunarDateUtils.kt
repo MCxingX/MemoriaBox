@@ -29,6 +29,8 @@ object LunarDateUtils {
         return null
     }
 
+    fun isGregorianMatchingLunar(timeMillis: Long, month: Int, day: Int): Boolean = isMonthDay(timeMillis, month, day)
+
     fun daysUntilNextOccurrence(lunar: String, nowMillis: Long = System.currentTimeMillis()): Long? {
         val next = nextOccurrenceMillis(lunar, nowMillis) ?: return null
         return TimeUnit.MILLISECONDS.toDays(startOfDay(next).timeInMillis - startOfDay(nowMillis).timeInMillis)
