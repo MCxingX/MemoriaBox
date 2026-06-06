@@ -115,7 +115,8 @@ fun BackupSettingsContent(
     modifier: Modifier = Modifier,
     onSelectDir: () -> Unit = {},
     onManualBackup: () -> Unit = {},
-    onImport: () -> Unit = {}
+    onImport: () -> Unit = {},
+    isBusy: Boolean = false
 ) {
     Column(
         modifier = modifier
@@ -129,23 +130,33 @@ fun BackupSettingsContent(
             Column(modifier = Modifier.padding(16.dp)) {
                 Text("本地备份", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(8.dp))
-                Button(onClick = onSelectDir, modifier = Modifier.fillMaxWidth()) {
+                Button(onClick = onSelectDir, enabled = !isBusy, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Default.Folder, null)
                     Spacer(Modifier.width(8.dp))
                     Text("选择备份目录")
                 }
                 Spacer(Modifier.height(8.dp))
-                Button(onClick = onManualBackup, modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Default.Backup, null)
+                Button(onClick = onManualBackup, enabled = !isBusy, modifier = Modifier.fillMaxWidth()) {
+                    if (isBusy) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    } else {
+                        Icon(Icons.Default.Backup, null)
+                    }
                     Spacer(Modifier.width(8.dp))
-                    Text("立即备份")
+                    Text(if (isBusy) "处理中" else "立即备份")
                 }
                 Spacer(Modifier.height(8.dp))
-                Button(onClick = onImport, modifier = Modifier.fillMaxWidth()) {
+                Button(onClick = onImport, enabled = !isBusy, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Default.Upload, null)
                     Spacer(Modifier.width(8.dp))
                     Text("导入备份")
                 }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "备份文件可跨设备导入。导入成功后请重启应用，以加载恢复后的数据库。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }

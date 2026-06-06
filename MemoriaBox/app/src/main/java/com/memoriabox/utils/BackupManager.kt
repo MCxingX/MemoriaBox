@@ -31,6 +31,7 @@ class BackupManager(
         private const val TAG = "BackupManager"
         private const val AUTO_BACKUP_DIR = "auto_backup"
         private const val BACKUP_EXTENSION = ".mbox"
+        private const val BACKUP_KEY_ALIAS = "memoriabox-portable-backup"
     }
 
     fun initialize() {
@@ -96,6 +97,7 @@ class BackupManager(
                 return
             }
 
+            checkpointDatabase()
             val encryptedFile = encryptDatabase(dbPath, config.backupPassword)
             val resultUri = copyFileToDir(encryptedFile, dir, fileName)
             if (resultUri != null) {
@@ -122,7 +124,8 @@ class BackupManager(
             }
 
             onProgress(20)
-            val encryptedFile = encryptDatabase(dbPath, password.ifEmpty { null })
+            checkpointDatabase()
+            val encryptedFile = encryptDatabase(dbPath, password)
             onProgress(60)
             
             val resultUri = copyFileToDir(encryptedFile, outputDir, fileName)
@@ -144,7 +147,7 @@ class BackupManager(
         return try {
             onProgress(20)
             
-            val decrypted = decryptDatabase(backupUri, password.ifEmpty { null }, tempFile)
+            val decrypted = decryptDatabase(backupUri, password, tempFile)
             if (!decrypted) {
                 return Result.failure(IllegalStateException("Decryption failed or wrong password"))
             }
@@ -196,7 +199,7 @@ class BackupManager(
         val key = if (!password.isNullOrEmpty()) {
             deriveKeyFromPassword(password, salt)
         } else {
-            getDeviceKey()
+            deriveKeyFromPassword(BACKUP_KEY_ALIAS, salt)
         }
 
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
@@ -228,18 +231,8 @@ class BackupManager(
                 val salt = ByteArray(16).also { input.read(it) }
                 val iv = ByteArray(12).also { input.read(it) }
 
-                val key = if (!password.isNullOrEmpty()) {
-                    deriveKeyFromPassword(password, salt)
-                } else {
-                    getDeviceKey()
-                }
-
-                val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-                val spec = GCMParameterSpec(128, iv)
-                cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), spec)
-
                 val remainingBytes = input.readBytes()
-                val decrypted = cipher.update(remainingBytes) + cipher.doFinal()
+                val decrypted = decryptBytes(remainingBytes, salt, iv, password)
 
                 FileOutputStream(output).use { it.write(decrypted) }
             }
@@ -252,8 +245,43 @@ class BackupManager(
 
     private suspend fun restoreDatabase(tempFile: File) {
         val dbPath = context.getDatabasePath("memoriabox.db")
-        if (dbPath.exists()) dbPath.delete()
+        AppDatabase.closeCurrentDatabase()
+        clearDatabaseFiles(dbPath)
         tempFile.copyTo(dbPath, overwrite = true)
+    }
+
+    private fun checkpointDatabase() {
+        database.openHelper.writableDatabase.query("PRAGMA wal_checkpoint(FULL)").use { }
+    }
+
+    private fun clearDatabaseFiles(dbPath: File) {
+        listOf(
+            dbPath,
+            File(dbPath.parentFile, "${dbPath.name}-wal"),
+            File(dbPath.parentFile, "${dbPath.name}-shm")
+        ).forEach { file ->
+            if (file.exists()) file.delete()
+        }
+    }
+
+    private fun decryptBytes(encryptedBytes: ByteArray, salt: ByteArray, iv: ByteArray, password: String?): ByteArray {
+        val keys = if (!password.isNullOrEmpty()) {
+            listOf(deriveKeyFromPassword(password, salt))
+        } else {
+            listOf(deriveKeyFromPassword(BACKUP_KEY_ALIAS, salt), getDeviceKey())
+        }
+        var lastError: Exception? = null
+        keys.forEach { key ->
+            try {
+                val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+                val spec = GCMParameterSpec(128, iv)
+                cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), spec)
+                return cipher.update(encryptedBytes) + cipher.doFinal()
+            } catch (e: Exception) {
+                lastError = e
+            }
+        }
+        throw lastError ?: IllegalStateException("Unable to decrypt backup")
     }
 
     private fun copyFileToDir(sourceFile: File, targetDir: Uri, fileName: String): Uri? {

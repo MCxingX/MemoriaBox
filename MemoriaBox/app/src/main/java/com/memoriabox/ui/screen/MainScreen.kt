@@ -2412,8 +2412,19 @@ fun BackupSettingsScreen(
     onNavigateBack: () -> Unit
 ) {
     val viewModel = remember { createBackupViewModel(application) }
+    val operationState by viewModel.operationState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val snackbarScope = rememberCoroutineScope()
+
+    LaunchedEffect(operationState.message) {
+        operationState.message?.let { message ->
+            snackbarHostState.showSnackbar(
+                message = message,
+                duration = if (operationState.importRestored) SnackbarDuration.Long else SnackbarDuration.Short
+            )
+            viewModel.clearOperationMessage()
+        }
+    }
 
     val dirPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
@@ -2431,7 +2442,6 @@ fun BackupSettingsScreen(
     ) { uri ->
         if (uri != null) {
             viewModel.triggerManualBackup(uri)
-            snackbarScope.launch { snackbarHostState.showSnackbar("正在备份到所选目录") }
         } else {
             snackbarScope.launch { snackbarHostState.showSnackbar("未选择备份目录") }
         }
@@ -2442,7 +2452,6 @@ fun BackupSettingsScreen(
     ) { uri ->
         if (uri != null) {
             viewModel.importBackup(uri)
-            snackbarScope.launch { snackbarHostState.showSnackbar("正在导入备份") }
         } else {
             snackbarScope.launch { snackbarHostState.showSnackbar("未选择备份文件") }
         }
@@ -2465,7 +2474,8 @@ fun BackupSettingsScreen(
             modifier = Modifier.padding(paddingValues),
             onSelectDir = { dirPicker.launch(null) },
             onManualBackup = { exportPicker.launch(null) },
-            onImport = { importPicker.launch(arrayOf("application/octet-stream", "application/x-sqlite3", "application/vnd.sqlite3", "*/*")) }
+            onImport = { importPicker.launch(arrayOf("application/octet-stream", "application/x-sqlite3", "application/vnd.sqlite3", "*/*")) },
+            isBusy = operationState.inProgress
         )
     }
 }

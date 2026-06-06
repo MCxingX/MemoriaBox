@@ -387,6 +387,15 @@ class BackupViewModel(
     private val backupManager: BackupManager
 ) : AndroidViewModel(application) {
 
+    data class OperationState(
+        val inProgress: Boolean = false,
+        val message: String? = null,
+        val importRestored: Boolean = false
+    )
+
+    private val _operationState = MutableStateFlow(OperationState())
+    val operationState: StateFlow<OperationState> = _operationState.asStateFlow()
+
     init { backupManager.initialize() }
 
     fun saveBackupDirUri(uri: Uri) { backupManager.saveBackupDirUri(uri) }
@@ -395,21 +404,33 @@ class BackupViewModel(
         backupManager.updateConfig(config)
     }
 
+    fun clearOperationMessage() {
+        _operationState.value = _operationState.value.copy(message = null, importRestored = false)
+    }
+
     fun triggerManualBackup(outputUri: Uri, password: String = "") = viewModelScope.launch {
-        try {
-            backupManager.performManualBackup(outputUri, password)
-            logRepository.logBackupOperation("MANUAL", "success")
-        } catch (e: Exception) {
-            logRepository.logBackupOperation("MANUAL", "failed", e.message)
+        _operationState.value = OperationState(inProgress = true, message = "正在导出备份")
+        runCatching {
+            backupManager.performManualBackup(outputUri, password).getOrThrow()
+        }.onSuccess { backupUri ->
+            _operationState.value = OperationState(message = "备份导出成功：${backupUri?.lastPathSegment ?: "已保存"}")
+            runCatching { logRepository.logBackupOperation("MANUAL", "success") }
+        }.onFailure { e ->
+            _operationState.value = OperationState(message = "备份导出失败：${e.message ?: "未知错误"}")
+            runCatching { logRepository.logBackupOperation("MANUAL", "failed", e.message) }
         }
     }
 
     fun importBackup(uri: Uri, password: String = "") = viewModelScope.launch {
-        try {
-            backupManager.importBackup(uri, password)
-            logRepository.logBackupOperation("IMPORT", "success")
-        } catch (e: Exception) {
-            logRepository.logBackupOperation("IMPORT", "failed", e.message)
+        _operationState.value = OperationState(inProgress = true, message = "正在导入备份")
+        runCatching {
+            backupManager.importBackup(uri, password).getOrThrow()
+        }.onSuccess {
+            _operationState.value = OperationState(message = "备份导入成功，请重启应用查看恢复后的数据。", importRestored = true)
+            runCatching { logRepository.logBackupOperation("IMPORT", "success") }
+        }.onFailure { e ->
+            _operationState.value = OperationState(message = "备份导入失败：${e.message ?: "未知错误"}")
+            runCatching { logRepository.logBackupOperation("IMPORT", "failed", e.message) }
         }
     }
 }
