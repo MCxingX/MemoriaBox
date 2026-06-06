@@ -549,7 +549,7 @@ fun CalendarViewScreen(
             val widthCell = (maxWidth - horizontalPadding * 2) / 7
             val fontScale = LocalDensity.current.fontScale
             val cellSize = (widthCell * (1f + (fontScale - 1f).coerceAtLeast(0f) * 0.35f))
-                .coerceIn(38.dp, 72.dp)
+                .coerceIn(52.dp, 78.dp)
             CalendarGrid(
                 currentMonth = cal,
                 events = events,
@@ -562,6 +562,7 @@ fun CalendarViewScreen(
             )
             MonthlyMediaFloatingButton(
                 hasMedia = hasMonthlyMedia,
+                mediaCount = monthlyImages.size + monthlyVideos.size,
                 month = currentMonth,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
@@ -699,6 +700,7 @@ fun CalendarViewScreen(
 @Composable
 private fun MonthlyMediaFloatingButton(
     hasMedia: Boolean,
+    mediaCount: Int,
     month: Int,
     modifier: Modifier = Modifier,
     onClick: () -> Unit
@@ -735,14 +737,33 @@ private fun MonthlyMediaFloatingButton(
                 color = if (hasMedia) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(8.dp)
-                .size(9.dp)
-                .clip(RoundedCornerShape(999.dp))
-                .background(if (hasMedia) Color(0xFFB7FF6A) else MaterialTheme.colorScheme.outline)
-        )
+        if (hasMedia) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(5.dp),
+                shape = RoundedCornerShape(999.dp),
+                color = Color(0xFFFFF4C2),
+                shadowElevation = 2.dp
+            ) {
+                Text(
+                    text = mediaCount.coerceAtMost(99).toString(),
+                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color(0xFF7A3B00),
+                    maxLines = 1
+                )
+            }
+        } else {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp)
+                    .size(9.dp)
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(MaterialTheme.colorScheme.outline)
+            )
+        }
     }
 }
 
@@ -1023,7 +1044,7 @@ fun CalendarDayCell(
     modifier: Modifier = Modifier,
     onClick: () -> Unit = {}
 ) {
-    Column(
+    Box(
         modifier = modifier
             .padding(2.dp)
             .clip(RoundedCornerShape(18.dp))
@@ -1033,31 +1054,63 @@ fun CalendarDayCell(
                 else Brush.linearGradient(listOf(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.52f)))
             )
             .padding(horizontal = 2.dp, vertical = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically)
     ) {
-        Text(
-            text = day.toString(),
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-        )
-        Text(
-            text = lunarDayLabel,
-            style = MaterialTheme.typography.labelSmall,
-            color = if (isToday) MaterialTheme.colorScheme.primary.copy(alpha = 0.78f) else MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            textAlign = TextAlign.Center
-        )
+        Column(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .padding(top = 1.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(1.dp)
+        ) {
+            Text(
+                text = day.toString(),
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                textAlign = TextAlign.Center
+            )
+            Text(
+                text = lunarDayLabel,
+                style = MaterialTheme.typography.labelSmall,
+                color = if (isToday) MaterialTheme.colorScheme.primary.copy(alpha = 0.78f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                textAlign = TextAlign.Center
+            )
+        }
         if (events.isNotEmpty() || diaries.isNotEmpty()) {
-            Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 if (events.isNotEmpty()) {
-                    repeat(minOf(events.size, 3)) {
-                        val dotColor = listOf(Color(0xFFFF6B6B), Color(0xFF7C5CFF), Color(0xFF00B8D9))[it]
-                        Box(modifier = Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(dotColor))
+                    Box(
+                        modifier = Modifier
+                            .height(7.dp)
+                            .width(if (events.size > 1) 16.dp else 9.dp)
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(Color(0xFFFF8A00))
+                    )
+                    if (events.size > 1) {
+                        Text(
+                            text = events.size.coerceAtMost(9).toString(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFFFF8A00),
+                            maxLines = 1
+                        )
                     }
                 }
                 if (diaries.isNotEmpty()) {
-                    Box(modifier = Modifier.size(7.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFF42A5F5)))
+                    Box(
+                        modifier = Modifier
+                            .height(7.dp)
+                            .width(if (diaries.size > 1) 16.dp else 9.dp)
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(Color(0xFF1E88E5))
+                    )
                 }
             }
         }
