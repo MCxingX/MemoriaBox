@@ -940,6 +940,10 @@ fun HomeDashboard(
         }
         Spacer(Modifier.height(adaptiveUi.sectionSpacing))
         HomeHeroCard(
+            totalEvents = visibleEvents.size,
+            boxCount = boxes.size,
+            upcomingDays = upcomingDays,
+            upcomingEnabled = upcomingEnabled,
             onEventsClick = { onTabSelected(0) },
             onBoxesClick = { onTabSelected(1) },
             adaptiveUi = adaptiveUi
@@ -951,7 +955,8 @@ fun HomeDashboard(
             upcomingDays = upcomingDays,
             now = now,
             onEventClick = onEventClick,
-            onEventLongClick = onEventLongClick
+            onEventLongClick = onEventLongClick,
+            adaptiveUi = adaptiveUi
         )
         }
     }
@@ -959,6 +964,10 @@ fun HomeDashboard(
 
 @Composable
 fun HomeHeroCard(
+    totalEvents: Int,
+    boxCount: Int,
+    upcomingDays: Int,
+    upcomingEnabled: Boolean,
     onEventsClick: () -> Unit = {},
     onBoxesClick: () -> Unit = {},
     adaptiveUi: AdaptiveUiSize
@@ -999,7 +1008,8 @@ fun HomeHeroCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(adaptiveUi.cardRadius),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (adaptiveUi.compact) 2.dp else 4.dp)
     ) {
         Box(
             modifier = Modifier
@@ -1014,19 +1024,56 @@ fun HomeHeroCard(
                         )
                     )
                 )
-                .padding(if (adaptiveUi.compact) 12.dp else 16.dp)
+                .padding(if (adaptiveUi.compact) 14.dp else 18.dp)
         ) {
-            Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
-                Surface(color = Color.White.copy(alpha = 0.22f), shape = MaterialTheme.shapes.large) {
-                    Text(dailyQuote.title, modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp), color = Color.White, style = MaterialTheme.typography.labelSmall)
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = 34.dp, y = (-38).dp)
+                    .size(if (adaptiveUi.compact) 104.dp else 132.dp)
+                    .background(Color.White.copy(alpha = 0.12f), RoundedCornerShape(999.dp))
+            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .offset(x = (-44).dp, y = 38.dp)
+                    .size(if (adaptiveUi.compact) 90.dp else 118.dp)
+                    .background(Color.Black.copy(alpha = 0.08f), RoundedCornerShape(999.dp))
+            )
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(if (adaptiveUi.compact) 12.dp else 14.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(color = Color.White.copy(alpha = 0.22f), shape = MaterialTheme.shapes.large) {
+                        Text(dailyQuote.title, modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp), color = Color.White, style = MaterialTheme.typography.labelSmall)
+                    }
+                    Text(
+                        if (upcomingEnabled) "${upcomingDays} 天内优先" else "完整日子流",
+                        color = Color.White.copy(alpha = 0.84f),
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1
+                    )
                 }
-                Spacer(Modifier.height(14.dp))
                 Text(
                     text = dailyQuote.content,
                     modifier = Modifier.fillMaxWidth(),
                     color = Color.White,
-                    style = MaterialTheme.typography.titleMedium
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 2
                 )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(if (adaptiveUi.compact) 8.dp else 10.dp)
+                ) {
+                    HeroStatPill("日子", totalEvents.toString(), Modifier.weight(1f), onEventsClick)
+                    HeroStatPill("分组", boxCount.toString(), Modifier.weight(1f), onBoxesClick)
+                    HeroStatPill("节奏", if (upcomingEnabled) "${upcomingDays}天" else "全部", Modifier.weight(1f), onEventsClick)
+                }
             }
         }
     }
@@ -1102,10 +1149,12 @@ fun AllEventsTab(
     upcomingDays: Int,
     now: Long,
     onEventClick: (Event) -> Unit,
-    onEventLongClick: (Event) -> Unit
+    onEventLongClick: (Event) -> Unit,
+    adaptiveUi: AdaptiveUiSize
 ) {
     val pinnedEvents = events.filter { it.isPinned }
     val normalEvents = events.filter { !it.isPinned }
+    val eventSpacing = if (adaptiveUi.compact) 7.dp else if (adaptiveUi.roomy) 10.dp else 8.dp
     
     if (events.isEmpty()) {
         if (upcomingEnabled) {
@@ -1116,21 +1165,21 @@ fun AllEventsTab(
     } else if (upcomingEnabled) {
         events.forEach { event ->
             EnhancedEventCard(event = event, onClick = { onEventClick(event) }, onLongPress = { onEventLongClick(event) })
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(eventSpacing))
         }
     } else if (pinnedEvents.isNotEmpty()) {
         Text("置顶", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(eventSpacing))
         pinnedEvents.forEach { event ->
             EnhancedEventCard(event = event, onClick = { onEventClick(event) }, onLongPress = { onEventLongClick(event) })
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(eventSpacing))
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(eventSpacing))
     }
     if (events.isNotEmpty() && !upcomingEnabled) {
         normalEvents.forEach { event ->
             EnhancedEventCard(event = event, onClick = { onEventClick(event) }, onLongPress = { onEventLongClick(event) })
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(eventSpacing))
         }
     }
 }

@@ -117,12 +117,12 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
     val displayFields = event.displayFields.split(",").map { it.trim() }.toSet()
     val eventTextColor = ColorUtils.hexToColor(event.textColor)
     val cardHeight = when (style) {
-        CardVisualStyle.HeroWide -> 172.dp
-        CardVisualStyle.PosterTall -> 236.dp
-        CardVisualStyle.GlassCompact -> 138.dp
-        CardVisualStyle.SplitPanel -> 196.dp
-        CardVisualStyle.NeonRail -> 184.dp
-        CardVisualStyle.MinimalBadge -> 152.dp
+        CardVisualStyle.HeroWide -> 164.dp
+        CardVisualStyle.PosterTall -> 216.dp
+        CardVisualStyle.GlassCompact -> 132.dp
+        CardVisualStyle.SplitPanel -> 176.dp
+        CardVisualStyle.NeonRail -> 172.dp
+        CardVisualStyle.MinimalBadge -> 144.dp
     }
 
     Card(
@@ -135,7 +135,7 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
                 rotationZ = dragProgress * 4f
                 translationX = dragOffset * 0.22f
             }
-            .shadow(elevation = animatedElevation, shape = RoundedCornerShape(22.dp))
+            .shadow(elevation = animatedElevation, shape = RoundedCornerShape(24.dp))
             .pointerInput(event.id) {
                 detectDragGestures(
                     onDragStart = { isDragging = true },
@@ -171,14 +171,14 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
                 )
             }
             .combinedClickable(onClick = onClick, onLongClick = onLongPress),
-        shape = RoundedCornerShape(22.dp),
+        shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = if (isDragging) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.72f)) else null
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .clip(RoundedCornerShape(22.dp))
+                .clip(RoundedCornerShape(24.dp))
         ) {
             if (hasImage) {
                 if (style == CardVisualStyle.HeroWide) {
@@ -262,7 +262,7 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
             Surface(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(12.dp),
+                    .padding(10.dp),
                 color = Color.White.copy(alpha = if (isDragging) 0.30f else 0.16f),
                 shape = RoundedCornerShape(999.dp)
             ) {
@@ -282,15 +282,19 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
 private fun EventCardHeroContent(event: Event, daysRemaining: Long, displayFields: Set<String>, color: Color, insetForRail: Boolean) {
     Column(
         modifier = Modifier
-            .fillMaxWidth(0.82f)
-            .padding(if (insetForRail) 20.dp else 16.dp)
-            .wrapContentHeight()
+            .fillMaxSize()
+            .padding(if (insetForRail) 18.dp else 16.dp),
+        verticalArrangement = Arrangement.SpaceBetween
     ) {
-        EventTypePill(event.type, color)
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(text = event.name, style = MaterialTheme.typography.titleLarge, color = color, maxLines = 2)
-        Text(text = "$daysRemaining 天", style = MaterialTheme.typography.headlineMedium, color = color)
-        EventMetaLines(event, displayFields, color)
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            EventTypePill(event.type, color)
+            Text(formatDate(event.date), style = MaterialTheme.typography.labelSmall, color = color.copy(alpha = 0.82f), maxLines = 1)
+        }
+        Column(modifier = Modifier.fillMaxWidth(0.84f)) {
+            Text(text = event.name, style = MaterialTheme.typography.titleLarge, color = color, maxLines = 2)
+            Text(text = "$daysRemaining 天", style = MaterialTheme.typography.headlineMedium, color = color)
+            EventMetaLines(event, displayFields - "date", color)
+        }
     }
 }
 
@@ -299,7 +303,7 @@ private fun EventCardPosterContent(event: Event, daysRemaining: Long, displayFie
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(18.dp),
+            .padding(16.dp),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -322,7 +326,7 @@ private fun BoxScope.EventCardGlassContent(event: Event, daysRemaining: Long, di
     Surface(
         modifier = Modifier
             .align(Alignment.BottomStart)
-            .padding(14.dp)
+            .padding(12.dp)
             .fillMaxWidth(0.88f),
         color = Color.White.copy(alpha = 0.18f),
         shape = RoundedCornerShape(18.dp)
@@ -340,11 +344,11 @@ private fun EventCardSplitContent(event: Event, daysRemaining: Long, displayFiel
     Row(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
+            .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Surface(color = Color.White.copy(alpha = 0.22f), shape = RoundedCornerShape(18.dp), modifier = Modifier.size(76.dp)) {
+        Surface(color = Color.White.copy(alpha = 0.22f), shape = RoundedCornerShape(18.dp), modifier = Modifier.size(70.dp)) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center, modifier = Modifier.fillMaxSize()) {
                 Text(text = "$daysRemaining", style = MaterialTheme.typography.headlineMedium, color = color, maxLines = 1)
                 Text(text = "天", style = MaterialTheme.typography.labelSmall, color = color.copy(alpha = 0.82f))
