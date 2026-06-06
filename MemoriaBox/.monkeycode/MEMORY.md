@@ -38,3 +38,11 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - 涉及 Android UI 布局修复时，优先使用多分辨率、自适应和字体缩放兼容方案。
   - 避免以单一机型、单一分辨率或固定高度作为布局修复依据。
   - 日历、卡片、弹窗等密集布局需要兼容不同屏幕宽度、系统字体大小和显示大小。
+
+[UI 调色排版 Skill 工作流]
+- Date: 2026-06-06
+- Context: 用户要求后续修改 UI、调色、排版问题时固定调用两个设计 skill
+- Instructions:
+  - 后续涉及 UI 修改、调色、视觉层级、布局排版、页面高级感或审美优化时，优先应用 `impeccable` 和 `design-taste-frontend` 两个 skill 的规则。
+  - 若当前 opencode 会话尚未加载新安装的 skill，应直接读取 `/root/.config/opencode/skills/impeccable/SKILL.md` 和 `/root/.config/opencode/skills/design-taste-frontend/SKILL.md` 后执行。
+  - UI 改造需要兼顾 `impeccable` 的产品级完成度、可访问性、对比度、响应式要求，以及 `design-taste-frontend` 的 anti-slop、设计读法和排版克制规则。
