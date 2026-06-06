@@ -31,6 +31,12 @@ object LunarDateUtils {
 
     fun isGregorianMatchingLunar(timeMillis: Long, month: Int, day: Int): Boolean = isMonthDay(timeMillis, month, day)
 
+    fun dayLabelForGregorian(timeMillis: Long): String {
+        val chineseCalendar = ChineseCalendar().apply { this.timeInMillis = timeMillis }
+        val day = chineseCalendar.get(Calendar.DAY_OF_MONTH)
+        return dayLabel(day)
+    }
+
     fun daysUntilNextOccurrence(lunar: String, nowMillis: Long = System.currentTimeMillis()): Long? {
         val next = nextOccurrenceMillis(lunar, nowMillis) ?: return null
         return TimeUnit.MILLISECONDS.toDays(startOfDay(next).timeInMillis - startOfDay(nowMillis).timeInMillis)

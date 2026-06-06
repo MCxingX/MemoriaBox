@@ -994,8 +994,10 @@ fun CalendarGrid(
 
                         val dayEvents = events.filter { event -> occursOnDay(event, dayCal) }
                         val dayDiaries = diaryMap[startOfDayMillis(dayCal.timeInMillis)] ?: emptyList()
+                        val lunarDayLabel = LunarDateUtils.dayLabelForGregorian(dayCal.timeInMillis)
                         CalendarDayCell(
                             day = dayNumber,
+                            lunarDayLabel = lunarDayLabel,
                             isToday = isToday,
                             events = dayEvents,
                             diaries = dayDiaries,
@@ -1014,6 +1016,7 @@ fun CalendarGrid(
 @Composable
 fun CalendarDayCell(
     day: Int,
+    lunarDayLabel: String,
     isToday: Boolean,
     events: List<Event>,
     diaries: List<DiaryEntry> = emptyList(),
@@ -1037,6 +1040,13 @@ fun CalendarDayCell(
             text = day.toString(),
             style = MaterialTheme.typography.bodyMedium,
             color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = lunarDayLabel,
+            style = MaterialTheme.typography.labelSmall,
+            color = if (isToday) MaterialTheme.colorScheme.primary.copy(alpha = 0.78f) else MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            textAlign = TextAlign.Center
         )
         if (events.isNotEmpty() || diaries.isNotEmpty()) {
             Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -1274,6 +1284,14 @@ private fun startOfDayMillis(timestamp: Long): Long {
 
 private fun occursOnDay(event: Event, dayCal: Calendar): Boolean {
     val eventCal = Calendar.getInstance().apply { timeInMillis = event.date }
+    val lunarMonthDay = if (event.type == EventType.BIRTHDAY && !event.lunar.isNullOrBlank()) {
+        LunarDateUtils.parseMonthDay(event.lunar)
+    } else {
+        null
+    }
+    if (lunarMonthDay != null) {
+        return LunarDateUtils.isGregorianMatchingLunar(dayCal.timeInMillis, lunarMonthDay.first, lunarMonthDay.second)
+    }
     fun sameDay(left: Calendar, right: Calendar): Boolean {
         return left.get(Calendar.YEAR) == right.get(Calendar.YEAR) &&
             left.get(Calendar.MONTH) == right.get(Calendar.MONTH) &&
