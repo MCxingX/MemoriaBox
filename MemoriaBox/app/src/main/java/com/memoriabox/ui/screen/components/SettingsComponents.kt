@@ -153,7 +153,7 @@ fun BackupSettingsContent(
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "备份文件可跨设备导入。导入成功后请重启应用，以加载恢复后的数据库。",
+                    "备份文件可跨设备导入。导入会合并到当前数据，保留现有日子、日记和素材。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

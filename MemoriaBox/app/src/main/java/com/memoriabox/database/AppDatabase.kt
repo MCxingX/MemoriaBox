@@ -83,13 +83,6 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        fun closeCurrentDatabase() {
-            synchronized(this) {
-                INSTANCE?.close()
-                INSTANCE = null
-            }
-        }
-
         fun getOrCreatePassphrase(context: Context, keyAlias: String?): ByteArray {
             val prefs = context.getSharedPreferences("db_key", Context.MODE_PRIVATE)
             var encodedKey = prefs.getString("encoded_key", null)

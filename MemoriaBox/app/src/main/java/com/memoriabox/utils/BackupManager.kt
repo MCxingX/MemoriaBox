@@ -4,7 +4,15 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import androidx.documentfile.provider.DocumentFile
+import androidx.room.Room
+import androidx.room.withTransaction
 import com.memoriabox.database.AppDatabase
+import com.memoriabox.database.MIGRATION_1_2
+import com.memoriabox.database.MIGRATION_2_3
+import com.memoriabox.database.MIGRATION_3_4
+import com.memoriabox.database.MIGRATION_4_5
+import com.memoriabox.database.MIGRATION_5_6
+import com.memoriabox.database.MIGRATION_6_7
 import com.memoriabox.data.model.BackupConfig
 import kotlinx.coroutines.*
 import java.io.*
@@ -142,7 +150,7 @@ class BackupManager(
         password: String = "",
         onProgress: (Int) -> Unit = {}
     ): Result<Unit> {
-        val tempFile = File(context.cacheDir, "temp_import_backup.db")
+        val tempFile = File(context.cacheDir, "temp_import_backup_${System.currentTimeMillis()}.db")
         tempFile.delete()
         return try {
             onProgress(20)
@@ -153,7 +161,7 @@ class BackupManager(
             }
             
             onProgress(60)
-            restoreDatabase(tempFile)
+            mergeDatabase(tempFile)
             onProgress(100)
             
             Result.success(Unit)
@@ -243,11 +251,37 @@ class BackupManager(
         }
     }
 
-    private suspend fun restoreDatabase(tempFile: File) {
-        val dbPath = context.getDatabasePath("memoriabox.db")
-        AppDatabase.closeCurrentDatabase()
-        clearDatabaseFiles(dbPath)
-        tempFile.copyTo(dbPath, overwrite = true)
+    private suspend fun mergeDatabase(tempFile: File) {
+        val importDbName = "import_${tempFile.name}"
+        val importDbPath = context.getDatabasePath(importDbName)
+        clearDatabaseFiles(importDbPath)
+        tempFile.copyTo(importDbPath, overwrite = true)
+
+        val importDb = Room.databaseBuilder(context, AppDatabase::class.java, importDbName)
+            .addMigrations(
+                MIGRATION_1_2,
+                MIGRATION_2_3,
+                MIGRATION_3_4,
+                MIGRATION_4_5,
+                MIGRATION_5_6,
+                MIGRATION_6_7
+            )
+            .build()
+
+        try {
+            database.withTransaction {
+                importDb.boxDao().getAllBoxesOnce().takeIf { it.isNotEmpty() }?.let { database.boxDao().insertBoxes(it) }
+                importDb.labelDao().getAllLabelsOnce().takeIf { it.isNotEmpty() }?.let { database.labelDao().insertLabels(it) }
+                importDb.eventDao().getAllEventsOnce().takeIf { it.isNotEmpty() }?.let { database.eventDao().insertEvents(it) }
+                importDb.labelDao().getAllEventLabelsOnce().takeIf { it.isNotEmpty() }?.let { database.labelDao().addEventLabels(it) }
+                importDb.diaryDao().getAllDiariesOnce().takeIf { it.isNotEmpty() }?.let { database.diaryDao().upsertDiaries(it) }
+                importDb.diaryDao().getAllMediaOnce().takeIf { it.isNotEmpty() }?.let { database.diaryDao().upsertMedia(it) }
+                importDb.logDao().getAllLogsOnce().takeIf { it.isNotEmpty() }?.let { database.logDao().insertLogs(it) }
+            }
+        } finally {
+            importDb.close()
+            clearDatabaseFiles(importDbPath)
+        }
     }
 
     private fun checkpointDatabase() {

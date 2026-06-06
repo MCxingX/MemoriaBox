@@ -426,7 +426,7 @@ class BackupViewModel(
         runCatching {
             backupManager.importBackup(uri, password).getOrThrow()
         }.onSuccess {
-            _operationState.value = OperationState(message = "备份导入成功，请重启应用查看恢复后的数据。", importRestored = true)
+            _operationState.value = OperationState(message = "备份导入成功，已合并到当前数据。", importRestored = true)
             runCatching { logRepository.logBackupOperation("IMPORT", "success") }
         }.onFailure { e ->
             _operationState.value = OperationState(message = "备份导入失败：${e.message ?: "未知错误"}")

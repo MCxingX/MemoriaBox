@@ -12,11 +12,17 @@ interface BoxDao {
     @Query("SELECT * FROM boxes WHERE is_archived = 1 ORDER BY created_at DESC")
     fun getArchivedBoxes(): Flow<List<Box>>
 
+    @Query("SELECT * FROM boxes ORDER BY sort_order ASC, created_at ASC")
+    suspend fun getAllBoxesOnce(): List<Box>
+
     @Query("SELECT * FROM boxes WHERE id = :id")
     suspend fun getBoxById(id: String): Box?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertBox(box: Box): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertBoxes(boxes: List<Box>)
 
     @Update
     suspend fun updateBox(box: Box)
@@ -45,6 +51,9 @@ interface EventDao {
     @Query("SELECT * FROM events WHERE id NOT LIKE 'milestone_%' ORDER BY is_pinned DESC, date ASC")
     fun getAllEvents(): Flow<List<Event>>
 
+    @Query("SELECT * FROM events WHERE id NOT LIKE 'milestone_%' ORDER BY is_pinned DESC, date ASC")
+    suspend fun getAllEventsOnce(): List<Event>
+
     @Query("SELECT * FROM events WHERE type = 'TODO' AND id NOT LIKE 'milestone_%' ORDER BY due_date ASC")
     fun getTodoEvents(): Flow<List<Event>>
 
@@ -56,6 +65,9 @@ interface EventDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertEvent(event: Event): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertEvents(events: List<Event>)
 
     @Update
     suspend fun updateEvent(event: Event)
@@ -90,11 +102,23 @@ interface LabelDao {
     @Query("SELECT * FROM labels ORDER BY name ASC")
     fun getAllLabels(): Flow<List<Label>>
 
+    @Query("SELECT * FROM labels ORDER BY name ASC")
+    suspend fun getAllLabelsOnce(): List<Label>
+
     @Query("SELECT * FROM labels WHERE name = :name")
     suspend fun getLabel(name: String): Label?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertLabel(label: Label): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertLabels(labels: List<Label>)
+
+    @Query("SELECT * FROM event_labels")
+    suspend fun getAllEventLabelsOnce(): List<EventLabel>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun addEventLabels(eventLabels: List<EventLabel>)
 
     @Delete
     suspend fun deleteLabel(label: Label)
@@ -120,8 +144,14 @@ interface LogDao {
     @Query("SELECT * FROM logs ORDER BY timestamp DESC")
     fun getAllLogs(): Flow<List<LogEntry>>
 
+    @Query("SELECT * FROM logs ORDER BY timestamp DESC")
+    suspend fun getAllLogsOnce(): List<LogEntry>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertLog(log: LogEntry): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertLogs(logs: List<LogEntry>)
 
     @Query("DELETE FROM logs WHERE timestamp < :cutoffTimestamp")
     suspend fun deleteOldLogs(cutoffTimestamp: Long)
@@ -138,6 +168,9 @@ interface DiaryDao {
     @Query("SELECT * FROM diary_entries ORDER BY date_start DESC")
     fun getAllDiaries(): Flow<List<DiaryEntry>>
 
+    @Query("SELECT * FROM diary_entries ORDER BY date_start DESC")
+    suspend fun getAllDiariesOnce(): List<DiaryEntry>
+
     @Query("SELECT * FROM diary_entries WHERE date_start = :dateStart LIMIT 1")
     suspend fun getDiaryByDateStart(dateStart: Long): DiaryEntry?
 
@@ -149,6 +182,12 @@ interface DiaryDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertDiary(diary: DiaryEntry)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertDiaries(diaries: List<DiaryEntry>)
+
+    @Query("SELECT * FROM diary_media ORDER BY diary_id ASC, sort_order ASC")
+    suspend fun getAllMediaOnce(): List<DiaryMedia>
 
     @Delete
     suspend fun deleteDiary(diary: DiaryEntry)

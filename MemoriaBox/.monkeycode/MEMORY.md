@@ -46,3 +46,12 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - 后续涉及 UI 修改、调色、视觉层级、布局排版、页面高级感或审美优化时，优先应用 `impeccable` 和 `design-taste-frontend` 两个 skill 的规则。
   - 若当前 opencode 会话尚未加载新安装的 skill，应直接读取 `/root/.config/opencode/skills/impeccable/SKILL.md` 和 `/root/.config/opencode/skills/design-taste-frontend/SKILL.md` 后执行。
   - UI 改造需要兼顾 `impeccable` 的产品级完成度、可访问性、对比度、响应式要求，以及 `design-taste-frontend` 的 anti-slop、设计读法和排版克制规则。
+
+[备份导入保护旧数据]
+- Date: 2026-06-06
+- Context: 用户要求备份导入时保留现有数据，避免直接覆盖清空数据库
+- Instructions:
+  - 备份导入必须优先保护现有数据，采用合并追加策略。
+  - 导入备份时不能强制删除旧数据库或清空旧数据。
+  - 日子、日历日记和日记素材都必须完整参与备份和导入。
+  - 主键相同的数据可以更新覆盖；名称相同但主键不同的数据应保留，由用户自行决定是否删除重复项。
