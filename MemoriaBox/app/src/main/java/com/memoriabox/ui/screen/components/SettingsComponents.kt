@@ -417,6 +417,14 @@ fun MonthlySummarySettingsDialog(
                     onRemoveVideo = { uri ->
                         monthVideos = monthVideos.filterNot { it == uri }
                         AppSettings.setMonthlyMediaVideos(context, selectedYear, selectedMonth, monthVideos)
+                    },
+                    onClearImages = {
+                        monthImages = emptyList()
+                        AppSettings.setMonthlyMediaImages(context, selectedYear, selectedMonth, monthImages)
+                    },
+                    onClearVideos = {
+                        monthVideos = emptyList()
+                        AppSettings.setMonthlyMediaVideos(context, selectedYear, selectedMonth, monthVideos)
                     }
                 )
             }
@@ -438,12 +446,14 @@ private fun MonthlyMediaSettingsPanel(
     onAddImages: () -> Unit,
     onAddVideos: () -> Unit,
     onRemoveImage: (String) -> Unit,
-    onRemoveVideo: (String) -> Unit
+    onRemoveVideo: (String) -> Unit,
+    onClearImages: () -> Unit,
+    onClearVideos: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text("当月相册 / 视频", style = MaterialTheme.typography.titleSmall)
-            Text("当前配置 ${selectedYear} 年 ${selectedMonth} 月素材，旧版月份素材会作为兼容内容显示。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("当前配置 ${selectedYear} 年 ${selectedMonth} 月素材。支持一次选择多张照片或多个视频，下面可横向滑动预览和移除。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -470,31 +480,78 @@ private fun MonthlyMediaSettingsPanel(
             OutlinedButton(onClick = onAddImages, modifier = Modifier.weight(1f)) {
                 Icon(Icons.Default.Image, contentDescription = null)
                 Spacer(Modifier.width(4.dp))
-                Text("加照片")
+                Text("批量加照片")
             }
             OutlinedButton(onClick = onAddVideos, modifier = Modifier.weight(1f)) {
                 Icon(Icons.Default.Videocam, contentDescription = null)
                 Spacer(Modifier.width(4.dp))
-                Text("加视频")
+                Text("批量加视频")
             }
         }
-        MonthlyMediaStrip(title = "照片 ${images.size}", items = images, isVideo = false, onRemove = onRemoveImage)
-        MonthlyMediaStrip(title = "视频 ${videos.size}", items = videos, isVideo = true, onRemove = onRemoveVideo)
+        MonthlyMediaStrip(title = "照片 ${images.size}", items = images, isVideo = false, onRemove = onRemoveImage, onClear = onClearImages)
+        MonthlyMediaStrip(title = "视频 ${videos.size}", items = videos, isVideo = true, onRemove = onRemoveVideo, onClear = onClearVideos)
     }
 }
 
 @Composable
-private fun MonthlyMediaStrip(title: String, items: List<String>, isVideo: Boolean, onRemove: (String) -> Unit) {
+private fun MonthlyMediaStrip(title: String, items: List<String>, isVideo: Boolean, onRemove: (String) -> Unit, onClear: () -> Unit) {
+    var selectedIndex by remember(items) { mutableIntStateOf(0) }
+    val selectedItem = items.getOrNull(selectedIndex.coerceIn(0, (items.size - 1).coerceAtLeast(0)))
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(title, style = MaterialTheme.typography.labelLarge)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(title, style = MaterialTheme.typography.labelLarge)
+            if (items.isNotEmpty()) {
+                TextButton(onClick = onClear) { Text("清空") }
+            }
+        }
         if (items.isEmpty()) {
             Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.56f), modifier = Modifier.fillMaxWidth()) {
-                Text("暂无素材", modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(if (isVideo) "暂无视频，可一次选择多个视频" else "暂无照片，可一次选择多张照片", modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         } else {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(if (isVideo) 96.dp else 148.dp)
+                        .padding(8.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.surface),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (selectedItem != null && !isVideo) {
+                        AsyncImage(model = selectedItem, contentDescription = "当前照片", contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
+                    } else {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Icon(Icons.Default.PlayCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
+                            Text(selectedItem?.substringAfterLast('/')?.take(36) ?: "视频素材", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                        }
+                    }
+                    IconButton(
+                        onClick = { selectedItem?.let(onRemove) },
+                        modifier = Modifier.align(Alignment.TopEnd).size(36.dp)
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = "移除当前素材", tint = if (isVideo) MaterialTheme.colorScheme.primary else Color.White)
+                    }
+                }
+            }
             Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items.forEach { uri ->
-                    Box(modifier = Modifier.size(width = 84.dp, height = 68.dp).clip(RoundedCornerShape(18.dp)).background(MaterialTheme.colorScheme.surfaceVariant)) {
+                items.forEachIndexed { index, uri ->
+                    Box(
+                        modifier = Modifier
+                            .size(width = 84.dp, height = 68.dp)
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(if (index == selectedIndex) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)
+                            .clickable { selectedIndex = index }
+                    ) {
                         if (isVideo) {
                             Icon(Icons.Default.PlayCircle, contentDescription = "视频", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.align(Alignment.Center).size(28.dp))
                         } else {
