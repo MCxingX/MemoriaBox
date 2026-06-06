@@ -37,6 +37,14 @@ object LunarDateUtils {
         return dayLabel(day)
     }
 
+    fun selectionForGregorian(timeMillis: Long): Triple<Int, Int, Int> {
+        val chineseCalendar = ChineseCalendar().apply { this.timeInMillis = timeMillis }
+        val year = chineseCalendar.get(ChineseCalendar.EXTENDED_YEAR) - 2637
+        val month = chineseCalendar.get(Calendar.MONTH) + 1
+        val day = chineseCalendar.get(Calendar.DAY_OF_MONTH)
+        return Triple(year.coerceIn(1900, 2100), month.coerceIn(1, 12), day.coerceIn(1, 30))
+    }
+
     fun daysUntilNextOccurrence(lunar: String, nowMillis: Long = System.currentTimeMillis()): Long? {
         val next = nextOccurrenceMillis(lunar, nowMillis) ?: return null
         return TimeUnit.MILLISECONDS.toDays(startOfDay(next).timeInMillis - startOfDay(nowMillis).timeInMillis)

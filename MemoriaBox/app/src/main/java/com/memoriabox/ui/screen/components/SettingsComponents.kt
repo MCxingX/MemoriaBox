@@ -295,22 +295,23 @@ fun MonthlySummarySettingsDialog(
     var autoPromptEnabled by remember { mutableStateOf(com.memoriabox.utils.AppSettings.getMonthlySummaryAutoPromptEnabled(context)) }
     var textEnabled by remember { mutableStateOf(com.memoriabox.utils.AppSettings.getMonthlySummaryTextEnabled(context)) }
     var playSpeed by remember { mutableFloatStateOf(com.memoriabox.utils.AppSettings.getMonthlySummaryPlaySpeedFactor(context)) }
+    var selectedYear by remember { mutableIntStateOf(java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)) }
     var selectedMonth by remember { mutableIntStateOf(java.util.Calendar.getInstance().get(java.util.Calendar.MONTH) + 1) }
     val settingsVersion = AppSettings.settingsVersion
-    var monthImages by remember(settingsVersion, selectedMonth) { mutableStateOf(AppSettings.getMonthlyMediaImages(context, selectedMonth)) }
-    var monthVideos by remember(settingsVersion, selectedMonth) { mutableStateOf(AppSettings.getMonthlyMediaVideos(context, selectedMonth)) }
+    var monthImages by remember(settingsVersion, selectedYear, selectedMonth) { mutableStateOf(AppSettings.getMonthlyMediaImages(context, selectedYear, selectedMonth)) }
+    var monthVideos by remember(settingsVersion, selectedYear, selectedMonth) { mutableStateOf(AppSettings.getMonthlyMediaVideos(context, selectedYear, selectedMonth)) }
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris ->
         val copied = uris.mapNotNull { ImageImportUtils.copyImageToPrivateStorage(context, it, "monthly_media_images") }
         if (copied.isNotEmpty()) {
             monthImages = (monthImages + copied).distinct()
-            AppSettings.setMonthlyMediaImages(context, selectedMonth, monthImages)
+            AppSettings.setMonthlyMediaImages(context, selectedYear, selectedMonth, monthImages)
         }
     }
     val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris ->
         val copied = uris.mapNotNull { ImageImportUtils.copyImageToPrivateStorage(context, it, "monthly_media_videos") }
         if (copied.isNotEmpty()) {
             monthVideos = (monthVideos + copied).distinct()
-            AppSettings.setMonthlyMediaVideos(context, selectedMonth, monthVideos)
+            AppSettings.setMonthlyMediaVideos(context, selectedYear, selectedMonth, monthVideos)
         }
     }
 
@@ -401,7 +402,9 @@ fun MonthlySummarySettingsDialog(
                 }
                 HorizontalDivider()
                 MonthlyMediaSettingsPanel(
+                    selectedYear = selectedYear,
                     selectedMonth = selectedMonth,
+                    onYearSelected = { selectedYear = it },
                     onMonthSelected = { selectedMonth = it },
                     images = monthImages,
                     videos = monthVideos,
@@ -409,11 +412,11 @@ fun MonthlySummarySettingsDialog(
                     onAddVideos = { videoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) },
                     onRemoveImage = { uri ->
                         monthImages = monthImages.filterNot { it == uri }
-                        AppSettings.setMonthlyMediaImages(context, selectedMonth, monthImages)
+                        AppSettings.setMonthlyMediaImages(context, selectedYear, selectedMonth, monthImages)
                     },
                     onRemoveVideo = { uri ->
                         monthVideos = monthVideos.filterNot { it == uri }
-                        AppSettings.setMonthlyMediaVideos(context, selectedMonth, monthVideos)
+                        AppSettings.setMonthlyMediaVideos(context, selectedYear, selectedMonth, monthVideos)
                     }
                 )
             }
@@ -426,7 +429,9 @@ fun MonthlySummarySettingsDialog(
 
 @Composable
 private fun MonthlyMediaSettingsPanel(
+    selectedYear: Int,
     selectedMonth: Int,
+    onYearSelected: (Int) -> Unit,
     onMonthSelected: (Int) -> Unit,
     images: List<String>,
     videos: List<String>,
@@ -438,7 +443,16 @@ private fun MonthlyMediaSettingsPanel(
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text("当月相册 / 视频", style = MaterialTheme.typography.titleSmall)
-            Text("和月度背景共用 1-12 月体系，当前配置 ${selectedMonth} 月素材。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("当前配置 ${selectedYear} 年 ${selectedMonth} 月素材，旧版月份素材会作为兼容内容显示。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedButton(onClick = { onYearSelected((selectedYear - 1).coerceIn(1900, 2100)) }) { Text("上一年") }
+            Text("${selectedYear} 年", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+            OutlinedButton(onClick = { onYearSelected((selectedYear + 1).coerceIn(1900, 2100)) }) { Text("下一年") }
         }
         Row(
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),

@@ -17,6 +17,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -303,7 +304,10 @@ fun ShareOptionsDialog(
 }
 
 @Composable
-fun ExportScreen(application: Application) {
+fun ExportScreen(
+    application: Application,
+    onNavigateBack: () -> Unit = {}
+) {
     val context = LocalContext.current
     val vm = remember { createCalendarViewModel(application) }
     val events by vm.allEvents.collectAsState(initial = emptyList())
@@ -330,7 +334,12 @@ fun ExportScreen(application: Application) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("导出分享") }
+                title = { Text("导出分享") },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                    }
+                }
             )
         }
     ) { paddingValues ->
@@ -341,8 +350,15 @@ fun ExportScreen(application: Application) {
                 .fillMaxWidth()
         ) {
             Text(
-                "选择导出格式",
+                "分享或迁移到其他应用",
                 style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+
+            Text(
+                "这里导出的是公开分享格式。完整数据备份请在设置里的备份与恢复中操作。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
 
@@ -372,7 +388,7 @@ fun ExportScreen(application: Application) {
                         Column {
                             Text("导出为 JSON", style = MaterialTheme.typography.titleMedium)
                             Text(
-                                "包含所有事件和设置数据",
+                                "用于分享日子清单，不包含完整备份数据",
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }

@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import org.json.JSONArray
+import java.util.Calendar
 
 object AppSettings {
     var settingsVersion by mutableIntStateOf(0)
@@ -39,6 +40,8 @@ object AppSettings {
         getPrefs(context).edit().putInt(key, value).apply()
         settingsVersion++
     }
+
+    private fun monthlyMediaKey(year: Int, month: Int): String = "%04d-%02d".format(year.coerceIn(1900, 2100), month.coerceIn(1, 12))
 
     const val HOME_BG_URI = "home_bg_uri"
     const val CALENDAR_BG_URI = "calendar_bg_uri"
@@ -158,11 +161,27 @@ object AppSettings {
     fun getMonthlySummaryLastPromptMonth(context: Context) = getPrefs(context).getString(MONTHLY_SUMMARY_LAST_PROMPT_MONTH, null)
     fun setMonthlySummaryLastPromptMonth(context: Context, month: String) = saveString(context, MONTHLY_SUMMARY_LAST_PROMPT_MONTH, month)
 
-    fun getMonthlyMediaImages(context: Context, month: Int): List<String> = getStringList(context, "$MONTHLY_MEDIA_IMAGES_PREFIX${month.coerceIn(1, 12)}")
-    fun setMonthlyMediaImages(context: Context, month: Int, uris: List<String>) = saveStringList(context, "$MONTHLY_MEDIA_IMAGES_PREFIX${month.coerceIn(1, 12)}", uris)
+    fun getMonthlyMediaImages(context: Context, year: Int, month: Int): List<String> {
+        val monthKey = monthlyMediaKey(year, month)
+        val current = getStringList(context, "$MONTHLY_MEDIA_IMAGES_PREFIX$monthKey")
+        return current.ifEmpty { getStringList(context, "$MONTHLY_MEDIA_IMAGES_PREFIX${month.coerceIn(1, 12)}") }
+    }
 
-    fun getMonthlyMediaVideos(context: Context, month: Int): List<String> = getStringList(context, "$MONTHLY_MEDIA_VIDEOS_PREFIX${month.coerceIn(1, 12)}")
-    fun setMonthlyMediaVideos(context: Context, month: Int, uris: List<String>) = saveStringList(context, "$MONTHLY_MEDIA_VIDEOS_PREFIX${month.coerceIn(1, 12)}", uris)
+    fun setMonthlyMediaImages(context: Context, year: Int, month: Int, uris: List<String>) = saveStringList(context, "$MONTHLY_MEDIA_IMAGES_PREFIX${monthlyMediaKey(year, month)}", uris)
+
+    fun getMonthlyMediaImages(context: Context, month: Int): List<String> = getMonthlyMediaImages(context, Calendar.getInstance().get(Calendar.YEAR), month)
+    fun setMonthlyMediaImages(context: Context, month: Int, uris: List<String>) = setMonthlyMediaImages(context, Calendar.getInstance().get(Calendar.YEAR), month, uris)
+
+    fun getMonthlyMediaVideos(context: Context, year: Int, month: Int): List<String> {
+        val monthKey = monthlyMediaKey(year, month)
+        val current = getStringList(context, "$MONTHLY_MEDIA_VIDEOS_PREFIX$monthKey")
+        return current.ifEmpty { getStringList(context, "$MONTHLY_MEDIA_VIDEOS_PREFIX${month.coerceIn(1, 12)}") }
+    }
+
+    fun setMonthlyMediaVideos(context: Context, year: Int, month: Int, uris: List<String>) = saveStringList(context, "$MONTHLY_MEDIA_VIDEOS_PREFIX${monthlyMediaKey(year, month)}", uris)
+
+    fun getMonthlyMediaVideos(context: Context, month: Int): List<String> = getMonthlyMediaVideos(context, Calendar.getInstance().get(Calendar.YEAR), month)
+    fun setMonthlyMediaVideos(context: Context, month: Int, uris: List<String>) = setMonthlyMediaVideos(context, Calendar.getInstance().get(Calendar.YEAR), month, uris)
 
     fun getUpcomingEventsEnabled(context: Context) = getPrefs(context).getBoolean(UPCOMING_EVENTS_ENABLED, true)
     fun setUpcomingEventsEnabled(context: Context, enabled: Boolean) = saveBoolean(context, UPCOMING_EVENTS_ENABLED, enabled)

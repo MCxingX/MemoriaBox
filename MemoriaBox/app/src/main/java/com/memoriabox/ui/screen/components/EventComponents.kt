@@ -498,9 +498,10 @@ fun CalendarViewScreen(
         }
     }
     val today = Calendar.getInstance()
+    val currentYear = cal.get(Calendar.YEAR)
     val currentMonth = cal.get(Calendar.MONTH) + 1
-    val monthlyImages = remember(settingsVersion, currentMonth) { AppSettings.getMonthlyMediaImages(context, currentMonth) }
-    val monthlyVideos = remember(settingsVersion, currentMonth) { AppSettings.getMonthlyMediaVideos(context, currentMonth) }
+    val monthlyImages = remember(settingsVersion, currentYear, currentMonth) { AppSettings.getMonthlyMediaImages(context, currentYear, currentMonth) }
+    val monthlyVideos = remember(settingsVersion, currentYear, currentMonth) { AppSettings.getMonthlyMediaVideos(context, currentYear, currentMonth) }
     val hasMonthlyMedia = monthlyImages.isNotEmpty() || monthlyVideos.isNotEmpty()
     val nearestEvent = remember(monthEvents) {
         monthEvents.minByOrNull { kotlin.math.abs(it.date - System.currentTimeMillis()) }

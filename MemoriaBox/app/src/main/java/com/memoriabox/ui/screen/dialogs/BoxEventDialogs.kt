@@ -372,6 +372,28 @@ fun EventDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
+                if (availableBoxes.isNotEmpty()) {
+                    Text("所属分类", style = MaterialTheme.typography.labelLarge)
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        availableBoxes.forEach { box ->
+                            FilterChip(
+                                selected = selectedBoxId == box.id,
+                                onClick = { selectedBoxId = box.id },
+                                label = { Text(box.name) },
+                                leadingIcon = {
+                                    Text(box.icon.takeIf { it.isNotBlank() } ?: "•")
+                                }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+
                 if (allowTypeChange) {
                     Text("事件类型", style = MaterialTheme.typography.labelLarge)
                     FlowRow(
@@ -1144,10 +1166,8 @@ fun LunarCalendarDialog(
     )
     val lunarDays = (1..30).map { it to LunarDateUtils.dayLabel(it) }
     val initialSelection = remember(initialLunar, initialDateMillis) {
-        parseLunarSelection(initialLunar, lunarMonths) ?: run {
-            val cal = Calendar.getInstance().apply { timeInMillis = initialDateMillis ?: System.currentTimeMillis() }
-            Triple(cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.DAY_OF_MONTH).coerceIn(1, 30))
-        }
+        parseLunarSelection(initialLunar, lunarMonths)
+            ?: LunarDateUtils.selectionForGregorian(initialDateMillis ?: System.currentTimeMillis())
     }
     var selectedYear by remember(initialSelection) { mutableIntStateOf(initialSelection.first) }
     var selectedMonth by remember(initialSelection) { mutableIntStateOf(initialSelection.second) }
@@ -1165,6 +1185,15 @@ fun LunarCalendarDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
+                val selectedGregorianDate = remember(selectedYear, selectedMonth, selectedDay) {
+                    LunarDateUtils.monthDayToGregorian(selectedYear, selectedMonth, selectedDay)
+                }
+                Text(
+                    selectedGregorianDate?.let { "对应公历：${formatDate(it)}" } ?: "当前农历日期在所选年份中无法换算",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),

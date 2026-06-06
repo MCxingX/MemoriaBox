@@ -354,7 +354,10 @@ fun MainScreen(
                 PhotoWallScreen(application)
             }
             composable(Screen.Export.route) {
-                ExportScreen(application)
+                ExportScreen(
+                    application = application,
+                    onNavigateBack = { navController.popBackStack() }
+                )
             }
             composable(Screen.BackupSettings.route) {
                 BackupSettingsScreen(
