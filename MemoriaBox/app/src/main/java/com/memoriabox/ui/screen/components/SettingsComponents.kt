@@ -1,9 +1,14 @@
 package com.memoriabox.ui.screen.components
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -14,8 +19,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.memoriabox.ui.utils.rememberAdaptiveUiSize
+import com.memoriabox.utils.AppSettings
+import com.memoriabox.utils.ImageImportUtils
 
 @Composable
 fun SettingsList(
@@ -275,12 +284,33 @@ fun MonthlySummarySettingsDialog(
     var autoPromptEnabled by remember { mutableStateOf(com.memoriabox.utils.AppSettings.getMonthlySummaryAutoPromptEnabled(context)) }
     var textEnabled by remember { mutableStateOf(com.memoriabox.utils.AppSettings.getMonthlySummaryTextEnabled(context)) }
     var playSpeed by remember { mutableFloatStateOf(com.memoriabox.utils.AppSettings.getMonthlySummaryPlaySpeedFactor(context)) }
+    var selectedMonth by remember { mutableIntStateOf(java.util.Calendar.getInstance().get(java.util.Calendar.MONTH) + 1) }
+    val settingsVersion = AppSettings.settingsVersion
+    var monthImages by remember(settingsVersion, selectedMonth) { mutableStateOf(AppSettings.getMonthlyMediaImages(context, selectedMonth)) }
+    var monthVideos by remember(settingsVersion, selectedMonth) { mutableStateOf(AppSettings.getMonthlyMediaVideos(context, selectedMonth)) }
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris ->
+        val copied = uris.mapNotNull { ImageImportUtils.copyImageToPrivateStorage(context, it, "monthly_media_images") }
+        if (copied.isNotEmpty()) {
+            monthImages = (monthImages + copied).distinct()
+            AppSettings.setMonthlyMediaImages(context, selectedMonth, monthImages)
+        }
+    }
+    val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris ->
+        val copied = uris.mapNotNull { ImageImportUtils.copyImageToPrivateStorage(context, it, "monthly_media_videos") }
+        if (copied.isNotEmpty()) {
+            monthVideos = (monthVideos + copied).distinct()
+            AppSettings.setMonthlyMediaVideos(context, selectedMonth, monthVideos)
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("月度总结设置") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -358,12 +388,101 @@ fun MonthlySummarySettingsDialog(
                         Text("快", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
+                HorizontalDivider()
+                MonthlyMediaSettingsPanel(
+                    selectedMonth = selectedMonth,
+                    onMonthSelected = { selectedMonth = it },
+                    images = monthImages,
+                    videos = monthVideos,
+                    onAddImages = { imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                    onAddVideos = { videoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) },
+                    onRemoveImage = { uri ->
+                        monthImages = monthImages.filterNot { it == uri }
+                        AppSettings.setMonthlyMediaImages(context, selectedMonth, monthImages)
+                    },
+                    onRemoveVideo = { uri ->
+                        monthVideos = monthVideos.filterNot { it == uri }
+                        AppSettings.setMonthlyMediaVideos(context, selectedMonth, monthVideos)
+                    }
+                )
             }
         },
         confirmButton = {
             TextButton(onClick = onDismiss) { Text("完成") }
         }
     )
+}
+
+@Composable
+private fun MonthlyMediaSettingsPanel(
+    selectedMonth: Int,
+    onMonthSelected: (Int) -> Unit,
+    images: List<String>,
+    videos: List<String>,
+    onAddImages: () -> Unit,
+    onAddVideos: () -> Unit,
+    onRemoveImage: (String) -> Unit,
+    onRemoveVideo: (String) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text("当月相册 / 视频", style = MaterialTheme.typography.titleSmall)
+            Text("和月度背景共用 1-12 月体系，当前配置 ${selectedMonth} 月素材。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            (1..12).forEach { month ->
+                FilterChip(
+                    selected = selectedMonth == month,
+                    onClick = { onMonthSelected(month) },
+                    label = { Text("${month}月") }
+                )
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(onClick = onAddImages, modifier = Modifier.weight(1f)) {
+                Icon(Icons.Default.Image, contentDescription = null)
+                Spacer(Modifier.width(4.dp))
+                Text("加照片")
+            }
+            OutlinedButton(onClick = onAddVideos, modifier = Modifier.weight(1f)) {
+                Icon(Icons.Default.Videocam, contentDescription = null)
+                Spacer(Modifier.width(4.dp))
+                Text("加视频")
+            }
+        }
+        MonthlyMediaStrip(title = "照片 ${images.size}", items = images, isVideo = false, onRemove = onRemoveImage)
+        MonthlyMediaStrip(title = "视频 ${videos.size}", items = videos, isVideo = true, onRemove = onRemoveVideo)
+    }
+}
+
+@Composable
+private fun MonthlyMediaStrip(title: String, items: List<String>, isVideo: Boolean, onRemove: (String) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(title, style = MaterialTheme.typography.labelLarge)
+        if (items.isEmpty()) {
+            Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.56f), modifier = Modifier.fillMaxWidth()) {
+                Text("暂无素材", modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        } else {
+            Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items.forEach { uri ->
+                    Box(modifier = Modifier.size(width = 84.dp, height = 68.dp).clip(RoundedCornerShape(18.dp)).background(MaterialTheme.colorScheme.surfaceVariant)) {
+                        if (isVideo) {
+                            Icon(Icons.Default.PlayCircle, contentDescription = "视频", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.align(Alignment.Center).size(28.dp))
+                        } else {
+                            AsyncImage(model = uri, contentDescription = "照片", contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
+                        }
+                        IconButton(onClick = { onRemove(uri) }, modifier = Modifier.align(Alignment.TopEnd).size(28.dp)) {
+                            Icon(Icons.Default.Close, contentDescription = "移除", tint = if (isVideo) MaterialTheme.colorScheme.primary else Color.White, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable

@@ -1,10 +1,16 @@
 package com.memoriabox.ui.screen.components
 
+import android.net.Uri
+import android.widget.MediaController
+import android.widget.VideoView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
@@ -30,11 +36,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.memoriabox.data.model.*
 import com.memoriabox.ui.utils.rememberAdaptiveUiSize
+import com.memoriabox.utils.AppSettings
 import com.memoriabox.utils.ColorUtils
 import com.memoriabox.utils.LunarDateUtils
 import com.memoriabox.utils.MonthlySummaryUiState
@@ -435,8 +445,12 @@ fun CalendarViewScreen(
     onLoadMonthlySummary: (Long) -> Unit = {}
 ) {
     val adaptiveUi = rememberAdaptiveUiSize()
+    val context = LocalContext.current
+    val settingsVersion = AppSettings.settingsVersion
     var currentMonthYear by remember { mutableStateOf("${Calendar.getInstance().get(Calendar.YEAR)}-${Calendar.getInstance().get(Calendar.MONTH) + 1}") }
     var showMonthlySummary by remember { mutableStateOf(initialShowSummary) }
+    var showMonthlyMedia by remember { mutableStateOf(false) }
+    var noMonthlyMediaTip by remember { mutableStateOf(false) }
     LaunchedEffect(initialShowSummary) {
         if (initialShowSummary) showMonthlySummary = true
     }
@@ -457,6 +471,10 @@ fun CalendarViewScreen(
         }
     }
     val today = Calendar.getInstance()
+    val currentMonth = cal.get(Calendar.MONTH) + 1
+    val monthlyImages = remember(settingsVersion, currentMonth) { AppSettings.getMonthlyMediaImages(context, currentMonth) }
+    val monthlyVideos = remember(settingsVersion, currentMonth) { AppSettings.getMonthlyMediaVideos(context, currentMonth) }
+    val hasMonthlyMedia = monthlyImages.isNotEmpty() || monthlyVideos.isNotEmpty()
     val nearestEvent = remember(monthEvents) {
         monthEvents.minByOrNull { kotlin.math.abs(it.date - System.currentTimeMillis()) }
     }
@@ -542,7 +560,39 @@ fun CalendarViewScreen(
                     selectedDay = dayCal.timeInMillis to dayEvents
                 }
             )
+            MonthlyMediaFloatingButton(
+                hasMedia = hasMonthlyMedia,
+                month = currentMonth,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = adaptiveUi.screenPadding, bottom = adaptiveUi.screenPadding + 10.dp),
+                onClick = {
+                    if (hasMonthlyMedia) {
+                        showMonthlyMedia = true
+                    } else {
+                        noMonthlyMediaTip = true
+                    }
+                }
+            )
         }
+    }
+
+    if (noMonthlyMediaTip) {
+        AlertDialog(
+            onDismissRequest = { noMonthlyMediaTip = false },
+            title = { Text("本月暂无素材") },
+            text = { Text("本月暂未收录照片和视频。可以到月度总结设置里为 ${currentMonth} 月添加素材。") },
+            confirmButton = { TextButton(onClick = { noMonthlyMediaTip = false }) { Text("知道了") } }
+        )
+    }
+
+    if (showMonthlyMedia) {
+        MonthlyMediaPreviewDialog(
+            month = currentMonth,
+            images = monthlyImages,
+            videos = monthlyVideos,
+            onDismiss = { showMonthlyMedia = false }
+        )
     }
 
     selectedDay?.let { (date, dayEvents) ->
@@ -645,6 +695,209 @@ fun CalendarViewScreen(
         )
     }
 }
+
+@Composable
+private fun MonthlyMediaFloatingButton(
+    hasMedia: Boolean,
+    month: Int,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val gradient = if (hasMedia) {
+        Brush.linearGradient(listOf(Color(0xFFFFB86B), Color(0xFFFF6B9A), Color(0xFF7C5CFF)))
+    } else {
+        Brush.linearGradient(listOf(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.outline.copy(alpha = 0.54f)))
+    }
+    Box(
+        modifier = modifier
+            .size(64.dp)
+            .shadow(10.dp, RoundedCornerShape(22.dp))
+            .clip(RoundedCornerShape(22.dp))
+            .background(gradient)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .background(Color.White.copy(alpha = if (hasMedia) 0.12f else 0.28f))
+        )
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Icon(
+                if (hasMedia) Icons.Default.Collections else Icons.Default.Inventory2,
+                contentDescription = "${month}月素材",
+                tint = if (hasMedia) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(25.dp)
+            )
+            Text(
+                "${month}月",
+                style = MaterialTheme.typography.labelSmall,
+                color = if (hasMedia) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(8.dp)
+                .size(9.dp)
+                .clip(RoundedCornerShape(999.dp))
+                .background(if (hasMedia) Color(0xFFB7FF6A) else MaterialTheme.colorScheme.outline)
+        )
+    }
+}
+
+@Composable
+private fun MonthlyMediaPreviewDialog(
+    month: Int,
+    images: List<String>,
+    videos: List<String>,
+    onDismiss: () -> Unit
+) {
+    val media = remember(images, videos) {
+        images.map { MonthlyMediaItem(it, DiaryMediaType.IMAGE) } + videos.map { MonthlyMediaItem(it, DiaryMediaType.VIDEO) }
+    }
+    var selectedIndex by remember(media) { mutableIntStateOf(0) }
+    var fullscreenVideo by remember { mutableStateOf<String?>(null) }
+    val selected = media.getOrNull(selectedIndex)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text("${month} 月图片 / 视频总结")
+                Text("图片总结 ${images.size} 张 · 视频总结 ${videos.size} 个", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 280.dp, max = 420.dp)
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(Color.Black),
+                    contentAlignment = Alignment.Center
+                ) {
+                    when (selected?.type) {
+                        DiaryMediaType.IMAGE -> AsyncImage(
+                            model = selected.uri,
+                            contentDescription = "${month}月照片",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.matchParentSize()
+                        )
+                        DiaryMediaType.VIDEO -> MonthlyVideoTile(
+                            uri = selected.uri,
+                            modifier = Modifier.matchParentSize(),
+                            autoPlay = false,
+                            onPlay = { fullscreenVideo = selected.uri }
+                        )
+                        null -> Text("本月暂无素材", color = Color.White)
+                    }
+                    if (media.size > 1) {
+                        IconButton(
+                            onClick = { selectedIndex = (selectedIndex - 1 + media.size) % media.size },
+                            modifier = Modifier.align(Alignment.CenterStart).padding(6.dp)
+                        ) { Icon(Icons.Default.ChevronLeft, contentDescription = "上一张", tint = Color.White) }
+                        IconButton(
+                            onClick = { selectedIndex = (selectedIndex + 1) % media.size },
+                            modifier = Modifier.align(Alignment.CenterEnd).padding(6.dp)
+                        ) { Icon(Icons.Default.ChevronRight, contentDescription = "下一张", tint = Color.White) }
+                    }
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    media.forEachIndexed { index, item ->
+                        MonthlyMediaThumb(
+                            item = item,
+                            selected = index == selectedIndex,
+                            onClick = { selectedIndex = index }
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } }
+    )
+
+    fullscreenVideo?.let { uri ->
+        Dialog(onDismissRequest = { fullscreenVideo = null }) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 360.dp, max = 620.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(Color.Black),
+                contentAlignment = Alignment.Center
+            ) {
+                MonthlyVideoTile(uri = uri, modifier = Modifier.matchParentSize(), autoPlay = true, onPlay = {})
+                IconButton(
+                    onClick = { fullscreenVideo = null },
+                    modifier = Modifier.align(Alignment.TopEnd).padding(10.dp)
+                ) { Icon(Icons.Default.Close, contentDescription = "关闭视频", tint = Color.White) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MonthlyVideoTile(uri: String, modifier: Modifier = Modifier, autoPlay: Boolean = false, onPlay: () -> Unit) {
+    Box(
+        modifier = modifier
+            .background(Brush.verticalGradient(listOf(Color(0xFF111827), Color(0xFF312E81))))
+            .pointerInput(uri) { detectTapGestures { onPlay() } },
+        contentAlignment = Alignment.Center
+    ) {
+        if (autoPlay) {
+            AndroidView(
+                modifier = Modifier.matchParentSize(),
+                factory = { context ->
+                    VideoView(context).apply {
+                        setVideoURI(Uri.parse(uri))
+                        setMediaController(MediaController(context).also { it.setAnchorView(this) })
+                        setOnPreparedListener { player ->
+                            player.isLooping = false
+                            start()
+                        }
+                    }
+                },
+                update = { view ->
+                    if (!view.isPlaying) view.start()
+                }
+            )
+        } else {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Icon(Icons.Default.PlayCircle, contentDescription = "播放视频", tint = Color.White, modifier = Modifier.size(58.dp))
+                Text("点击播放短视频", style = MaterialTheme.typography.titleSmall, color = Color.White)
+                Text(uri.substringAfterLast('/').take(32), style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.7f), maxLines = 1)
+            }
+        }
+    }
+}
+
+@Composable
+private fun MonthlyMediaThumb(item: MonthlyMediaItem, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(width = 72.dp, height = 56.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clickable(onClick = onClick)
+            .then(if (selected) Modifier.border(BorderStroke(2.dp, MaterialTheme.colorScheme.primary), RoundedCornerShape(16.dp)) else Modifier),
+        contentAlignment = Alignment.Center
+    ) {
+        if (item.type == DiaryMediaType.IMAGE) {
+            AsyncImage(model = item.uri, contentDescription = "素材缩略图", contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
+        } else {
+            Icon(Icons.Default.Videocam, contentDescription = "视频素材", tint = MaterialTheme.colorScheme.primary)
+        }
+    }
+}
+
+private data class MonthlyMediaItem(val uri: String, val type: DiaryMediaType)
 
 @Composable
 private fun CalendarBoardSummary(

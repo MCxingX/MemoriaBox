@@ -59,6 +59,8 @@ object AppSettings {
     const val MONTHLY_SUMMARY_PLAY_MODE = "monthly_summary_play_mode"
     const val MONTHLY_SUMMARY_PLAY_SPEED_FACTOR = "monthly_summary_play_speed_factor"
     const val MONTHLY_SUMMARY_LAST_PROMPT_MONTH = "monthly_summary_last_prompt_month"
+    const val MONTHLY_MEDIA_IMAGES_PREFIX = "monthly_media_images_"
+    const val MONTHLY_MEDIA_VIDEOS_PREFIX = "monthly_media_videos_"
     const val UPCOMING_EVENTS_ENABLED = "upcoming_events_enabled"
     const val UPCOMING_EVENTS_DAYS = "upcoming_events_days"
     const val UPCOMING_EVENTS_URGENT_DAYS = "upcoming_events_urgent_days"
@@ -156,6 +158,12 @@ object AppSettings {
     fun getMonthlySummaryLastPromptMonth(context: Context) = getPrefs(context).getString(MONTHLY_SUMMARY_LAST_PROMPT_MONTH, null)
     fun setMonthlySummaryLastPromptMonth(context: Context, month: String) = saveString(context, MONTHLY_SUMMARY_LAST_PROMPT_MONTH, month)
 
+    fun getMonthlyMediaImages(context: Context, month: Int): List<String> = getStringList(context, "$MONTHLY_MEDIA_IMAGES_PREFIX${month.coerceIn(1, 12)}")
+    fun setMonthlyMediaImages(context: Context, month: Int, uris: List<String>) = saveStringList(context, "$MONTHLY_MEDIA_IMAGES_PREFIX${month.coerceIn(1, 12)}", uris)
+
+    fun getMonthlyMediaVideos(context: Context, month: Int): List<String> = getStringList(context, "$MONTHLY_MEDIA_VIDEOS_PREFIX${month.coerceIn(1, 12)}")
+    fun setMonthlyMediaVideos(context: Context, month: Int, uris: List<String>) = saveStringList(context, "$MONTHLY_MEDIA_VIDEOS_PREFIX${month.coerceIn(1, 12)}", uris)
+
     fun getUpcomingEventsEnabled(context: Context) = getPrefs(context).getBoolean(UPCOMING_EVENTS_ENABLED, true)
     fun setUpcomingEventsEnabled(context: Context, enabled: Boolean) = saveBoolean(context, UPCOMING_EVENTS_ENABLED, enabled)
 
@@ -173,4 +181,31 @@ object AppSettings {
 
     fun getUpcomingEventsReminderEnabled(context: Context) = getPrefs(context).getBoolean(UPCOMING_EVENTS_REMINDER_ENABLED, true)
     fun setUpcomingEventsReminderEnabled(context: Context, enabled: Boolean) = saveBoolean(context, UPCOMING_EVENTS_REMINDER_ENABLED, enabled)
+
+    private fun getStringList(context: Context, key: String): List<String> {
+        val stored = getPrefs(context).getString(key, null) ?: return emptyList()
+        return runCatching {
+            val array = JSONArray(stored)
+            buildList {
+                for (index in 0 until array.length()) {
+                    val value = array.optString(index).trim()
+                    if (value.isNotBlank()) add(value)
+                }
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    private fun saveStringList(context: Context, key: String, values: List<String>) {
+        val cleaned = values.map { it.trim() }.filter { it.isNotBlank() }.distinct()
+        val editor = getPrefs(context).edit()
+        if (cleaned.isEmpty()) {
+            editor.remove(key)
+        } else {
+            val array = JSONArray()
+            cleaned.forEach { array.put(it) }
+            editor.putString(key, array.toString())
+        }
+        editor.apply()
+        settingsVersion++
+    }
 }
