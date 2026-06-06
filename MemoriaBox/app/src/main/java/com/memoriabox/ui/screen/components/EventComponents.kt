@@ -119,6 +119,9 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
     var styleIndex by remember(event.id, event.cardTemplate) { mutableIntStateOf(styleOptions.indexOf(initialStyle).coerceAtLeast(0)) }
     var isDragging by remember { mutableStateOf(false) }
     var dragOffset by remember { mutableFloatStateOf(0f) }
+    var verticalDragOffset by remember { mutableFloatStateOf(0f) }
+    var horizontalDragLocked by remember { mutableStateOf(false) }
+    var verticalDragLocked by remember { mutableStateOf(false) }
     val style = styleOptions[styleIndex]
     val dragProgress = (dragOffset / 180f).coerceIn(-1f, 1f)
     val animatedScale by animateFloatAsState(targetValue = if (isDragging) 1.04f else 1f, label = "eventCardScale")
@@ -148,14 +151,22 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
             .shadow(elevation = animatedElevation, shape = RoundedCornerShape(24.dp))
             .pointerInput(event.id) {
                 detectDragGestures(
-                    onDragStart = { isDragging = true },
+                    onDragStart = {
+                        dragOffset = 0f
+                        verticalDragOffset = 0f
+                        horizontalDragLocked = false
+                        verticalDragLocked = false
+                    },
                     onDragCancel = {
                         isDragging = false
                         dragOffset = 0f
+                        verticalDragOffset = 0f
+                        horizontalDragLocked = false
+                        verticalDragLocked = false
                     },
                     onDragEnd = {
                         isDragging = false
-                        if (abs(dragOffset) > 44f) {
+                        if (horizontalDragLocked && abs(dragOffset) > 72f) {
                             val newIndex = if (dragOffset > 0f) {
                                 (styleIndex + 1) % styleOptions.size
                             } else {
@@ -173,10 +184,26 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
                             onStyleChange(newTemplate)
                         }
                         dragOffset = 0f
+                        verticalDragOffset = 0f
+                        horizontalDragLocked = false
+                        verticalDragLocked = false
                     },
                     onDrag = { change, dragAmount ->
-                        dragOffset += dragAmount.x
-                        change.consume()
+                        if (!horizontalDragLocked && !verticalDragLocked) {
+                            dragOffset += dragAmount.x
+                            verticalDragOffset += dragAmount.y
+                            val horizontalDistance = abs(dragOffset)
+                            val verticalDistance = abs(verticalDragOffset)
+                            horizontalDragLocked = horizontalDistance > 36f && horizontalDistance > verticalDistance * 1.6f
+                            verticalDragLocked = verticalDistance > 18f && verticalDistance >= horizontalDistance
+                            isDragging = horizontalDragLocked
+                        } else if (horizontalDragLocked) {
+                            dragOffset += dragAmount.x
+                        }
+
+                        if (horizontalDragLocked) {
+                            change.consume()
+                        }
                     }
                 )
             }
