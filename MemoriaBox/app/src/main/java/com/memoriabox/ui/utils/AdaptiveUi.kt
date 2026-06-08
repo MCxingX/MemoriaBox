@@ -23,33 +23,33 @@ fun rememberAdaptiveUiSize(): AdaptiveUiSize {
     val shortest = minOf(configuration.screenWidthDp, configuration.screenHeightDp)
     val tallest = maxOf(configuration.screenWidthDp, configuration.screenHeightDp)
     return remember(shortest, tallest) {
-        val compact = shortest < 380 || tallest < 720
-        val roomy = shortest >= 600 || tallest >= 1000
+        val compact = shortest < 375 || tallest < 720
+        val roomy = shortest > 414 || shortest >= 600 || tallest >= 1000
         AdaptiveUiSize(
             compact = compact,
             roomy = roomy,
             screenPadding = when {
-                compact -> 12.dp
-                roomy -> 22.dp
+                compact -> 16.dp
+                roomy -> 24.dp
                 else -> 16.dp
             },
             sectionSpacing = when {
-                compact -> 6.dp
-                roomy -> 12.dp
+                compact -> 8.dp
+                roomy -> 16.dp
                 else -> 8.dp
             },
             topBarHeight = when {
-                compact -> 44.dp
+                compact -> 48.dp
                 roomy -> 56.dp
-                else -> 50.dp
+                else -> 48.dp
             },
-            buttonHeight = if (compact) 44.dp else 48.dp,
+            buttonHeight = 48.dp,
             heroMinHeight = when {
-                compact -> 118.dp
-                roomy -> 168.dp
-                else -> 138.dp
+                compact -> 128.dp
+                roomy -> 176.dp
+                else -> 144.dp
             },
-            cardRadius = if (compact) 18.dp else 24.dp
+            cardRadius = if (compact) 16.dp else 24.dp
         )
     }
 }

@@ -48,6 +48,8 @@ import com.memoriabox.ui.utils.rememberAdaptiveUiSize
 import com.memoriabox.data.model.*
 import com.memoriabox.ui.theme.AppThemeMode
 import com.memoriabox.ui.theme.AppThemeGroup
+import com.memoriabox.ui.theme.MemoriaBoxLogoMark
+import com.memoriabox.ui.theme.MemoriaDesign
 import com.memoriabox.ui.theme.group
 import com.memoriabox.utils.AppSettings
 import com.memoriabox.utils.MonthlySummaryHelper
@@ -690,12 +692,20 @@ fun BoxesScreen(
             topBar = {
                 TopAppBar(
                     modifier = Modifier.height(adaptiveUi.topBarHeight),
-                    title = { Text("日子") },
+                    title = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            MemoriaBoxLogoMark(size = 32.dp)
+                            Text("今天", style = MaterialTheme.typography.titleMedium)
+                        }
+                    },
                     windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                     actions = {
                         IconButton(onClick = { showCreateDialog = true }) {
-                            Icon(Icons.Default.Add, contentDescription = "添加分类")
+                            Icon(Icons.Default.CreateNewFolder, contentDescription = "添加分组")
                         }
                     }
                 )
@@ -930,32 +940,23 @@ fun HomeDashboard(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = adaptiveUi.screenPadding, vertical = adaptiveUi.sectionSpacing)
         ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(if (upcomingEnabled) "即将到来" else "今天先看这些", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    if (upcomingEnabled) {
-                        val reminderText = if (upcomingReminderEnabled) "提醒开启" else "提醒关闭"
-                        "${visibleEvents.size} 个 · ${upcomingDays} 天内优先 · $reminderText · $selectedBoxName"
-                    } else {
-                        "${visibleEvents.size} 个 · $selectedBoxName"
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+        TodayHeader(
+            visibleCount = visibleEvents.size,
+            selectedBoxName = selectedBoxName,
+            upcomingDays = upcomingDays,
+            upcomingEnabled = upcomingEnabled,
+            reminderEnabled = upcomingReminderEnabled,
+            adaptiveUi = adaptiveUi,
+            trailing = {
+                HomeBoxFilter(
+                    boxes = boxes,
+                    selectedBoxId = selectedBoxId,
+                    onBoxSelected = onBoxSelected,
+                    onCreateBox = onCreateBox
                 )
             }
-            HomeBoxFilter(
-                boxes = boxes,
-                selectedBoxId = selectedBoxId,
-                onBoxSelected = onBoxSelected,
-                onCreateBox = onCreateBox
-            )
-        }
-        Spacer(Modifier.height(adaptiveUi.sectionSpacing))
+        )
+        Spacer(Modifier.height(8.dp))
         HomeHeroCard(
             totalEvents = visibleEvents.size,
             boxCount = boxes.size,
@@ -965,7 +966,7 @@ fun HomeDashboard(
             onBoxesClick = { onTabSelected(1) },
             adaptiveUi = adaptiveUi
         )
-        Spacer(Modifier.height(adaptiveUi.sectionSpacing))
+        Spacer(Modifier.height(8.dp))
         AllEventsTab(
             events = visibleEvents,
             upcomingEnabled = upcomingEnabled,
@@ -975,6 +976,62 @@ fun HomeDashboard(
             onEventLongClick = onEventLongClick,
             adaptiveUi = adaptiveUi
         )
+        }
+    }
+}
+
+@Composable
+private fun TodayHeader(
+    visibleCount: Int,
+    selectedBoxName: String,
+    upcomingDays: Int,
+    upcomingEnabled: Boolean,
+    reminderEnabled: Boolean,
+    adaptiveUi: AdaptiveUiSize,
+    trailing: @Composable () -> Unit
+) {
+    val now = remember { Date() }
+    val dateText = remember(now) { SimpleDateFormat("M月d日 EEEE", Locale.getDefault()).format(now) }
+    val lunarText = remember(now) { LunarDateUtils.dayLabelForGregorian(now.time) }
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(adaptiveUi.cardRadius),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
+        tonalElevation = 1.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(MemoriaDesign.spacing.cardPadding),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text("今天", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface)
+                    Text(
+                        "$dateText · $lunarText",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1
+                    )
+                }
+                trailing()
+            }
+            val reminderText = if (reminderEnabled) "提醒开启" else "提醒关闭"
+            Text(
+                text = if (upcomingEnabled) {
+                    "$visibleCount 个日子 · $upcomingDays 天内优先 · $reminderText · $selectedBoxName"
+                } else {
+                    "$visibleCount 个日子 · $selectedBoxName"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -1041,25 +1098,25 @@ fun HomeHeroCard(
                         )
                     )
                 )
-                .padding(if (adaptiveUi.compact) 14.dp else 18.dp)
+                .padding(MemoriaDesign.spacing.cardPadding)
         ) {
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .offset(x = 34.dp, y = (-38).dp)
-                    .size(if (adaptiveUi.compact) 104.dp else 132.dp)
+                    .offset(x = 32.dp, y = (-40).dp)
+                    .size(if (adaptiveUi.compact) 104.dp else 136.dp)
                     .background(Color.White.copy(alpha = 0.12f), RoundedCornerShape(999.dp))
             )
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .offset(x = (-44).dp, y = 38.dp)
-                    .size(if (adaptiveUi.compact) 90.dp else 118.dp)
+                    .offset(x = (-40).dp, y = 40.dp)
+                    .size(if (adaptiveUi.compact) 88.dp else 120.dp)
                     .background(Color.Black.copy(alpha = 0.08f), RoundedCornerShape(999.dp))
             )
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(if (adaptiveUi.compact) 12.dp else 14.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1067,7 +1124,7 @@ fun HomeHeroCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Surface(color = Color.White.copy(alpha = 0.22f), shape = MaterialTheme.shapes.large) {
-                        Text(dailyQuote.title, modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp), color = Color.White, style = MaterialTheme.typography.labelSmall)
+                        Text(dailyQuote.title, modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp), color = Color.White, style = MaterialTheme.typography.labelSmall)
                     }
                     Text(
                         if (upcomingEnabled) "${upcomingDays} 天内优先" else "完整日子流",
@@ -1085,7 +1142,7 @@ fun HomeHeroCard(
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(if (adaptiveUi.compact) 8.dp else 10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     HeroStatPill("日子", totalEvents.toString(), Modifier.weight(1f), onEventsClick)
                     HeroStatPill("分组", boxCount.toString(), Modifier.weight(1f), onBoxesClick)
@@ -1109,7 +1166,7 @@ fun HomeBoxFilter(
     Box {
         OutlinedButton(onClick = { expanded = true }) {
             Text(selectedBoxId?.let { id -> boxes.firstOrNull { it.id == id }?.name } ?: "全部分组", maxLines = 1)
-            Spacer(Modifier.width(4.dp))
+            Spacer(Modifier.width(8.dp))
             Icon(Icons.Default.ArrowDropDown, contentDescription = null)
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -1150,7 +1207,7 @@ fun HeroStatPill(label: String, value: String, modifier: Modifier = Modifier, on
         modifier = modifier.clickable(onClick = onClick)
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(value, color = Color.White, style = MaterialTheme.typography.titleMedium)
@@ -1171,7 +1228,7 @@ fun AllEventsTab(
 ) {
     val pinnedEvents = events.filter { it.isPinned }
     val normalEvents = events.filter { !it.isPinned }
-    val eventSpacing = if (adaptiveUi.compact) 7.dp else if (adaptiveUi.roomy) 10.dp else 8.dp
+    val eventSpacing = if (adaptiveUi.roomy) 16.dp else 8.dp
     
     if (events.isEmpty()) {
         if (upcomingEnabled) {
@@ -1209,7 +1266,7 @@ fun EmptyUpcomingEventHint(upcomingDays: Int) {
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text("近期很轻松", style = MaterialTheme.typography.titleSmall)
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(8.dp))
             Text("${upcomingDays} 天内没有需要特别留意的日子。", style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.height(4.dp))
             Text("所有日子都会显示，临近的排前面，较远或已过的排后面。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -2211,7 +2268,7 @@ fun SettingsScreen(
         SettingsItem(
             icon = Icons.Default.Info,
             title = "关于",
-            description = "版本 3.2.11 · MemoriaBox",
+            description = "版本 3.2.14 · MemoriaBox",
             onClick = { showAboutDialog = true }
         )
     }
@@ -2222,7 +2279,7 @@ fun SettingsScreen(
             title = { Text("关于 MemoriaBox") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("版本：3.2.11", style = MaterialTheme.typography.bodyMedium)
+                    Text("版本：3.2.14", style = MaterialTheme.typography.bodyMedium)
                     Text("MemoriaBox 是一个本地优先的日子、纪念日、待办和照片记录工具。", style = MaterialTheme.typography.bodyMedium)
                     Text("数据默认保存在本机，可通过备份和 WebDAV 功能进行迁移或同步。", style = MaterialTheme.typography.bodyMedium)
                     Text("著名木羽制作", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
@@ -2353,17 +2410,28 @@ fun SettingsHeroCard() {
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = adaptiveUi.screenPadding, vertical = adaptiveUi.sectionSpacing),
         shape = MaterialTheme.shapes.extraLarge,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.18f))
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
-        Box(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Brush.linearGradient(listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary, MaterialTheme.colorScheme.tertiary)))
-                .padding(if (adaptiveUi.compact) 16.dp else 20.dp)
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.80f),
+                            MaterialTheme.colorScheme.surface
+                        )
+                    )
+                )
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("轻松设置", color = Color.White, style = MaterialTheme.typography.headlineSmall)
-                Text("把常用的留下，把低频工具收起来，界面就清爽很多。", color = Color.White.copy(alpha = 0.88f), style = MaterialTheme.typography.bodyMedium)
+            MemoriaBoxLogoMark(size = if (adaptiveUi.compact) 48.dp else 56.dp)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
+                Text("我的 MemoriaBox", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.headlineSmall)
+                Text("数据安全、外观、提醒和常用工具都放在这里。", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
             }
         }
     }
@@ -2378,14 +2446,14 @@ fun ThemeModeCard(currentThemeMode: AppThemeMode, onThemeModeChange: (AppThemeMo
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.84f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text("当前主题：${currentThemeMode.label}", style = MaterialTheme.typography.titleMedium)
             Text(currentThemeMode.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             AppThemeGroup.entries.forEach { group ->
                 val modes = AppThemeMode.entries.filter { it.group == group }
                 if (modes.isNotEmpty()) {
                     Text(group.label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         modes.forEach { mode ->
                             ThemePreviewCard(
                                 mode = mode,
@@ -2408,7 +2476,7 @@ private fun ThemePreviewCard(mode: AppThemeMode, selected: Boolean, onClick: () 
         border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
         colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -2417,13 +2485,13 @@ private fun ThemePreviewCard(mode: AppThemeMode, selected: Boolean, onClick: () 
                     .background(themePreviewBrush(mode))
             ) {
                 Row(
-                    modifier = Modifier.align(Alignment.BottomStart).padding(7.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    modifier = Modifier.align(Alignment.BottomStart).padding(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     repeat(5) { index ->
                         Box(
                             modifier = Modifier
-                                .size(if (index == 2) 16.dp else 10.dp)
+                                .size(if (index == 2) 16.dp else 8.dp)
                                 .clip(RoundedCornerShape(999.dp))
                                 .background(if (index == 2) Color.White else Color.White.copy(alpha = 0.62f))
                         )
@@ -2454,10 +2522,10 @@ fun SettingsSectionTitle(title: String, description: String) {
     val adaptiveUi = rememberAdaptiveUiSize()
     Column(
         modifier = Modifier.padding(
-            start = adaptiveUi.screenPadding + 4.dp,
-            end = adaptiveUi.screenPadding + 4.dp,
-            top = if (adaptiveUi.compact) 12.dp else 18.dp,
-            bottom = adaptiveUi.sectionSpacing / 2f
+            start = adaptiveUi.screenPadding,
+            end = adaptiveUi.screenPadding,
+            top = 24.dp,
+            bottom = 8.dp
         )
     ) {
         Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
