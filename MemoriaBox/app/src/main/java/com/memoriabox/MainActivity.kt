@@ -1,6 +1,8 @@
 package com.memoriabox
 
 import android.Manifest
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -24,6 +26,9 @@ import androidx.core.content.ContextCompat
 import com.memoriabox.ui.theme.AppThemeMode
 import com.memoriabox.ui.theme.MemoriaBoxTheme
 import com.memoriabox.ui.screen.MainScreen
+import com.memoriabox.widget.CalendarWidget
+import com.memoriabox.widget.CountdownWidget
+import com.memoriabox.widget.MemoriaBoxWidget
 
 class MainActivity : ComponentActivity() {
     
@@ -72,6 +77,7 @@ class MainActivity : ComponentActivity() {
                             onThemeModeChange = { mode ->
                                 themeMode = mode
                                 prefs.edit().putString("theme_mode", mode.id).apply()
+                                refreshWidgetsForThemeChange()
                             }
                         )
                     }
@@ -107,6 +113,23 @@ class MainActivity : ComponentActivity() {
             SystemBarStyle.light(background, 0xFF000000.toInt())
         }
         enableEdgeToEdge(statusBarStyle = statusBarStyle, navigationBarStyle = navigationBarStyle)
+    }
+
+    private fun refreshWidgetsForThemeChange() {
+        val manager = AppWidgetManager.getInstance(this)
+        listOf(
+            MemoriaBoxWidget::class.java,
+            CountdownWidget::class.java,
+            CalendarWidget::class.java
+        ).forEach { widgetClass ->
+            val ids = manager.getAppWidgetIds(ComponentName(this, widgetClass))
+            if (ids.isNotEmpty()) {
+                sendBroadcast(Intent(this, widgetClass).apply {
+                    action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
+                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
+                })
+            }
+        }
     }
 
     override fun onNewIntent(intent: Intent) {

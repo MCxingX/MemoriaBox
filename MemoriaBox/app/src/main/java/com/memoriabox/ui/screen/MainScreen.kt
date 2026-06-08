@@ -7,6 +7,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -46,6 +47,8 @@ import com.memoriabox.ui.utils.AdaptiveUiSize
 import com.memoriabox.ui.utils.rememberAdaptiveUiSize
 import com.memoriabox.data.model.*
 import com.memoriabox.ui.theme.AppThemeMode
+import com.memoriabox.ui.theme.AppThemeGroup
+import com.memoriabox.ui.theme.group
 import com.memoriabox.utils.AppSettings
 import com.memoriabox.utils.MonthlySummaryHelper
 import com.memoriabox.utils.NotificationHelper
@@ -58,6 +61,7 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import kotlin.random.Random
 
 @Composable
 fun MainScreen(
@@ -111,7 +115,10 @@ fun MainScreen(
     }
     var cuteTextIndex by rememberSaveable { mutableIntStateOf(0) }
     fun nextCuteText() {
-        cuteTextIndex = (cuteTextIndex + 1) % cuteTexts.size
+        if (cuteTexts.size <= 1) return
+        var next = Random.nextInt(cuteTexts.size)
+        if (next == cuteTextIndex) next = (next + 1) % cuteTexts.size
+        cuteTextIndex = next
     }
     fun navigateToRootTab(index: Int, route: String) {
         selectedTab = index
@@ -342,6 +349,7 @@ fun MainScreen(
                     onNavigateToSyncStatus = { navController.navigate(Screen.SyncStatus.route) },
                     onNavigateToDayTools = { navController.navigate(Screen.DayTools.route) },
                     onNavigateToCustomization = { navController.navigate(Screen.CustomizationSettings.route) },
+                    onNavigateToFriends = { navController.navigate(Screen.Friends.route) },
                     onBackupSettingsClick = { navController.navigate(Screen.BackupSettings.route) },
                     onWebDavSettingsClick = { navController.navigate(Screen.WebDavSettings.route) }
                 )
@@ -394,6 +402,12 @@ fun MainScreen(
             }
             composable(Screen.CustomizationSettings.route) {
                 CustomizationSettingsScreen(
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+            composable(Screen.Friends.route) {
+                FriendsScreen(
+                    application = application,
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
@@ -2051,6 +2065,7 @@ fun SettingsScreen(
     onNavigateToSyncStatus: () -> Unit,
     onNavigateToDayTools: () -> Unit,
     onNavigateToCustomization: () -> Unit,
+    onNavigateToFriends: () -> Unit,
     onBackupSettingsClick: () -> Unit,
     onWebDavSettingsClick: () -> Unit
 ) {
@@ -2086,6 +2101,12 @@ fun SettingsScreen(
             title = "个性化设置",
             description = "自定义页面背景、固定每日语录",
             onClick = onNavigateToCustomization
+        )
+        SettingsItem(
+            icon = Icons.Default.Groups,
+            title = "好友管理",
+            description = "生日按一个月内临近优先排序，全部好友都会保留",
+            onClick = onNavigateToFriends
         )
         SettingsItem(
             icon = Icons.Default.MoreHoriz,
@@ -2360,22 +2381,57 @@ fun ThemeModeCard(currentThemeMode: AppThemeMode, onThemeModeChange: (AppThemeMo
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("当前主题：${currentThemeMode.label}", style = MaterialTheme.typography.titleMedium)
             Text(currentThemeMode.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                AppThemeMode.entries.forEach { mode ->
-                    FilterChip(
-                        selected = currentThemeMode == mode,
-                        onClick = { onThemeModeChange(mode) },
-                        label = { Text(mode.label) },
-                        leadingIcon = {
-                            Box(
-                                modifier = Modifier
-                                    .size(14.dp)
-                                    .background(themePreviewBrush(mode), shape = MaterialTheme.shapes.small)
+            AppThemeGroup.entries.forEach { group ->
+                val modes = AppThemeMode.entries.filter { it.group == group }
+                if (modes.isNotEmpty()) {
+                    Text(group.label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        modes.forEach { mode ->
+                            ThemePreviewCard(
+                                mode = mode,
+                                selected = currentThemeMode == mode,
+                                onClick = { onThemeModeChange(mode) }
                             )
                         }
-                    )
+                    }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ThemePreviewCard(mode: AppThemeMode, selected: Boolean, onClick: () -> Unit) {
+    OutlinedCard(
+        onClick = onClick,
+        modifier = Modifier.width(154.dp),
+        border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
+        colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(54.dp)
+                    .clip(MaterialTheme.shapes.medium)
+                    .background(themePreviewBrush(mode))
+            ) {
+                Row(
+                    modifier = Modifier.align(Alignment.BottomStart).padding(7.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    repeat(5) { index ->
+                        Box(
+                            modifier = Modifier
+                                .size(if (index == 2) 16.dp else 10.dp)
+                                .clip(RoundedCornerShape(999.dp))
+                                .background(if (index == 2) Color.White else Color.White.copy(alpha = 0.62f))
+                        )
+                    }
+                }
+            }
+            Text(mode.label, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+            Text(mode.description, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
         }
     }
 }
@@ -2418,9 +2474,13 @@ fun BackupSettingsScreen(
     val operationState by viewModel.operationState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val snackbarScope = rememberCoroutineScope()
+    var backupPassword by rememberSaveable { mutableStateOf("") }
+    var pendingImportUri by remember { mutableStateOf<Uri?>(null) }
+    var importSummary by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(operationState.message) {
         operationState.message?.let { message ->
+            if (operationState.importSummary != null) importSummary = operationState.importSummary
             snackbarHostState.showSnackbar(
                 message = message,
                 duration = if (operationState.importRestored) SnackbarDuration.Long else SnackbarDuration.Short
@@ -2444,7 +2504,7 @@ fun BackupSettingsScreen(
         contract = ActivityResultContracts.OpenDocumentTree()
     ) { uri ->
         if (uri != null) {
-            viewModel.triggerManualBackup(uri)
+            viewModel.triggerManualBackup(uri, backupPassword)
         } else {
             snackbarScope.launch { snackbarHostState.showSnackbar("未选择备份目录") }
         }
@@ -2454,7 +2514,7 @@ fun BackupSettingsScreen(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) {
-            viewModel.importBackup(uri)
+            pendingImportUri = uri
         } else {
             snackbarScope.launch { snackbarHostState.showSnackbar("未选择备份文件") }
         }
@@ -2475,10 +2535,38 @@ fun BackupSettingsScreen(
     ) { paddingValues ->
         BackupSettingsContent(
             modifier = Modifier.padding(paddingValues),
+            backupPassword = backupPassword,
+            onBackupPasswordChange = { backupPassword = it },
             onSelectDir = { dirPicker.launch(null) },
             onManualBackup = { exportPicker.launch(null) },
             onImport = { importPicker.launch(arrayOf("application/octet-stream", "application/x-sqlite3", "application/vnd.sqlite3", "*/*")) },
             isBusy = operationState.inProgress
+        )
+    }
+
+    pendingImportUri?.let { uri ->
+        AlertDialog(
+            onDismissRequest = { pendingImportUri = null },
+            title = { Text("确认导入备份") },
+            text = {
+                Text("导入会合并到当前数据，现有日子、日记和素材会保留。若备份设置了密码，请确认上方密码已填写。")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.importBackup(uri, backupPassword)
+                    pendingImportUri = null
+                }) { Text("合并导入") }
+            },
+            dismissButton = { TextButton(onClick = { pendingImportUri = null }) { Text("取消") } }
+        )
+    }
+
+    importSummary?.let { summary ->
+        AlertDialog(
+            onDismissRequest = { importSummary = null },
+            title = { Text("导入摘要") },
+            text = { Text(summary) },
+            confirmButton = { TextButton(onClick = { importSummary = null }) { Text("知道了") } }
         )
     }
 }

@@ -2,6 +2,7 @@ package com.memoriabox.repository
 
 import com.memoriabox.data.dao.BoxDao
 import com.memoriabox.data.dao.EventDao
+import com.memoriabox.data.dao.FriendDao
 import com.memoriabox.data.dao.LabelDao
 import com.memoriabox.data.dao.LogDao
 import com.memoriabox.data.dao.DiaryDao
@@ -36,6 +37,13 @@ class EventRepository(private val eventDao: EventDao) {
     suspend fun deleteEventsByIds(ids: List<String>) = eventDao.deleteEventsByIds(ids)
     suspend fun getEventsByIds(ids: List<String>): List<Event> = eventDao.getEventsByIds(ids)
     suspend fun updatePinned(id: String, isPinned: Boolean) = eventDao.updatePinned(id, isPinned)
+}
+
+class FriendRepository(private val friendDao: FriendDao) {
+    fun getAllFriends(): Flow<List<Friend>> = friendDao.getAllFriends()
+    suspend fun getAllFriendsOnce(): List<Friend> = friendDao.getAllFriendsOnce()
+    suspend fun upsertFriend(friend: Friend): Long = friendDao.upsertFriend(friend)
+    suspend fun deleteFriend(friend: Friend) = friendDao.deleteFriend(friend)
 }
 
 class LogRepository(private val logDao: LogDao) {

@@ -23,6 +23,7 @@ sealed class Screen(val route: String) {
     object SyncStatus : Screen("sync_status")
     object DayTools : Screen("day_tools")
     object CustomizationSettings : Screen("customization_settings")
+    object Friends : Screen("friends")
 }
 
 sealed class BottomNavigationItem(

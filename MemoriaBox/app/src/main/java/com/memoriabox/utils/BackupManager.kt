@@ -276,7 +276,9 @@ class BackupManager(
                 importDb.labelDao().getAllEventLabelsOnce().takeIf { it.isNotEmpty() }?.let { database.labelDao().addEventLabels(it) }
                 importDb.diaryDao().getAllDiariesOnce().takeIf { it.isNotEmpty() }?.let { database.diaryDao().upsertDiaries(it) }
                 importDb.diaryDao().getAllMediaOnce().takeIf { it.isNotEmpty() }?.let { database.diaryDao().upsertMedia(it) }
-                importDb.logDao().getAllLogsOnce().takeIf { it.isNotEmpty() }?.let { database.logDao().insertLogs(it) }
+                importDb.logDao().getAllLogsOnce().takeIf { it.isNotEmpty() }?.let { logs ->
+                    database.logDao().insertLogs(logs.map { it.copy(id = 0) })
+                }
             }
         } finally {
             importDb.close()

@@ -9,6 +9,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.memoriabox.data.model.*
 import com.memoriabox.repository.EventRepository
+import com.memoriabox.repository.FriendRepository
 import com.memoriabox.repository.LogRepository
 import com.memoriabox.repository.LabelRepository
 import com.memoriabox.repository.DiaryRepository
@@ -24,6 +25,7 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
+import java.util.concurrent.TimeUnit
 
 class MainViewModel(
     application: Application,
@@ -365,6 +367,61 @@ class TodoViewModel(
     }
 }
 
+class FriendViewModel(
+    application: Application,
+    private val friendRepository: FriendRepository
+) : AndroidViewModel(application) {
+
+    val friends = friendRepository.getAllFriends()
+        .map { list -> list.sortedWith(compareBy<Friend> { friendBirthdaySortBucket(it) }.thenBy { friendNextBirthdayDistance(it) }.thenBy { it.createdAt }) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun saveFriend(existing: Friend?, name: String, birthdayDate: Long?) = viewModelScope.launch {
+        val trimmed = name.trim()
+        if (trimmed.isBlank()) return@launch
+        friendRepository.upsertFriend(
+            Friend(
+                id = existing?.id ?: java.util.UUID.randomUUID().toString(),
+                name = trimmed,
+                avatarUri = existing?.avatarUri,
+                birthdayDate = birthdayDate,
+                createdAt = existing?.createdAt ?: System.currentTimeMillis()
+            )
+        )
+    }
+
+    fun deleteFriend(friend: Friend) = viewModelScope.launch {
+        friendRepository.deleteFriend(friend)
+    }
+}
+
+private fun friendBirthdaySortBucket(friend: Friend): Int {
+    val distance = friendNextBirthdayDistance(friend)
+    return when {
+        distance == Int.MAX_VALUE -> 2
+        distance <= 30 -> 0
+        else -> 1
+    }
+}
+
+private fun friendNextBirthdayDistance(friend: Friend): Int {
+    val birthday = friend.birthdayDate ?: return Int.MAX_VALUE
+    val today = Calendar.getInstance().apply {
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }
+    val source = Calendar.getInstance().apply { timeInMillis = birthday }
+    val next = Calendar.getInstance().apply {
+        timeInMillis = today.timeInMillis
+        set(Calendar.MONTH, source.get(Calendar.MONTH))
+        set(Calendar.DAY_OF_MONTH, source.get(Calendar.DAY_OF_MONTH))
+    }
+    if (next.before(today)) next.add(Calendar.YEAR, 1)
+    return TimeUnit.MILLISECONDS.toDays(next.timeInMillis - today.timeInMillis).toInt()
+}
+
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class LogViewModel(
     application: Application,
@@ -390,7 +447,8 @@ class BackupViewModel(
     data class OperationState(
         val inProgress: Boolean = false,
         val message: String? = null,
-        val importRestored: Boolean = false
+        val importRestored: Boolean = false,
+        val importSummary: String? = null
     )
 
     private val _operationState = MutableStateFlow(OperationState())
@@ -426,7 +484,11 @@ class BackupViewModel(
         runCatching {
             backupManager.importBackup(uri, password).getOrThrow()
         }.onSuccess {
-            _operationState.value = OperationState(message = "备份导入成功，已合并到当前数据。", importRestored = true)
+            _operationState.value = OperationState(
+                message = "备份导入成功，已合并到当前数据。",
+                importRestored = true,
+                importSummary = "导入方式：合并导入\n当前数据：已保留\n日子、日记和素材：已尝试恢复\n如存在同名或重复内容，会在原列表中继续保留，方便你手动整理。"
+            )
             runCatching { logRepository.logBackupOperation("IMPORT", "success") }
         }.onFailure { e ->
             _operationState.value = OperationState(message = "备份导入失败：${e.message ?: "未知错误"}")
@@ -518,6 +580,11 @@ fun createTodoViewModel(application: Application): TodoViewModel {
         application,
         EventRepository(app.database.eventDao())
     )
+}
+
+fun createFriendViewModel(application: Application): FriendViewModel {
+    val app = application as com.memoriabox.MemoriaApp
+    return FriendViewModel(application, FriendRepository(app.database.friendDao()))
 }
 
 fun createLogViewModel(application: Application): LogViewModel {

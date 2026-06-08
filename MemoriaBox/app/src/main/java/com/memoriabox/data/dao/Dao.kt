@@ -98,6 +98,21 @@ interface EventDao {
 }
 
 @Dao
+interface FriendDao {
+    @Query("SELECT * FROM friends ORDER BY created_at ASC")
+    fun getAllFriends(): Flow<List<Friend>>
+
+    @Query("SELECT * FROM friends ORDER BY created_at ASC")
+    suspend fun getAllFriendsOnce(): List<Friend>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertFriend(friend: Friend): Long
+
+    @Delete
+    suspend fun deleteFriend(friend: Friend)
+}
+
+@Dao
 interface LabelDao {
     @Query("SELECT * FROM labels ORDER BY name ASC")
     fun getAllLabels(): Flow<List<Label>>

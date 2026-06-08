@@ -10,6 +10,10 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 
@@ -22,6 +26,116 @@ enum class AppThemeMode(val id: String, val label: String, val description: Stri
     CREAM("cream", "奶油米白", "轻松、温柔、像纸质手账"),
     MINT("mint", "薄荷清晨", "清爽、安静、适合日常记录"),
     LAVENDER("lavender", "薰衣草雾", "柔软、舒缓、带一点浪漫")
+}
+
+enum class AppThemeGroup(val label: String) {
+    RECOMMENDED("推荐"), EYE_CARE("护眼"), PLAYFUL("个性"), DARK("暗色")
+}
+
+val AppThemeMode.group: AppThemeGroup
+    get() = when (this) {
+        AppThemeMode.DARK -> AppThemeGroup.DARK
+        AppThemeMode.EYE_CARE -> AppThemeGroup.EYE_CARE
+        AppThemeMode.PLAYFUL -> AppThemeGroup.PLAYFUL
+        AppThemeMode.BLUE_WHITE, AppThemeMode.WARM, AppThemeMode.CREAM, AppThemeMode.MINT, AppThemeMode.LAVENDER -> AppThemeGroup.RECOMMENDED
+    }
+
+@Immutable
+data class MemoriaThemeTokens(
+    val calendarBackground: Color,
+    val calendarCard: Color,
+    val calendarToday: Color,
+    val calendarSelected: Color,
+    val calendarSelectedContent: Color,
+    val diaryMarker: Color,
+    val anniversaryMarker: Color,
+    val festivalMarker: Color,
+    val todoMarker: Color,
+    val heatLow: Color,
+    val heatHigh: Color,
+    val gentleWarning: Color,
+    val success: Color
+)
+
+val LocalMemoriaThemeTokens = staticCompositionLocalOf {
+    MemoriaThemeTokens(
+        calendarBackground = Color(0xFFF6FAFF),
+        calendarCard = Color.White,
+        calendarToday = Color(0xFF1677FF),
+        calendarSelected = Color(0xFF062A5C),
+        calendarSelectedContent = Color.White,
+        diaryMarker = Color(0xFF1677FF),
+        anniversaryMarker = Color(0xFFFF7A00),
+        festivalMarker = Color(0xFFD946EF),
+        todoMarker = Color(0xFF0F9F8E),
+        heatLow = Color(0xFFE8F2FF),
+        heatHigh = Color(0xFF1677FF),
+        gentleWarning = Color(0xFFFFB020),
+        success = Color(0xFF2E7D32)
+    )
+}
+
+private fun memoriaThemeTokens(themeMode: AppThemeMode, scheme: androidx.compose.material3.ColorScheme): MemoriaThemeTokens = when (themeMode) {
+    AppThemeMode.DARK -> MemoriaThemeTokens(
+        calendarBackground = Color(0xFF17121A),
+        calendarCard = Color(0xFF221B28),
+        calendarToday = Color(0xFFFFC2CC),
+        calendarSelected = Color(0xFFFF8A9A),
+        calendarSelectedContent = Color(0xFF3B0710),
+        diaryMarker = Color(0xFF91D7FF),
+        anniversaryMarker = Color(0xFFFFC078),
+        festivalMarker = Color(0xFFE6B8FF),
+        todoMarker = Color(0xFF83E6C8),
+        heatLow = Color(0xFF342637),
+        heatHigh = Color(0xFFFF8A9A),
+        gentleWarning = Color(0xFFFFC078),
+        success = Color(0xFF83E6C8)
+    )
+    AppThemeMode.EYE_CARE -> MemoriaThemeTokens(
+        calendarBackground = Color(0xFFFAFCF4),
+        calendarCard = Color.White,
+        calendarToday = Color(0xFF2E7D32),
+        calendarSelected = Color(0xFF0B3D12),
+        calendarSelectedContent = Color.White,
+        diaryMarker = Color(0xFF2E7D32),
+        anniversaryMarker = Color(0xFFB7791F),
+        festivalMarker = Color(0xFF4DB6AC),
+        todoMarker = Color(0xFF6B8E23),
+        heatLow = Color(0xFFE7F5E8),
+        heatHigh = Color(0xFF2E7D32),
+        gentleWarning = Color(0xFFFFB020),
+        success = Color(0xFF2E7D32)
+    )
+    AppThemeMode.PLAYFUL -> MemoriaThemeTokens(
+        calendarBackground = Color(0xFFFFFBF7),
+        calendarCard = Color.White,
+        calendarToday = Color(0xFFFF6B6B),
+        calendarSelected = Color(0xFF7C5CFF),
+        calendarSelectedContent = Color.White,
+        diaryMarker = Color(0xFF00B8D9),
+        anniversaryMarker = Color(0xFFFF6B6B),
+        festivalMarker = Color(0xFF7C5CFF),
+        todoMarker = Color(0xFF2ECA8B),
+        heatLow = Color(0xFFFFE1E4),
+        heatHigh = Color(0xFFFF6B6B),
+        gentleWarning = Color(0xFFFFB020),
+        success = Color(0xFF2ECA8B)
+    )
+    else -> MemoriaThemeTokens(
+        calendarBackground = scheme.background,
+        calendarCard = scheme.surface,
+        calendarToday = scheme.primary,
+        calendarSelected = scheme.primaryContainer,
+        calendarSelectedContent = scheme.onPrimaryContainer,
+        diaryMarker = scheme.primary,
+        anniversaryMarker = scheme.secondary,
+        festivalMarker = scheme.tertiary,
+        todoMarker = Color(0xFF0F9F8E),
+        heatLow = scheme.primaryContainer.copy(alpha = 0.42f),
+        heatHigh = scheme.primary,
+        gentleWarning = Color(0xFFFFB020),
+        success = Color(0xFF2E7D32)
+    )
 }
 
 private val BlueWhiteColorScheme = lightColorScheme(
@@ -192,10 +306,12 @@ fun MemoriaBoxTheme(
         else -> BlueWhiteColorScheme
     }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        shapes = MemoriaShapes,
-        content = content
-    )
+    CompositionLocalProvider(LocalMemoriaThemeTokens provides memoriaThemeTokens(themeMode, colorScheme)) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = Typography,
+            shapes = MemoriaShapes,
+            content = content
+        )
+    }
 }

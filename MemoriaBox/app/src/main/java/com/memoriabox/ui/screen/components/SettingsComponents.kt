@@ -20,6 +20,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.memoriabox.ui.utils.rememberAdaptiveUiSize
@@ -113,6 +114,8 @@ fun SettingsItem(
 @Composable
 fun BackupSettingsContent(
     modifier: Modifier = Modifier,
+    backupPassword: String = "",
+    onBackupPasswordChange: (String) -> Unit = {},
     onSelectDir: () -> Unit = {},
     onManualBackup: () -> Unit = {},
     onImport: () -> Unit = {},
@@ -129,6 +132,17 @@ fun BackupSettingsContent(
         OutlinedCard(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text("本地备份", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = backupPassword,
+                    onValueChange = onBackupPasswordChange,
+                    label = { Text("备份密码（可选）") },
+                    supportingText = { Text("留空会使用默认保护；跨设备导入建议设置密码。") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isBusy
+                )
                 Spacer(Modifier.height(8.dp))
                 Button(onClick = onSelectDir, enabled = !isBusy, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Default.Folder, null)
@@ -197,6 +211,8 @@ fun WebDavSettingsContent(
             value = password,
             onValueChange = { password = it },
             label = { Text("密码") },
+            visualTransformation = PasswordVisualTransformation(),
+            singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.height(16.dp))
