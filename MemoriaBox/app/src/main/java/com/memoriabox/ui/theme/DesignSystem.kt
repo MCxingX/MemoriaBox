@@ -20,18 +20,23 @@ import androidx.compose.ui.unit.dp
 
 @Immutable
 data class MemoriaSpacing(
-    val xs: Dp = 8.dp,
-    val sm: Dp = 16.dp,
-    val md: Dp = 24.dp,
-    val lg: Dp = 32.dp,
-    val cardPadding: Dp = 16.dp
+    val xs: Dp = 6.dp,
+    val sm: Dp = 10.dp,
+    val md: Dp = 14.dp,
+    val lg: Dp = 20.dp,
+    val xl: Dp = 28.dp,
+    val cardPadding: Dp = 14.dp
 )
 
 object MemoriaDesign {
     val spacing = MemoriaSpacing()
-    val cardRadius = 24.dp
-    val compactCardRadius = 16.dp
-    val maxContentWidth = 600.dp
+    val cardRadius = 16.dp
+    val compactCardRadius = 14.dp
+    val sheetRadius = 22.dp
+    val softShadow = 3.dp
+    val liftedShadow = 6.dp
+    val maxContentWidth = 640.dp
+    val wideContentWidth = 760.dp
 }
 
 @Composable

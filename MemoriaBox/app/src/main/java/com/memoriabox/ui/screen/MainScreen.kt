@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import androidx.navigation.NavHostController
@@ -938,6 +939,8 @@ fun HomeDashboard(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
+                .widthIn(max = adaptiveUi.maxContentWidth)
+                .align(Alignment.TopCenter)
                 .padding(horizontal = adaptiveUi.screenPadding, vertical = adaptiveUi.sectionSpacing)
         ) {
         TodayHeader(
@@ -956,17 +959,19 @@ fun HomeDashboard(
                 )
             }
         )
-        Spacer(Modifier.height(8.dp))
-        HomeHeroCard(
-            totalEvents = visibleEvents.size,
-            boxCount = boxes.size,
-            upcomingDays = upcomingDays,
-            upcomingEnabled = upcomingEnabled,
-            onEventsClick = { onTabSelected(0) },
-            onBoxesClick = { onTabSelected(1) },
-            adaptiveUi = adaptiveUi
-        )
-        Spacer(Modifier.height(8.dp))
+        if (!adaptiveUi.compact) {
+            Spacer(Modifier.height(adaptiveUi.sectionSpacing))
+            HomeHeroCard(
+                totalEvents = visibleEvents.size,
+                boxCount = boxes.size,
+                upcomingDays = upcomingDays,
+                upcomingEnabled = upcomingEnabled,
+                onEventsClick = { onTabSelected(0) },
+                onBoxesClick = { onTabSelected(1) },
+                adaptiveUi = adaptiveUi
+            )
+        }
+        Spacer(Modifier.height(adaptiveUi.sectionSpacing))
         AllEventsTab(
             events = visibleEvents,
             upcomingEnabled = upcomingEnabled,
@@ -1000,8 +1005,8 @@ private fun TodayHeader(
         tonalElevation = 1.dp
     ) {
         Column(
-            modifier = Modifier.padding(MemoriaDesign.spacing.cardPadding),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.padding(adaptiveUi.cardPadding),
+            verticalArrangement = Arrangement.spacedBy(MemoriaDesign.spacing.xs)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1010,14 +1015,15 @@ private fun TodayHeader(
             ) {
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    Text("今天", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface)
+                    Text("今天", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
                     Text(
                         "$dateText · $lunarText",
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
                 trailing()
@@ -1030,7 +1036,9 @@ private fun TodayHeader(
                     "$visibleCount 个日子 · $selectedBoxName"
                 },
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
@@ -1228,7 +1236,7 @@ fun AllEventsTab(
 ) {
     val pinnedEvents = events.filter { it.isPinned }
     val normalEvents = events.filter { !it.isPinned }
-    val eventSpacing = if (adaptiveUi.roomy) 16.dp else 8.dp
+    val eventSpacing = adaptiveUi.sectionSpacing
     
     if (events.isEmpty()) {
         if (upcomingEnabled) {
@@ -2440,20 +2448,37 @@ fun SettingsHeroCard() {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ThemeModeCard(currentThemeMode: AppThemeMode, onThemeModeChange: (AppThemeMode) -> Unit) {
+    val adaptiveUi = rememberAdaptiveUiSize()
     Card(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-        shape = MaterialTheme.shapes.extraLarge,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = adaptiveUi.screenPadding, vertical = adaptiveUi.sectionSpacing),
+        shape = RoundedCornerShape(MemoriaDesign.cardRadius),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.84f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = MemoriaDesign.softShadow)
     ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text("当前主题：${currentThemeMode.label}", style = MaterialTheme.typography.titleMedium)
-            Text(currentThemeMode.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(modifier = Modifier.padding(adaptiveUi.cardPadding), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("当前主题", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+                    Text(currentThemeMode.label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                }
+                Box(
+                    modifier = Modifier
+                        .width(54.dp)
+                        .height(28.dp)
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(themePreviewBrush(currentThemeMode))
+                )
+            }
+            Text(currentThemeMode.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
             AppThemeGroup.entries.forEach { group ->
                 val modes = AppThemeMode.entries.filter { it.group == group }
                 if (modes.isNotEmpty()) {
-                    Text(group.label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(group.label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         modes.forEach { mode ->
                             ThemePreviewCard(
                                 mode = mode,
@@ -2472,34 +2497,26 @@ fun ThemeModeCard(currentThemeMode: AppThemeMode, onThemeModeChange: (AppThemeMo
 private fun ThemePreviewCard(mode: AppThemeMode, selected: Boolean, onClick: () -> Unit) {
     OutlinedCard(
         onClick = onClick,
-        modifier = Modifier.width(154.dp),
+        modifier = Modifier.width(118.dp),
+        shape = RoundedCornerShape(14.dp),
         border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
         colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(54.dp)
-                    .clip(MaterialTheme.shapes.medium)
+                    .size(26.dp)
+                    .clip(RoundedCornerShape(9.dp))
                     .background(themePreviewBrush(mode))
-            ) {
-                Row(
-                    modifier = Modifier.align(Alignment.BottomStart).padding(8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    repeat(5) { index ->
-                        Box(
-                            modifier = Modifier
-                                .size(if (index == 2) 16.dp else 8.dp)
-                                .clip(RoundedCornerShape(999.dp))
-                                .background(if (index == 2) Color.White else Color.White.copy(alpha = 0.62f))
-                        )
-                    }
-                }
+            )
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                Text(mode.label, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(mode.description, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            Text(mode.label, style = MaterialTheme.typography.labelLarge, maxLines = 1)
-            Text(mode.description, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
         }
     }
 }
