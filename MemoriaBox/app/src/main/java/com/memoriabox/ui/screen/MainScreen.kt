@@ -584,7 +584,7 @@ fun AddActionOption(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Row(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -620,7 +620,7 @@ fun AddTypeOption(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Row(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -1268,7 +1268,7 @@ fun EmptyUpcomingEventHint(upcomingDays: Int) {
             Text("近期很轻松", style = MaterialTheme.typography.titleSmall)
             Spacer(Modifier.height(8.dp))
             Text("${upcomingDays} 天内没有需要特别留意的日子。", style = MaterialTheme.typography.bodyMedium)
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(8.dp))
             Text("所有日子都会显示，临近的排前面，较远或已过的排后面。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
@@ -1317,9 +1317,9 @@ fun HomeShortcutCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Surface(
                 shape = MaterialTheme.shapes.medium,
@@ -1347,7 +1347,7 @@ fun EmptyEventListHint() {
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text("这里还很清爽", style = MaterialTheme.typography.titleSmall)
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(8.dp))
             Text("点底部中间按钮，先记录一个真正重要的日子。", style = MaterialTheme.typography.bodyMedium)
         }
     }
@@ -1430,7 +1430,7 @@ fun EventDetailDialog(
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Box(
                     modifier = Modifier
@@ -1458,7 +1458,7 @@ fun EventDetailDialog(
                     Column(
                         modifier = Modifier
                             .align(Alignment.BottomStart)
-                            .padding(18.dp)
+                            .padding(16.dp)
                     ) {
                         Text(days.toString(), style = MaterialTheme.typography.displayMedium, color = com.memoriabox.utils.ColorUtils.hexToColor(event.textColor))
                         Text("天 · ${eventTypeLabel(event.type)}", style = MaterialTheme.typography.titleMedium, color = com.memoriabox.utils.ColorUtils.hexToColor(event.textColor))
@@ -1751,7 +1751,7 @@ fun DayToolsScreen(
 @Composable
 private fun ToolSection(title: String, subtitle: String, content: @Composable ColumnScope.() -> Unit) {
     OutlinedCard(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium)
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             content()
@@ -1772,7 +1772,7 @@ private fun ToolActionRow(title: String, subtitle: String, icon: androidx.compos
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = if (featured) 10.dp else 0.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
             Column(modifier = Modifier.weight(1f)) {
@@ -2278,7 +2278,7 @@ fun SettingsScreen(
             onDismissRequest = { showAboutDialog = false },
             title = { Text("关于 MemoriaBox") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("版本：3.2.14", style = MaterialTheme.typography.bodyMedium)
                     Text("MemoriaBox 是一个本地优先的日子、纪念日、待办和照片记录工具。", style = MaterialTheme.typography.bodyMedium)
                     Text("数据默认保存在本机，可通过备份和 WebDAV 功能进行迁移或同步。", style = MaterialTheme.typography.bodyMedium)

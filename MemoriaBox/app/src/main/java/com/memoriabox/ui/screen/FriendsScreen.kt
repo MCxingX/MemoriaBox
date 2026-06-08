@@ -33,6 +33,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -48,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.memoriabox.data.model.Friend
+import com.memoriabox.ui.theme.MemoriaDesign
 import com.memoriabox.viewmodel.createFriendViewModel
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -93,19 +95,15 @@ fun FriendsScreen(
                 .padding(paddingValues)
                 .padding(16.dp)
         ) {
-            Text(
-                "一个月内生日会按越近越靠前排序，超过一个月和未设置生日的好友会继续保留在列表后面。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.height(12.dp))
+            FriendBirthdayGuide()
+            Spacer(Modifier.height(16.dp))
             if (friends.isEmpty()) {
                 EmptyFriendsCard(onAdd = {
                     editingFriend = null
                     showEditor = true
                 })
             } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(friends, key = { it.id }) { friend ->
                         FriendCard(
                             friend = friend,
@@ -151,18 +149,50 @@ fun FriendsScreen(
 }
 
 @Composable
+private fun FriendBirthdayGuide() {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.58f)
+    ) {
+        Column(modifier = Modifier.padding(MemoriaDesign.spacing.cardPadding), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(Icons.Default.Cake, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                Text("生日小册子", style = MaterialTheme.typography.titleMedium)
+            }
+            Text(
+                "一个月内生日越近越靠前，超过一个月和未设置生日的好友会继续保留。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+        }
+    }
+}
+
+@Composable
 private fun FriendCard(friend: Friend, onEdit: () -> Unit, onDelete: () -> Unit) {
+    val daysUntilBirthday = remember(friend.birthdayDate) { friend.birthdayDate?.let { nextBirthdayDistance(it) } }
+    val isSoon = daysUntilBirthday != null && daysUntilBirthday in 0..30
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isSoon) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f) else MaterialTheme.colorScheme.surface
+        ),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Row(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier.padding(MemoriaDesign.spacing.cardPadding),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.width(12.dp))
+            Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer) {
+                Icon(
+                    Icons.Default.Person,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(8.dp)
+                )
+            }
+            Spacer(Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(friend.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(friendBirthdayLabel(friend), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -176,7 +206,7 @@ private fun FriendCard(friend: Friend, onEdit: () -> Unit, onDelete: () -> Unit)
 @Composable
 private fun EmptyFriendsCard(onAdd: () -> Unit) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(modifier = Modifier.padding(MemoriaDesign.spacing.cardPadding), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Icon(Icons.Default.Cake, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
             Text("还没有好友", style = MaterialTheme.typography.titleMedium)
             Text("记录亲友生日后，临近一个月的生日会自动排到前面。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -196,7 +226,7 @@ private fun FriendEditorDialog(friend: Friend?, onDismiss: () -> Unit, onSave: (
         onDismissRequest = onDismiss,
         title = { Text(if (friend == null) "新增好友" else "编辑好友") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("好友名称") }, singleLine = true)
                 OutlinedButton(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) {
                     Text(birthday?.let { "生日：${formatBirthday(it)}" } ?: "选择生日（可选）")

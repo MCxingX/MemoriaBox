@@ -560,7 +560,7 @@ fun CalendarViewScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Brush.linearGradient(listOf(themeTokens.calendarSelected, themeTokens.calendarToday, themeTokens.anniversaryMarker)))
-                    .padding(horizontal = 10.dp, vertical = 14.dp),
+                    .padding(horizontal = 16.dp, vertical = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -607,7 +607,7 @@ fun CalendarViewScreen(
             )
         }
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            val horizontalPadding = if (adaptiveUi.compact) 6.dp else adaptiveUi.screenPadding
+            val horizontalPadding = if (adaptiveUi.compact) 8.dp else adaptiveUi.screenPadding
             val widthCell = (maxWidth - horizontalPadding * 2) / 7
             val fontScale = LocalDensity.current.fontScale
             val cellSize = (widthCell * (1f + (fontScale - 1f).coerceAtLeast(0f) * 0.35f))
@@ -642,7 +642,7 @@ fun CalendarViewScreen(
                 month = currentMonth,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(end = adaptiveUi.screenPadding, bottom = adaptiveUi.screenPadding + 10.dp),
+                    .padding(end = adaptiveUi.screenPadding, bottom = adaptiveUi.screenPadding + 16.dp),
                 onClick = {
                     if (hasMonthlyMedia) {
                         showMonthlyMedia = true
