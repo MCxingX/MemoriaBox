@@ -105,8 +105,17 @@ interface FriendDao {
     @Query("SELECT * FROM friends ORDER BY created_at ASC")
     suspend fun getAllFriendsOnce(): List<Friend>
 
+    @Query("SELECT * FROM friend_relations")
+    suspend fun getAllFriendRelationsOnce(): List<FriendRelation>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertFriend(friend: Friend): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertFriends(friends: List<Friend>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertFriendRelations(relations: List<FriendRelation>)
 
     @Delete
     suspend fun deleteFriend(friend: Friend)

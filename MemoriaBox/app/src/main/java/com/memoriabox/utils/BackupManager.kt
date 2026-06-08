@@ -272,6 +272,8 @@ class BackupManager(
             database.withTransaction {
                 importDb.boxDao().getAllBoxesOnce().takeIf { it.isNotEmpty() }?.let { database.boxDao().insertBoxes(it) }
                 importDb.labelDao().getAllLabelsOnce().takeIf { it.isNotEmpty() }?.let { database.labelDao().insertLabels(it) }
+                importDb.friendDao().getAllFriendsOnce().takeIf { it.isNotEmpty() }?.let { database.friendDao().upsertFriends(it) }
+                importDb.friendDao().getAllFriendRelationsOnce().takeIf { it.isNotEmpty() }?.let { database.friendDao().upsertFriendRelations(it) }
                 importDb.eventDao().getAllEventsOnce().takeIf { it.isNotEmpty() }?.let { database.eventDao().insertEvents(it) }
                 importDb.labelDao().getAllEventLabelsOnce().takeIf { it.isNotEmpty() }?.let { database.labelDao().addEventLabels(it) }
                 importDb.diaryDao().getAllDiariesOnce().takeIf { it.isNotEmpty() }?.let { database.diaryDao().upsertDiaries(it) }
