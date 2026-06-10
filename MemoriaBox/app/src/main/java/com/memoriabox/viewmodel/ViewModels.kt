@@ -243,13 +243,21 @@ class BoxDetailViewModel(
 class CalendarViewModel(
     application: Application,
     private val eventRepository: EventRepository,
-    private val diaryRepository: DiaryRepository
+    private val diaryRepository: DiaryRepository,
+    private val backupManager: BackupManager
 ) : AndroidViewModel(application) {
 
     val allEvents = eventRepository.getAllEvents()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val allDiaries = diaryRepository.getAllDiaries()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val allDiaryMedia = allDiaries
+        .flatMapLatest { diaries ->
+            if (diaries.isEmpty()) flowOf(emptyList()) else diaryRepository.getMediaForDiaries(diaries.map { it.id })
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _selectedDiaryMedia = MutableStateFlow<List<DiaryMedia>>(emptyList())
@@ -325,11 +333,13 @@ class CalendarViewModel(
         }
         diaryRepository.saveDiary(diary, media)
         _selectedDiaryMedia.value = media
+        backupManager.onDataChanged()
     }
 
     fun deleteDiary(diary: DiaryEntry) = viewModelScope.launch {
         diaryRepository.deleteDiary(diary)
         _selectedDiaryMedia.value = emptyList()
+        backupManager.onDataChanged()
     }
 
     private fun startOfDay(timestamp: Long): Long {
@@ -369,7 +379,8 @@ class TodoViewModel(
 
 class FriendViewModel(
     application: Application,
-    private val friendRepository: FriendRepository
+    private val friendRepository: FriendRepository,
+    private val backupManager: BackupManager
 ) : AndroidViewModel(application) {
 
     val friends = friendRepository.getAllFriends()
@@ -388,10 +399,12 @@ class FriendViewModel(
                 createdAt = existing?.createdAt ?: System.currentTimeMillis()
             )
         )
+        backupManager.onDataChanged()
     }
 
     fun deleteFriend(friend: Friend) = viewModelScope.launch {
         friendRepository.deleteFriend(friend)
+        backupManager.onDataChanged()
     }
 }
 
@@ -570,7 +583,8 @@ fun createCalendarViewModel(application: Application): CalendarViewModel {
     return CalendarViewModel(
         application,
         EventRepository(app.database.eventDao()),
-        DiaryRepository(app.database.diaryDao())
+        DiaryRepository(app.database.diaryDao()),
+        app.backupManager
     )
 }
 
@@ -584,7 +598,7 @@ fun createTodoViewModel(application: Application): TodoViewModel {
 
 fun createFriendViewModel(application: Application): FriendViewModel {
     val app = application as com.memoriabox.MemoriaApp
-    return FriendViewModel(application, FriendRepository(app.database.friendDao()))
+    return FriendViewModel(application, FriendRepository(app.database.friendDao()), app.backupManager)
 }
 
 fun createLogViewModel(application: Application): LogViewModel {

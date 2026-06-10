@@ -2,6 +2,8 @@ package com.memoriabox.ui.screen.components
 
 import android.content.Context
 import android.net.Uri
+import android.widget.MediaController
+import android.widget.VideoView
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -121,13 +123,14 @@ fun MediaBackgroundPlayer(
 
     when (mediaType) {
         DiaryMediaType.VIDEO -> {
-            Box(modifier = modifier.fillMaxSize()) {
-                Text(
-                    text = "[视频背景：$mediaUri]",
-                    color = Color.White.copy(alpha = 0.6f),
-                    modifier = Modifier.align(Alignment.Center)
-                )
-            }
+            DiaryVideoPlayer(
+                uri = mediaUri,
+                modifier = modifier.fillMaxSize(),
+                showControls = false,
+                autoPlay = true,
+                loop = true,
+                muted = true
+            )
         }
         else -> {
             AsyncImage(
@@ -141,6 +144,51 @@ fun MediaBackgroundPlayer(
             )
         }
     }
+}
+
+@Composable
+fun DiaryVideoPlayer(
+    uri: String,
+    modifier: Modifier = Modifier,
+    showControls: Boolean = true,
+    autoPlay: Boolean = false,
+    loop: Boolean = false,
+    muted: Boolean = false,
+    onCompletion: (() -> Unit)? = null
+) {
+    val context = LocalContext.current
+    AndroidView(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color.Black),
+        factory = {
+            VideoView(context).apply {
+                setVideoURI(Uri.parse(uri))
+                if (showControls) {
+                    setMediaController(MediaController(context).also { controller -> controller.setAnchorView(this) })
+                }
+                setOnPreparedListener { player ->
+                    player.isLooping = loop
+                    if (muted) player.setVolume(0f, 0f)
+                    if (autoPlay) start()
+                }
+                setOnCompletionListener {
+                    if (!loop) onCompletion?.invoke()
+                }
+            }
+        },
+        update = { view ->
+            val currentUri = Uri.parse(uri)
+            if (view.tag != uri) {
+                view.tag = uri
+                view.setVideoURI(currentUri)
+            }
+            if (autoPlay && !view.isPlaying) view.start()
+        },
+        onRelease = { view ->
+            view.stopPlayback()
+        }
+    )
 }
 
 @Composable
@@ -219,21 +267,14 @@ fun DiaryDetailDialog(
                                         )
                                     }
                                     DiaryMediaType.VIDEO -> {
-                                        Box(
+                                        DiaryVideoPlayer(
+                                            uri = media.mediaUri,
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .aspectRatio(media.aspectRatio.toFloatRatio())
-                                                .clip(RoundedCornerShape(12.dp))
-                                                .background(Color.Black.copy(alpha = 0.6f)),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                Icons.Default.PlayCircle,
-                                                contentDescription = "播放视频",
-                                                tint = Color.White,
-                                                modifier = Modifier.size(48.dp)
-                                            )
-                                        }
+                                                .aspectRatio(media.aspectRatio.toFloatRatio()),
+                                            showControls = true,
+                                            autoPlay = false
+                                        )
                                     }
                                 }
                             }
@@ -326,13 +367,13 @@ fun DiaryEditorDialog(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
         uri?.let {
-            val copied = ImageImportUtils.copyImageToPrivateStorage(context, it, "diary_videos")
+            val copied = ImageImportUtils.copyMediaToPrivateStorage(context, it, "diary_videos", "mp4")
             copied?.let { uri ->
                 mediaItems.add(
                     DiaryMedia(
                         diaryId = existingDiary?.id ?: "",
                         mediaUri = uri,
-                        mediaType = inferDiaryMediaTypeForEditor(uri),
+                        mediaType = DiaryMediaType.VIDEO,
                         sortOrder = mediaItems.size
                     )
                 )
@@ -346,7 +387,7 @@ fun DiaryEditorDialog(
         val index = replacingMediaIndex
         replacingMediaIndex = null
         if (uri != null && index != null && index in mediaItems.indices) {
-            val copied = ImageImportUtils.copyImageToPrivateStorage(context, uri, "diary_images") ?: return@rememberLauncherForActivityResult
+            val copied = ImageImportUtils.copyMediaToPrivateStorage(context, uri, "diary_media", "jpg") ?: return@rememberLauncherForActivityResult
             mediaItems[index] = mediaItems[index].copy(
                 mediaUri = copied,
                 mediaType = inferDiaryMediaTypeForEditor(copied)
@@ -359,7 +400,7 @@ fun DiaryEditorDialog(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
         backgroundUri = uri?.let {
-            ImageImportUtils.copyImageToPrivateStorage(context, it, "diary_backgrounds")
+            ImageImportUtils.copyMediaToPrivateStorage(context, it, "diary_backgrounds", "jpg")
         } ?: backgroundUri
     }
 

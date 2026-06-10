@@ -226,7 +226,7 @@ fun MainScreen(
                 val calendarVM = remember { createCalendarViewModel(application) }
                 val events by calendarVM.allEvents.collectAsState(initial = emptyList())
                 val diaries by calendarVM.allDiaries.collectAsState(initial = emptyList())
-                val diaryMedia by calendarVM.selectedDiaryMedia.collectAsState(initial = emptyList())
+                val diaryMedia by calendarVM.allDiaryMedia.collectAsState(initial = emptyList())
                 val monthlySummaryState by calendarVM.monthlySummary.collectAsState(initial = com.memoriabox.utils.MonthlySummaryUiState())
                 var addDateFromCalendar by remember { mutableStateOf<Long?>(null) }
                 var selectedCalendarEvent by remember { mutableStateOf<Event?>(null) }

@@ -8,6 +8,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -20,14 +21,18 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -99,81 +104,218 @@ fun EnhancedEventGrid(
 @Composable
 fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit, onStyleChange: (String) -> Unit = {}) {
     val daysRemaining = calculateDays(event)
-    val adaptiveUi = rememberAdaptiveUiSize()
-    val accent = ColorUtils.hexToColor(event.gradientStart)
-    val accentEnd = ColorUtils.hexToColor(event.gradientEnd)
-    val progress = remember(event.id, event.date, event.createdAt, event.type, event.todoStatus, daysRemaining) {
-        eventProgress(event, daysRemaining)
+    val styleOptions = remember {
+        listOf(
+            CardVisualStyle.HeroWide,
+            CardVisualStyle.PosterTall,
+            CardVisualStyle.GlassCompact,
+            CardVisualStyle.SplitPanel,
+            CardVisualStyle.NeonRail,
+            CardVisualStyle.MinimalBadge
+        )
     }
+    val initialStyle = when (event.cardTemplate) {
+        "POSTER" -> CardVisualStyle.PosterTall
+        "GLASS" -> CardVisualStyle.GlassCompact
+        "SPLIT" -> CardVisualStyle.SplitPanel
+        "NEON" -> CardVisualStyle.NeonRail
+        "MINIMAL" -> CardVisualStyle.MinimalBadge
+        else -> CardVisualStyle.HeroWide
+    }
+    var styleIndex by remember(event.id, event.cardTemplate) { mutableIntStateOf(styleOptions.indexOf(initialStyle).coerceAtLeast(0)) }
+    var isDragging by remember { mutableStateOf(false) }
+    var dragOffset by remember { mutableFloatStateOf(0f) }
+    var verticalDragOffset by remember { mutableFloatStateOf(0f) }
+    var horizontalDragLocked by remember { mutableStateOf(false) }
+    var verticalDragLocked by remember { mutableStateOf(false) }
+    val style = styleOptions[styleIndex]
+    val dragProgress = (dragOffset / 180f).coerceIn(-1f, 1f)
+    val animatedScale by animateFloatAsState(targetValue = if (isDragging) 1.04f else 1f, label = "eventCardScale")
+    val animatedElevation by animateDpAsState(targetValue = if (isDragging) 16.dp else 4.dp, label = "eventCardElevation")
+    val hasImage = event.avatarUri != null
+    val displayFields = event.displayFields.split(",").map { it.trim() }.toSet()
+    val eventTextColor = ColorUtils.hexToColor(event.textColor)
     val fontScale = LocalDensity.current.fontScale
-    val minHeight = if (fontScale > 1.2f) adaptiveUi.listItemMinHeight + 18.dp else adaptiveUi.listItemMinHeight
-    val statusText = eventStatusText(event, daysRemaining)
+    val cardHeight = when (style) {
+        CardVisualStyle.HeroWide -> if (fontScale > 1.2f) 184.dp else 164.dp
+        CardVisualStyle.PosterTall -> if (fontScale > 1.2f) 236.dp else 216.dp
+        CardVisualStyle.GlassCompact -> if (fontScale > 1.2f) 152.dp else 132.dp
+        CardVisualStyle.SplitPanel -> if (fontScale > 1.2f) 196.dp else 176.dp
+        CardVisualStyle.NeonRail -> if (fontScale > 1.2f) 192.dp else 172.dp
+        CardVisualStyle.MinimalBadge -> if (fontScale > 1.2f) 164.dp else 144.dp
+    }
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = minHeight)
-            .shadow(elevation = if (event.isPinned) 6.dp else 3.dp, shape = RoundedCornerShape(16.dp), ambientColor = accent.copy(alpha = 0.10f), spotColor = accent.copy(alpha = 0.14f))
-            .combinedClickable(onClick = onClick, onLongClick = onLongPress),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = if (event.isPinned) 0.28f else 0.16f))
-    ) {
-        Column(
-            modifier = Modifier.padding(adaptiveUi.cardPadding),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                EventReminderLeading(event = event, accent = accent, accentEnd = accentEnd)
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(
-                            text = event.name,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = if (fontScale > 1.2f) 2 else 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f)
-                        )
-                        if (event.isPinned) {
-                            Surface(color = accent.copy(alpha = 0.12f), shape = RoundedCornerShape(999.dp)) {
-                                Text("置顶", modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, color = accent)
+            .height(cardHeight)
+            .graphicsLayer {
+                scaleX = animatedScale
+                scaleY = animatedScale
+                rotationZ = dragProgress * 4f
+                translationX = dragOffset * 0.22f
+            }
+            .shadow(elevation = animatedElevation, shape = RoundedCornerShape(24.dp))
+            .pointerInput(event.id) {
+                detectDragGestures(
+                    onDragStart = {
+                        dragOffset = 0f
+                        verticalDragOffset = 0f
+                        horizontalDragLocked = false
+                        verticalDragLocked = false
+                    },
+                    onDragCancel = {
+                        isDragging = false
+                        dragOffset = 0f
+                        verticalDragOffset = 0f
+                        horizontalDragLocked = false
+                        verticalDragLocked = false
+                    },
+                    onDragEnd = {
+                        isDragging = false
+                        if (horizontalDragLocked && abs(dragOffset) > 72f) {
+                            val newIndex = if (dragOffset > 0f) {
+                                (styleIndex + 1) % styleOptions.size
+                            } else {
+                                (styleIndex - 1 + styleOptions.size) % styleOptions.size
                             }
+                            styleIndex = newIndex
+                            val newTemplate = when (styleOptions[newIndex]) {
+                                CardVisualStyle.PosterTall -> "POSTER"
+                                CardVisualStyle.GlassCompact -> "GLASS"
+                                CardVisualStyle.SplitPanel -> "SPLIT"
+                                CardVisualStyle.NeonRail -> "NEON"
+                                CardVisualStyle.MinimalBadge -> "MINIMAL"
+                                else -> "HERO"
+                            }
+                            onStyleChange(newTemplate)
+                        }
+                        dragOffset = 0f
+                        verticalDragOffset = 0f
+                        horizontalDragLocked = false
+                        verticalDragLocked = false
+                    },
+                    onDrag = { change, dragAmount ->
+                        if (!horizontalDragLocked && !verticalDragLocked) {
+                            dragOffset += dragAmount.x
+                            verticalDragOffset += dragAmount.y
+                            val horizontalDistance = abs(dragOffset)
+                            val verticalDistance = abs(verticalDragOffset)
+                            horizontalDragLocked = horizontalDistance > 36f && horizontalDistance > verticalDistance * 1.6f
+                            verticalDragLocked = verticalDistance > 18f && verticalDistance >= horizontalDistance
+                            isDragging = horizontalDragLocked
+                        } else if (horizontalDragLocked) {
+                            dragOffset += dragAmount.x
+                        }
+
+                        if (horizontalDragLocked) {
+                            change.consume()
                         }
                     }
-                    Text(
-                        text = listOf(statusText, formatDate(event.date)).joinToString(" · "),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                )
+            }
+            .combinedClickable(onClick = onClick, onLongClick = onLongPress),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = if (isDragging) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.72f)) else null
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(RoundedCornerShape(24.dp))
+        ) {
+            if (hasImage) {
+                if (style == CardVisualStyle.HeroWide) {
+                    AsyncImage(
+                        model = event.avatarUri,
+                        contentDescription = event.name,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .matchParentSize()
+                            .blur(18.dp)
                     )
                 }
-                Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                    Text(daysRemaining.toString(), style = MaterialTheme.typography.headlineSmall, color = accent)
-                    Text("天", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                AsyncImage(
+                    model = event.avatarUri,
+                    contentDescription = event.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.matchParentSize()
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .background(
+                            Brush.linearGradient(
+                                listOf(
+                                    ColorUtils.hexToColor(event.gradientStart),
+                                    ColorUtils.hexToColor(event.gradientEnd),
+                                    MaterialTheme.colorScheme.tertiaryContainer
+                                )
+                            )
+                        )
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(cardOverlayBrush(style))
+            )
+
+            if (style == CardVisualStyle.NeonRail) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .fillMaxHeight()
+                        .width(8.dp)
+                        .background(Brush.verticalGradient(listOf(ColorUtils.hexToColor(event.gradientStart), ColorUtils.hexToColor(event.gradientEnd))))
+                )
+            }
+
+            if (isDragging) {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                )
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(10.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    shape = RoundedCornerShape(999.dp)
+                ) {
+                    Text(
+                        if (dragOffset < -44f) "松手切上一款" else if (dragOffset > 44f) "松手切下一款" else "左右拖动换排版",
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        style = MaterialTheme.typography.labelSmall
+                    )
                 }
             }
-            LinearProgressIndicator(
-                progress = { progress },
+
+            when (style) {
+                CardVisualStyle.SplitPanel -> EventCardSplitContent(event, daysRemaining, displayFields, eventTextColor)
+                CardVisualStyle.GlassCompact -> EventCardGlassContent(event, daysRemaining, displayFields, eventTextColor)
+                CardVisualStyle.PosterTall -> EventCardPosterContent(event, daysRemaining, displayFields, eventTextColor)
+                CardVisualStyle.MinimalBadge -> EventCardMinimalContent(event, daysRemaining, displayFields, eventTextColor)
+                else -> EventCardHeroContent(event, daysRemaining, displayFields, eventTextColor, style == CardVisualStyle.NeonRail)
+            }
+
+            Surface(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(5.dp)
-                    .clip(RoundedCornerShape(999.dp)),
-                color = accent,
-                trackColor = accent.copy(alpha = 0.12f)
-            )
-            if (event.note.isNotBlank() || event.reminderEnabled) {
+                    .align(Alignment.BottomEnd)
+                    .padding(10.dp),
+                color = Color.White.copy(alpha = if (isDragging) 0.30f else 0.16f),
+                shape = RoundedCornerShape(999.dp)
+            ) {
                 Text(
-                    text = eventReminderMeta(event),
+                    text = cardStyleLabel(style),
+                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                    color = eventTextColor,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    maxLines = 1
                 )
             }
         }
@@ -218,12 +360,34 @@ private fun eventStatusText(event: Event, daysRemaining: Long): String = when (e
     EventType.COUNTDOWN -> if (daysRemaining >= 0) "还剩 $daysRemaining 天" else "已过 ${abs(daysRemaining)} 天"
     EventType.ANNIVERSARY -> "已走过 $daysRemaining 天"
     EventType.ELAPSED -> "已过去 $daysRemaining 天"
-    EventType.BIRTHDAY -> if (daysRemaining == 0L) "今天生日" else "生日还有 $daysRemaining 天"
+    EventType.BIRTHDAY -> if (daysRemaining == 0L) birthdayGreetingText(event.name) else "生日还有 $daysRemaining 天"
     EventType.TODO -> when (event.todoStatus) {
         TodoStatus.COMPLETED -> "已完成"
         TodoStatus.CANCELLED -> "已取消"
         TodoStatus.PENDING -> event.dueDate?.let { "待办到期 ${formatDate(it)}" } ?: "待办"
     }
+}
+
+private fun eventPrimaryCountText(event: Event, daysRemaining: Long): String {
+    return if (event.type == EventType.BIRTHDAY && daysRemaining == 0L) "生日快乐" else "$daysRemaining 天"
+}
+
+private fun eventPrimaryNumberText(event: Event, daysRemaining: Long): String {
+    return if (event.type == EventType.BIRTHDAY && daysRemaining == 0L) "生日" else daysRemaining.toString()
+}
+
+private fun eventPrimaryUnitText(event: Event, daysRemaining: Long): String {
+    return if (event.type == EventType.BIRTHDAY && daysRemaining == 0L) "快乐" else "天"
+}
+
+private fun birthdayGreetingText(name: String): String {
+    val displayName = name.trim().takeIf { it.isNotBlank() }
+    return if (displayName != null) "今天生日，愿 $displayName 生日快乐" else "今天生日，愿你生日快乐"
+}
+
+private fun birthdayWishLine(event: Event, daysRemaining: Long): String? {
+    if (event.type != EventType.BIRTHDAY || daysRemaining != 0L) return null
+    return "平安喜乐，日日有光"
 }
 
 private fun eventReminderMeta(event: Event): String {
@@ -267,7 +431,10 @@ private fun EventCardHeroContent(event: Event, daysRemaining: Long, displayField
         }
         Column(modifier = Modifier.fillMaxWidth(0.84f)) {
             Text(text = event.name, style = MaterialTheme.typography.titleLarge, color = color, maxLines = 2)
-            Text(text = "$daysRemaining 天", style = MaterialTheme.typography.headlineMedium, color = color)
+            Text(text = eventPrimaryCountText(event, daysRemaining), style = MaterialTheme.typography.headlineMedium, color = color)
+            birthdayWishLine(event, daysRemaining)?.let { wish ->
+                Text(text = wish, style = MaterialTheme.typography.bodySmall, color = color.copy(alpha = 0.88f), maxLines = 1)
+            }
             EventMetaLines(event, displayFields - "date", color)
         }
     }
@@ -286,11 +453,14 @@ private fun EventCardPosterContent(event: Event, daysRemaining: Long, displayFie
             Text(formatDate(event.date), style = MaterialTheme.typography.labelSmall, color = color.copy(alpha = 0.86f), maxLines = 1)
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-            Text(text = "$daysRemaining", style = MaterialTheme.typography.displayMedium, color = color)
-            Text(text = "天", style = MaterialTheme.typography.titleMedium, color = color.copy(alpha = 0.88f))
+            Text(text = eventPrimaryNumberText(event, daysRemaining), style = MaterialTheme.typography.displayMedium, color = color)
+            Text(text = eventPrimaryUnitText(event, daysRemaining), style = MaterialTheme.typography.titleMedium, color = color.copy(alpha = 0.88f))
         }
         Column {
             Text(text = event.name, style = MaterialTheme.typography.titleLarge, color = color, maxLines = 2)
+            birthdayWishLine(event, daysRemaining)?.let { wish ->
+                Text(text = wish, style = MaterialTheme.typography.bodySmall, color = color.copy(alpha = 0.86f), maxLines = 1)
+            }
             EventMetaLines(event, displayFields - "date", color)
         }
     }
@@ -308,7 +478,10 @@ private fun BoxScope.EventCardGlassContent(event: Event, daysRemaining: Long, di
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text(text = event.name, style = MaterialTheme.typography.titleMedium, color = color, maxLines = 1)
-            Text(text = "$daysRemaining 天", style = MaterialTheme.typography.headlineSmall, color = color)
+            Text(text = eventPrimaryCountText(event, daysRemaining), style = MaterialTheme.typography.headlineSmall, color = color)
+            birthdayWishLine(event, daysRemaining)?.let { wish ->
+                Text(text = wish, style = MaterialTheme.typography.labelSmall, color = color.copy(alpha = 0.86f), maxLines = 1)
+            }
             EventMetaLines(event, displayFields, color)
         }
     }
@@ -325,14 +498,17 @@ private fun EventCardSplitContent(event: Event, daysRemaining: Long, displayFiel
     ) {
         Surface(color = Color.White.copy(alpha = 0.22f), shape = RoundedCornerShape(18.dp), modifier = Modifier.size(70.dp)) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center, modifier = Modifier.fillMaxSize()) {
-                Text(text = "$daysRemaining", style = MaterialTheme.typography.headlineMedium, color = color, maxLines = 1)
-                Text(text = "天", style = MaterialTheme.typography.labelSmall, color = color.copy(alpha = 0.82f))
+                Text(text = eventPrimaryNumberText(event, daysRemaining), style = MaterialTheme.typography.headlineMedium, color = color, maxLines = 1)
+                Text(text = eventPrimaryUnitText(event, daysRemaining), style = MaterialTheme.typography.labelSmall, color = color.copy(alpha = 0.82f))
             }
         }
         Column(modifier = Modifier.weight(1f)) {
             EventTypePill(event.type, color)
             Spacer(modifier = Modifier.height(8.dp))
             Text(text = event.name, style = MaterialTheme.typography.titleMedium, color = color, maxLines = 2)
+            birthdayWishLine(event, daysRemaining)?.let { wish ->
+                Text(text = wish, style = MaterialTheme.typography.labelSmall, color = color.copy(alpha = 0.86f), maxLines = 1)
+            }
             EventMetaLines(event, displayFields, color)
         }
     }
@@ -341,8 +517,11 @@ private fun EventCardSplitContent(event: Event, daysRemaining: Long, displayFiel
 @Composable
 private fun BoxScope.EventCardMinimalContent(event: Event, daysRemaining: Long, displayFields: Set<String>, color: Color) {
     Column(modifier = Modifier.align(Alignment.CenterStart).padding(18.dp).fillMaxWidth(0.74f)) {
-        Text(text = "$daysRemaining 天", style = MaterialTheme.typography.titleLarge, color = color)
+        Text(text = eventPrimaryCountText(event, daysRemaining), style = MaterialTheme.typography.titleLarge, color = color)
         Text(text = event.name, style = MaterialTheme.typography.titleMedium, color = color, maxLines = 2)
+        birthdayWishLine(event, daysRemaining)?.let { wish ->
+            Text(text = wish, style = MaterialTheme.typography.labelSmall, color = color.copy(alpha = 0.86f), maxLines = 1)
+        }
         EventMetaLines(event, displayFields, color)
     }
 }
@@ -414,11 +593,8 @@ fun CalendarViewScreen(
     val context = LocalContext.current
     val settingsVersion = AppSettings.settingsVersion
     var currentMonthYear by remember { mutableStateOf("${Calendar.getInstance().get(Calendar.YEAR)}-${Calendar.getInstance().get(Calendar.MONTH) + 1}") }
-    var calendarDisplayMode by remember { mutableStateOf(CalendarDisplayMode.MONTH) }
     var showMonthPicker by remember { mutableStateOf(false) }
     var showMonthlySummary by remember { mutableStateOf(initialShowSummary) }
-    var showMonthlyMedia by remember { mutableStateOf(false) }
-    var noMonthlyMediaTip by remember { mutableStateOf(false) }
     LaunchedEffect(initialShowSummary) {
         if (initialShowSummary) showMonthlySummary = true
     }
@@ -441,9 +617,6 @@ fun CalendarViewScreen(
     val today = Calendar.getInstance()
     val currentYear = cal.get(Calendar.YEAR)
     val currentMonth = cal.get(Calendar.MONTH) + 1
-    val monthlyImages = remember(settingsVersion, currentYear, currentMonth) { AppSettings.getMonthlyMediaImages(context, currentYear, currentMonth) }
-    val monthlyVideos = remember(settingsVersion, currentYear, currentMonth) { AppSettings.getMonthlyMediaVideos(context, currentYear, currentMonth) }
-    val hasMonthlyMedia = monthlyImages.isNotEmpty() || monthlyVideos.isNotEmpty()
     val nearestEvent = remember(monthEvents) {
         monthEvents.minByOrNull { kotlin.math.abs(it.date - System.currentTimeMillis()) }
     }
@@ -518,9 +691,6 @@ fun CalendarViewScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            CalendarDisplayMode.entries.forEach { mode ->
-                FilterChip(selected = calendarDisplayMode == mode, onClick = { calendarDisplayMode = mode }, label = { Text(mode.label) })
-            }
             Spacer(Modifier.weight(1f))
             TextButton(onClick = {
                 val now = Calendar.getInstance()
@@ -529,7 +699,6 @@ fun CalendarViewScreen(
             }) { Text("今天") }
         }
         CalendarHeatStrip(events = monthEvents, diaries = diaries, month = cal)
-        AnniversaryStoryStrip(events = monthEvents, onEventClick = onEventClick)
         selectedDay?.let { (date, dayEvents) ->
             SelectedDaySummaryCard(
                 date = date,
@@ -545,64 +714,15 @@ fun CalendarViewScreen(
             val fontScale = LocalDensity.current.fontScale
             val cellSize = (widthCell * (1f + (fontScale - 1f).coerceAtLeast(0f) * 0.35f))
                 .coerceIn(52.dp, 78.dp)
-            when (calendarDisplayMode) {
-                CalendarDisplayMode.MONTH -> CalendarGrid(
-                    currentMonth = cal,
-                    events = events,
-                    cellSize = cellSize,
-                    horizontalPadding = horizontalPadding,
-                    diaryMap = diaryMap,
-                    onDayClick = { dayCal, dayEvents -> selectedDay = dayCal.timeInMillis to dayEvents }
-                )
-                CalendarDisplayMode.WEEK -> CalendarWeekView(
-                    events = events,
-                    diaryMap = diaryMap,
-                    cellSize = cellSize,
-                    horizontalPadding = horizontalPadding,
-                    onDayClick = { dayCal, dayEvents -> selectedDay = dayCal.timeInMillis to dayEvents }
-                )
-                CalendarDisplayMode.AGENDA -> CalendarAgendaView(
-                    events = events,
-                    diaries = diaries,
-                    horizontalPadding = horizontalPadding,
-                    onEventClick = onEventClick,
-                    onDiaryClick = { diary -> onLoadDiaryMedia(diary); selectedDiaryForView = diary }
-                )
-            }
-            MonthlyMediaFloatingButton(
-                hasMedia = hasMonthlyMedia,
-                mediaCount = monthlyImages.size + monthlyVideos.size,
-                month = currentMonth,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = adaptiveUi.screenPadding, bottom = adaptiveUi.screenPadding + 16.dp),
-                onClick = {
-                    if (hasMonthlyMedia) {
-                        showMonthlyMedia = true
-                    } else {
-                        noMonthlyMediaTip = true
-                    }
-                }
+            CalendarGrid(
+                currentMonth = cal,
+                events = events,
+                cellSize = cellSize,
+                horizontalPadding = horizontalPadding,
+                diaryMap = diaryMap,
+                onDayClick = { dayCal, dayEvents -> selectedDay = dayCal.timeInMillis to dayEvents }
             )
         }
-    }
-
-    if (noMonthlyMediaTip) {
-        AlertDialog(
-            onDismissRequest = { noMonthlyMediaTip = false },
-            title = { Text("本月暂无素材") },
-            text = { Text("本月暂未收录照片和视频。可以到月度总结设置里为 ${currentMonth} 月添加素材。") },
-            confirmButton = { TextButton(onClick = { noMonthlyMediaTip = false }) { Text("知道了") } }
-        )
-    }
-
-    if (showMonthlyMedia) {
-        MonthlyMediaPreviewDialog(
-            month = currentMonth,
-            images = monthlyImages,
-            videos = monthlyVideos,
-            onDismiss = { showMonthlyMedia = false }
-        )
     }
 
     if (showMonthPicker) {
@@ -1505,15 +1625,21 @@ fun calculateDays(dateMillis: Long, type: EventType, lunar: String? = null): Lon
                 LunarDateUtils.daysUntilNextOccurrence(lunarValue, now)?.let { return it }
             }
             val eventCal = Calendar.getInstance().apply { timeInMillis = dateMillis }
-            val nowCal = Calendar.getInstance()
+            val todayCal = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            val targetCal = todayCal.clone() as Calendar
             val eventMonth = eventCal.get(Calendar.MONTH)
             val eventDay = eventCal.get(Calendar.DAY_OF_MONTH)
-            nowCal.set(Calendar.MONTH, eventMonth)
-            nowCal.set(Calendar.DAY_OF_MONTH, eventDay)
-            if (nowCal.before(now)) {
-                nowCal.add(Calendar.YEAR, 1)
+            targetCal.set(Calendar.MONTH, eventMonth)
+            targetCal.set(Calendar.DAY_OF_MONTH, eventDay)
+            if (targetCal.before(todayCal)) {
+                targetCal.add(Calendar.YEAR, 1)
             }
-            TimeUnit.MILLISECONDS.toDays(nowCal.timeInMillis - now)
+            TimeUnit.MILLISECONDS.toDays(targetCal.timeInMillis - todayCal.timeInMillis)
         }
         EventType.TODO -> 0
     }

@@ -11,6 +11,7 @@ data class MonthlyPhotoItem(
     val diaryId: String,
     val dateStart: Long,
     val mediaUri: String,
+    val mediaType: DiaryMediaType,
     val aspectRatio: String,
     val caption: String
 )
@@ -55,18 +56,30 @@ object MonthlySummaryHelper {
         playSpeedFactor: Float
     ): MonthlySummaryUiState {
         val sortedDiaries = diaries.sortedWith(compareBy<DiaryEntry> { startOfDay(it.dateStart) }.thenBy { it.createdAt })
-        val mediaByDiary = media.filter { it.mediaType == DiaryMediaType.IMAGE }.groupBy { it.diaryId }
+        val mediaByDiary = media.groupBy { it.diaryId }
         val slides = sortedDiaries.groupBy { startOfDay(it.dateStart) }.toSortedMap().map { (dateStart, dayDiaries) ->
             val photos = dayDiaries.flatMap { diary ->
-                mediaByDiary[diary.id].orEmpty().sortedBy { it.sortOrder }.map { item ->
+                val backgroundItem = diary.backgroundMediaUri?.let { uri ->
+                    MonthlyPhotoItem(
+                        diaryId = diary.id,
+                        dateStart = dateStart,
+                        mediaUri = uri,
+                        mediaType = diary.backgroundMediaType ?: DiaryMediaType.IMAGE,
+                        aspectRatio = "16:9",
+                        caption = diary.content.take(40)
+                    )
+                }
+                val attachedItems = mediaByDiary[diary.id].orEmpty().sortedBy { it.sortOrder }.map { item ->
                     MonthlyPhotoItem(
                         diaryId = diary.id,
                         dateStart = dateStart,
                         mediaUri = item.mediaUri,
+                        mediaType = item.mediaType,
                         aspectRatio = item.aspectRatio,
                         caption = diary.content.take(40)
                     )
                 }
+                listOfNotNull(backgroundItem) + attachedItems
             }
             MonthlySummarySlide(
                 dateStart = dateStart,
@@ -77,9 +90,9 @@ object MonthlySummaryHelper {
             )
         }
 
-        val photoCount = slides.sumOf { it.photos.size }
-        val summaryText = buildMonthText(monthStart, sortedDiaries, slides, photoCount)
-        val status = if (sortedDiaries.isEmpty() && photoCount == 0) MonthlySummaryStatus.EMPTY else MonthlySummaryStatus.READY
+        val mediaCount = slides.sumOf { it.photos.size }
+        val summaryText = buildMonthText(monthStart, sortedDiaries, slides, mediaCount)
+        val status = if (sortedDiaries.isEmpty() && mediaCount == 0) MonthlySummaryStatus.EMPTY else MonthlySummaryStatus.READY
         return MonthlySummaryUiState(
             monthStart = monthStart,
             slides = slides,
@@ -129,23 +142,23 @@ object MonthlySummaryHelper {
         monthStart: Long,
         diaries: List<DiaryEntry>,
         slides: List<MonthlySummarySlide>,
-        photoCount: Int
+        mediaCount: Int
     ): String {
-        if (diaries.isEmpty() && photoCount == 0) {
-            return "${monthFormat.format(monthStart)} 暂无日记和照片记录。"
+        if (diaries.isEmpty() && mediaCount == 0) {
+            return "${monthFormat.format(monthStart)} 暂无日记和媒体记录。"
         }
-        val lines = mutableListOf("${monthFormat.format(monthStart)} 记录了 ${diaries.size} 篇日记，留下了 $photoCount 张照片。")
+        val lines = mutableListOf("${monthFormat.format(monthStart)} 记录了 ${diaries.size} 篇日记，留下了 $mediaCount 个媒体。")
         slides.take(8).forEach { slide -> lines.add("${dayFormat.format(slide.dateStart)}：${slide.text}") }
         if (slides.size > 8) lines.add("还有 ${slides.size - 8} 天的记录，打开月度总结继续查看。")
         return lines.joinToString("\n")
     }
 
-    private fun buildDayText(dateStart: Long, diaries: List<DiaryEntry>, photoCount: Int): String {
+    private fun buildDayText(dateStart: Long, diaries: List<DiaryEntry>, mediaCount: Int): String {
         val content = diaries.map { it.content.trim() }.filter { it.isNotBlank() }.joinToString("；") { it.take(40) }
         return when {
-            content.isNotBlank() && photoCount > 0 -> "$content，留下了 $photoCount 张照片。"
+            content.isNotBlank() && mediaCount > 0 -> "$content，留下了 $mediaCount 个媒体。"
             content.isNotBlank() -> content
-            photoCount > 0 -> "这一天留下了 $photoCount 张照片。"
+            mediaCount > 0 -> "这一天留下了 $mediaCount 个媒体。"
             else -> "这一天留下了一篇日记。"
         }
     }

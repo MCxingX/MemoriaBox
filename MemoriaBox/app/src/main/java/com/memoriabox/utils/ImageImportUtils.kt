@@ -5,13 +5,19 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.net.Uri
+import android.webkit.MimeTypeMap
 import java.io.File
 
 object ImageImportUtils {
     fun copyImageToPrivateStorage(context: Context, uri: Uri, folder: String = "picked_images"): String? {
+        return copyMediaToPrivateStorage(context, uri, folder, "jpg")
+    }
+
+    fun copyMediaToPrivateStorage(context: Context, uri: Uri, folder: String = "picked_media", fallbackExtension: String = "bin"): String? {
         return runCatching {
             val dir = File(context.filesDir, folder).apply { mkdirs() }
-            val target = File(dir, "image_${System.currentTimeMillis()}.jpg")
+            val extension = resolveExtension(context, uri, fallbackExtension)
+            val target = File(dir, "media_${System.currentTimeMillis()}.$extension")
             context.contentResolver.openInputStream(uri)?.use { input ->
                 target.outputStream().use { output -> input.copyTo(output) }
             } ?: return null
@@ -71,5 +77,12 @@ object ImageImportUtils {
         if (degrees == 0f) return source
         val matrix = Matrix().apply { postRotate(degrees) }
         return Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, true)
+    }
+
+    private fun resolveExtension(context: Context, uri: Uri, fallbackExtension: String): String {
+        val mime = context.contentResolver.getType(uri)
+        val fromMime = mime?.let { MimeTypeMap.getSingleton().getExtensionFromMimeType(it) }
+        val fromPath = uri.lastPathSegment?.substringAfterLast('.', missingDelimiterValue = "")?.takeIf { it.length in 2..5 }
+        return (fromMime ?: fromPath ?: fallbackExtension).lowercase().trimStart('.')
     }
 }

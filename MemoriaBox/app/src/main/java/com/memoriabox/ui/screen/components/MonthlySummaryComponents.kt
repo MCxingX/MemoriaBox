@@ -15,8 +15,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
+import com.memoriabox.data.model.DiaryMediaType
+import com.memoriabox.utils.MonthlyPhotoItem
 import com.memoriabox.utils.MonthlySummaryHelper
 import com.memoriabox.utils.MonthlySummaryStatus
 import com.memoriabox.utils.MonthlySummaryUiState
@@ -35,25 +39,41 @@ fun MonthlySummaryPanel(
     modifier: Modifier = Modifier
 ) {
     var selectedIndex by remember(state.monthStart, state.slides) { mutableIntStateOf(0) }
+    var selectedMediaIndex by remember(state.monthStart, selectedIndex) { mutableIntStateOf(0) }
     var playing by remember(state.isPlayMode) { mutableStateOf(state.isPlayMode) }
     val monthFormat = remember { SimpleDateFormat("yyyy年M月", Locale.getDefault()) }
     val dayFormat = remember { SimpleDateFormat("M月d日", Locale.getDefault()) }
+    val currentSlide = state.slides.getOrNull(selectedIndex)
+    val currentMedia = currentSlide?.photos?.getOrNull(selectedMediaIndex)
 
-    LaunchedEffect(playing, selectedIndex, state.playSpeedFactor, state.slides.size) {
-        if (playing && state.slides.isNotEmpty()) {
-            delay(MonthlySummaryHelper.slideDelayMillis(state.playSpeedFactor))
-            selectedIndex = if (selectedIndex >= state.slides.lastIndex) state.slides.lastIndex else selectedIndex + 1
-            if (selectedIndex >= state.slides.lastIndex) playing = false
+    fun advancePlayback() {
+        val slide = state.slides.getOrNull(selectedIndex)
+        if (slide != null && selectedMediaIndex < slide.photos.lastIndex) {
+            selectedMediaIndex++
+            return
+        }
+        if (selectedIndex < state.slides.lastIndex) {
+            selectedIndex++
+            selectedMediaIndex = 0
+        } else {
+            playing = false
         }
     }
 
-    DialogContainer(onDismiss = onDismiss, modifier = modifier) {
+    LaunchedEffect(playing, selectedIndex, selectedMediaIndex, currentMedia?.mediaUri, state.playSpeedFactor, state.slides.size) {
+        if (playing && state.slides.isNotEmpty() && currentMedia?.mediaType != DiaryMediaType.VIDEO) {
+            delay(MonthlySummaryHelper.slideDelayMillis(state.playSpeedFactor))
+            advancePlayback()
+        }
+    }
+
+    ImmersiveSummaryDialog(onDismiss = onDismiss, modifier = modifier) {
         Box(
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxSize()
                 .background(Brush.verticalGradient(listOf(Color(0xAA101828), Color(0xDD111827))))
         ) {
-            Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(modifier = Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(Icons.Default.AutoStories, contentDescription = null, tint = Color.White)
                     Column(modifier = Modifier.weight(1f)) {
@@ -81,7 +101,7 @@ fun MonthlySummaryPanel(
                         onPlayModeChange(false)
                     },
                     onPrev = { if (selectedIndex > 0) selectedIndex-- },
-                    onNext = { if (selectedIndex < state.slides.lastIndex) selectedIndex++ },
+                    onNext = { advancePlayback() },
                     onSpeedChange = onSpeedChange,
                     onTextEnabledChange = onTextEnabledChange
                 )
@@ -89,16 +109,20 @@ fun MonthlySummaryPanel(
                 when (state.summaryStatus) {
                     MonthlySummaryStatus.LOADING -> LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     MonthlySummaryStatus.ERROR -> Text("月度总结加载失败，请稍后重试。", color = Color.White)
-                    MonthlySummaryStatus.EMPTY -> MonthlySummaryEmpty(monthFormat.format(state.monthStart))
+                    MonthlySummaryStatus.EMPTY -> MonthlySummaryEmpty(monthFormat.format(state.monthStart), modifier = Modifier.weight(1f))
                     MonthlySummaryStatus.READY -> {
                         if (playing && state.slides.isNotEmpty()) {
                             MonthlySummarySlideCard(
                                 slide = state.slides[selectedIndex.coerceIn(0, state.slides.lastIndex)],
                                 dayText = dayFormat.format(state.slides[selectedIndex.coerceIn(0, state.slides.lastIndex)].dateStart),
-                                textEnabled = state.isSummaryEnabled
+                                textEnabled = state.isSummaryEnabled,
+                                focusMediaIndex = selectedMediaIndex,
+                                autoPlayVideo = true,
+                                onVideoComplete = { advancePlayback() },
+                                modifier = Modifier.weight(1f)
                             )
                         } else {
-                            LazyColumn(modifier = Modifier.heightIn(max = 520.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 if (state.isSummaryEnabled) {
                                     item { SummaryTextCard(state.summaryText) }
                                 }
@@ -115,9 +139,23 @@ fun MonthlySummaryPanel(
 }
 
 @Composable
-private fun DialogContainer(onDismiss: () -> Unit, modifier: Modifier, content: @Composable () -> Unit) {
-    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
-        Surface(shape = RoundedCornerShape(24.dp), color = Color.Transparent, modifier = modifier.fillMaxWidth().widthIn(max = 560.dp)) {
+private fun ImmersiveSummaryDialog(onDismiss: () -> Unit, modifier: Modifier, content: @Composable () -> Unit) {
+    val configuration = LocalConfiguration.current
+    val compact = configuration.screenWidthDp < 600
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        val shape = if (compact) RoundedCornerShape(0.dp) else RoundedCornerShape(28.dp)
+        val sizeModifier = if (compact) {
+            Modifier.fillMaxSize()
+        } else {
+            Modifier
+                .fillMaxWidth(0.92f)
+                .fillMaxHeight(0.92f)
+                .widthIn(max = 760.dp)
+        }
+        Surface(shape = shape, color = Color.Transparent, modifier = modifier.then(sizeModifier)) {
             content()
         }
     }
@@ -161,8 +199,16 @@ private fun SummaryTextCard(text: String) {
 }
 
 @Composable
-private fun MonthlySummarySlideCard(slide: com.memoriabox.utils.MonthlySummarySlide, dayText: String, textEnabled: Boolean) {
-    Card(colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.16f)), shape = RoundedCornerShape(20.dp)) {
+private fun MonthlySummarySlideCard(
+    slide: com.memoriabox.utils.MonthlySummarySlide,
+    dayText: String,
+    textEnabled: Boolean,
+    focusMediaIndex: Int? = null,
+    autoPlayVideo: Boolean = false,
+    onVideoComplete: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    Card(modifier = modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.16f)), shape = RoundedCornerShape(20.dp)) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(dayText, color = Color.White, style = MaterialTheme.typography.titleMedium)
             if (slide.photos.isEmpty()) {
@@ -173,15 +219,18 @@ private fun MonthlySummarySlideCard(slide: com.memoriabox.utils.MonthlySummarySl
                     }
                 }
             } else {
-                slide.photos.take(6).forEach { photo ->
-                    AsyncImage(
-                        model = photo.mediaUri,
-                        contentDescription = "月度照片",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxWidth().aspectRatio(photo.aspectRatio.toRatio()).clip(RoundedCornerShape(16.dp)),
-                        error = androidx.compose.ui.res.painterResource(android.R.drawable.ic_menu_report_image),
-                        placeholder = androidx.compose.ui.res.painterResource(android.R.drawable.ic_menu_gallery)
+                val focused = focusMediaIndex?.let { index -> slide.photos.getOrNull(index) }
+                if (focused != null) {
+                    MonthlySummaryMediaItem(focused, autoPlayVideo = autoPlayVideo, onVideoComplete = onVideoComplete)
+                    Text(
+                        "${focusMediaIndex + 1} / ${slide.photos.size}",
+                        color = Color.White.copy(alpha = 0.78f),
+                        style = MaterialTheme.typography.labelSmall
                     )
+                } else {
+                    slide.photos.take(6).forEach { photo ->
+                        MonthlySummaryMediaItem(photo)
+                    }
                 }
             }
             if (textEnabled) Text(slide.text, color = Color.White, style = MaterialTheme.typography.bodyMedium)
@@ -190,8 +239,37 @@ private fun MonthlySummarySlideCard(slide: com.memoriabox.utils.MonthlySummarySl
 }
 
 @Composable
-private fun MonthlySummaryEmpty(monthText: String) {
-    Box(modifier = Modifier.fillMaxWidth().height(220.dp).clip(RoundedCornerShape(18.dp)).background(Color.White.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+private fun MonthlySummaryMediaItem(
+    photo: MonthlyPhotoItem,
+    autoPlayVideo: Boolean = false,
+    onVideoComplete: (() -> Unit)? = null
+) {
+    if (photo.mediaType == DiaryMediaType.VIDEO) {
+        DiaryVideoPlayer(
+            uri = photo.mediaUri,
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(photo.aspectRatio.toRatio())
+                .clip(RoundedCornerShape(16.dp)),
+            showControls = true,
+            autoPlay = autoPlayVideo,
+            onCompletion = onVideoComplete
+        )
+    } else {
+        AsyncImage(
+            model = photo.mediaUri,
+            contentDescription = "月度照片",
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxWidth().aspectRatio(photo.aspectRatio.toRatio()).clip(RoundedCornerShape(16.dp)),
+            error = androidx.compose.ui.res.painterResource(android.R.drawable.ic_menu_report_image),
+            placeholder = androidx.compose.ui.res.painterResource(android.R.drawable.ic_menu_gallery)
+        )
+    }
+}
+
+@Composable
+private fun MonthlySummaryEmpty(monthText: String, modifier: Modifier = Modifier) {
+    Box(modifier = modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.White.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(Icons.Default.PhotoLibrary, contentDescription = null, tint = Color.White.copy(alpha = 0.82f), modifier = Modifier.size(48.dp))
             Text("$monthText 暂无日记和照片记录", color = Color.White)
