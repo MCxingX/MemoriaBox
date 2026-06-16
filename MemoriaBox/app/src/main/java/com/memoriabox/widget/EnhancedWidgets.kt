@@ -63,7 +63,7 @@ class CountdownWidget : AppWidgetProvider() {
             } else {
                 views.setTextViewText(R.id.widget_next_event, "暂无即将到来的日子")
                 views.setTextViewText(R.id.widget_event_name, "添加纪念日")
-                views.setTextViewText(R.id.widget_event_meta, "点击打开 MemoriaBox")
+                views.setTextViewText(R.id.widget_event_meta, "点击打开 念记")
                 views.setTextViewText(R.id.widget_days_left, "--")
                 views.setTextViewText(R.id.widget_days_unit, "天")
             }

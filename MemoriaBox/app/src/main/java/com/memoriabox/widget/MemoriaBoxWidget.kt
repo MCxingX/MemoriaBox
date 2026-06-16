@@ -65,7 +65,7 @@ class MemoriaBoxWidget : AppWidgetProvider() {
                 views.setTextViewText(R.id.widget_date, SimpleDateFormat("yyyy年M月d日", Locale.getDefault()).format(Date(event.date)))
                 views.setTextViewText(R.id.widget_days, if (daysLeft == 0L) "今天" else "$daysLeft 天")
             } else {
-                views.setTextViewText(R.id.widget_title, "MemoriaBox")
+                views.setTextViewText(R.id.widget_title, "念记")
                 views.setTextViewText(R.id.widget_content, "点击添加第一个纪念日")
                 views.setTextViewText(R.id.widget_date, "")
                 views.setTextViewText(R.id.widget_days, "")

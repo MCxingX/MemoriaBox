@@ -1,4 +1,4 @@
-# MemoriaBox 项目状态报告
+# 念记 项目状态报告
 
 更新时间：2026-06-02
 
@@ -54,7 +54,7 @@
 - **WebDavClient.kt**: WebDAV 云端同步
 
 ### 5. 桌面组件 ✅
-- **MemoriaBoxWidget**: 1×1 盒子快速查看
+- **NianJiWidget**: 1×1 盒子快速查看
 - **CountdownWidget**: 1×2 倒数日组件
 - **CalendarWidget**: 1×2 日历组件
 
@@ -262,7 +262,7 @@ unzip gradle-8.0-bin.zip
 export PATH=$PATH:$(pwd)/gradle-8.0/bin
 
 # 2. 编译项目
-cd /workspace/MemoriaBox
+cd /workspace/NianJi
 ./gradlew :app:compileDebugKotlin
 
 # 3. 构建 Debug APK

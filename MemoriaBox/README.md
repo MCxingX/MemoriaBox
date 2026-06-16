@@ -1,4 +1,4 @@
-# MemoriaBox - 纪念日管理系统
+# 念记 - 纪念日管理系统
 
 集纪念日管理、倒数日提醒、个性化卡片展示于一体的情感记录工具。
 
@@ -25,7 +25,7 @@
 ### 1. 打开项目
 
 ```bash
-cd MemoriaBox
+cd NianJi
 ```
 
 ### 2. 使用Android Studio打开项目

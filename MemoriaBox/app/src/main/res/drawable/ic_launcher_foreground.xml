@@ -4,39 +4,20 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- 礼物盒主体 -->
+    <!-- 书签主体 - 代表记录 -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M30,50h48v30h-48z"/>
-    <!-- 盒盖 -->
+        android:pathData="M36,24h36v60l-18,-12l-18,12z"/>
+    <!-- 心形 - 代表思念和情感 -->
     <path
-        android:fillColor="#F5F5F5"
-        android:pathData="M28,44h52v8h-52z"/>
+        android:fillColor="#FF6B9D"
+        android:pathData="M54,48c-2.5,-3.5 -8,-3.5 -8,2c0,4.5 5,9.5 8,10.5c3,-1 8,-6 8,-10.5c0,-5.5 -5.5,-5.5 -8,-2z"/>
+    <!-- 心形内部高光 -->
     <path
-        android:fillColor="#EEEEEE"
-        android:pathData="M30,50h48v2h-48z"/>
-    <!-- 竖条丝带 -->
+        android:fillColor="#FF8FB8"
+        android:pathData="M54,50c-1.5,-2 -5,-2 -5,1.2c0,2.8 3.2,6 5,6.8c1.8,-0.8 5,-4 5,-6.8c0,-3.2 -3.5,-3.2 -5,-1.2z"/>
+    <!-- 书签底部装饰线 -->
     <path
-        android:fillColor="#FF4081"
-        android:pathData="M51,44h6v36h-6z"/>
-    <!-- 横条丝带 -->
-    <path
-        android:fillColor="#FF4081"
-        android:pathData="M30,58h48v6h-48z"/>
-    <!-- 蝴蝶结左环 -->
-    <path
-        android:fillColor="#FF4081"
-        android:pathData="M54,44 c-8,-4 -16,2 -12,10 c3,5 10,0 10,-4 L46,44h8z"/>
-    <!-- 蝴蝶结右环 -->
-    <path
-        android:fillColor="#FF4081"
-        android:pathData="M54,44 c8,-4 16,2 12,10 c-3,5 -10,0 -10,-4 L62,44h-8z"/>
-    <!-- 结中心 -->
-    <path
-        android:fillColor="#C51162"
-        android:pathData="M51,42h6v4h-6z"/>
-    <!-- 心形装饰 -->
-    <path
-        android:fillColor="#FF4081"
-        android:pathData="M54,34c-2,-3 -7,-3 -7,2 c0,4 4,8 7,9 c3,-1 7,-5 7,-9 c0,-5 -5,-5 -7,-2z"/>
+        android:fillColor="#E0E0E0"
+        android:pathData="M42,78l12,-8l12,8v6h-24z"/>
 </vector>

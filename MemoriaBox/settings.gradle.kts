@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "MemoriaBox"
+rootProject.name = "NianJi"
 include(":app")
