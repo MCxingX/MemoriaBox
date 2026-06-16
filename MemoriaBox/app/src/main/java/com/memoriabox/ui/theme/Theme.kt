@@ -285,7 +285,7 @@ private val MemoriaShapes = Shapes(
 )
 
 @Composable
-fun MemoriaBoxTheme(
+fun NianJiTheme(
     themeMode: AppThemeMode = AppThemeMode.BLUE_WHITE,
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = false,

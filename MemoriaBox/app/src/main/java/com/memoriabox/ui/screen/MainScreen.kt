@@ -2284,11 +2284,11 @@ fun SettingsScreen(
     if (showAboutDialog) {
         AlertDialog(
             onDismissRequest = { showAboutDialog = false },
-            title = { Text("关于 MemoriaBox") },
+            title = { Text("关于 念记") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("版本：3.2.14", style = MaterialTheme.typography.bodyMedium)
-                    Text("MemoriaBox 是一个本地优先的日子、纪念日、待办和照片记录工具。", style = MaterialTheme.typography.bodyMedium)
+                    Text("念记 是一个本地优先的日子、纪念日、待办和照片记录工具。", style = MaterialTheme.typography.bodyMedium)
                     Text("数据默认保存在本机，可通过备份和 WebDAV 功能进行迁移或同步。", style = MaterialTheme.typography.bodyMedium)
                     Text("著名木羽制作", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                 }
@@ -2438,7 +2438,7 @@ fun SettingsHeroCard() {
         ) {
             MemoriaBoxLogoMark(size = if (adaptiveUi.compact) 48.dp else 56.dp)
             Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
-                Text("我的 MemoriaBox", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.headlineSmall)
+                Text("我的 念记", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.headlineSmall)
                 Text("数据安全、外观、提醒和常用工具都放在这里。", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
             }
         }

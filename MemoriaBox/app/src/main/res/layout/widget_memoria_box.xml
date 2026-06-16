@@ -16,7 +16,7 @@
             android:id="@+id/widget_title"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="MemoriaBox"
+            android:text="念记"
             android:textSize="18sp"
             android:textStyle="bold"
             android:textColor="#FFFFFF" />

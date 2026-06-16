@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">MemoriaBox</string>
+    <string name="app_name">念记</string>
     <string name="tab_boxes">日子</string>
     <string name="tab_calendar">日历</string>
     <string name="tab_logs">日志</string>

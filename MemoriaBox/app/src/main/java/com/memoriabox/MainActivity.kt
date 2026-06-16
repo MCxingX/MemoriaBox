@@ -24,7 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import com.memoriabox.ui.theme.AppThemeMode
-import com.memoriabox.ui.theme.MemoriaBoxTheme
+import com.memoriabox.ui.theme.NianJiTheme
 import com.memoriabox.ui.screen.MainScreen
 import com.memoriabox.widget.CalendarWidget
 import com.memoriabox.widget.CountdownWidget
@@ -64,7 +64,7 @@ class MainActivity : ComponentActivity() {
                 SideEffect {
                     applySystemBarStyle(themeMode)
                 }
-                MemoriaBoxTheme(themeMode = themeMode) {
+                NianJiTheme(themeMode = themeMode) {
                     Surface(
                         modifier = Modifier.fillMaxSize(),
                         color = MaterialTheme.colorScheme.background
