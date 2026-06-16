@@ -49,7 +49,7 @@ import com.memoriabox.ui.utils.rememberAdaptiveUiSize
 import com.memoriabox.data.model.*
 import com.memoriabox.ui.theme.AppThemeMode
 import com.memoriabox.ui.theme.AppThemeGroup
-import com.memoriabox.ui.theme.MemoriaBoxLogoMark
+import com.memoriabox.ui.theme.NianJiLogoMark
 import com.memoriabox.ui.theme.MemoriaDesign
 import com.memoriabox.ui.theme.group
 import com.memoriabox.utils.AppSettings
@@ -698,7 +698,7 @@ fun BoxesScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            MemoriaBoxLogoMark(size = 32.dp)
+                            NianJiLogoMark(size = 32.dp)
                             Text("今天", style = MaterialTheme.typography.titleMedium)
                         }
                     },
@@ -2276,7 +2276,7 @@ fun SettingsScreen(
         SettingsItem(
             icon = Icons.Default.Info,
             title = "关于",
-            description = "版本 3.2.14 · MemoriaBox",
+            description = "版本 3.3.3 · 念记",
             onClick = { showAboutDialog = true }
         )
     }
@@ -2287,7 +2287,7 @@ fun SettingsScreen(
             title = { Text("关于 念记") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("版本：3.2.14", style = MaterialTheme.typography.bodyMedium)
+                    Text("版本：3.3.3", style = MaterialTheme.typography.bodyMedium)
                     Text("念记 是一个本地优先的日子、纪念日、待办和照片记录工具。", style = MaterialTheme.typography.bodyMedium)
                     Text("数据默认保存在本机，可通过备份和 WebDAV 功能进行迁移或同步。", style = MaterialTheme.typography.bodyMedium)
                     Text("著名木羽制作", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
@@ -2436,7 +2436,7 @@ fun SettingsHeroCard() {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            MemoriaBoxLogoMark(size = if (adaptiveUi.compact) 48.dp else 56.dp)
+            NianJiLogoMark(size = if (adaptiveUi.compact) 48.dp else 56.dp)
             Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
                 Text("我的 念记", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.headlineSmall)
                 Text("数据安全、外观、提醒和常用工具都放在这里。", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)

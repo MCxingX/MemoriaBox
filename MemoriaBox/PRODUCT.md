@@ -6,11 +6,11 @@ product
 
 ## Users
 
-MemoriaBox is used by Android users who want to keep dates, birthdays, todos, diary notes, photos, and reminders in one private daily tool. They use it in short sessions, often on varied Android devices, screen sizes, and font-scale settings.
+念记 is used by Android users who want to keep dates, birthdays, todos, diary notes, photos, and reminders in one private daily tool. They use it in short sessions, often on varied Android devices, screen sizes, and font-scale settings.
 
 ## Product Purpose
 
-MemoriaBox helps users preserve meaningful days and act on upcoming reminders with local-first storage, backups, calendar views, widgets, and lightweight organization. Success means users can find, review, edit, back up, and restore personal memories without losing data or fighting the interface.
+念记 helps users preserve meaningful days and act on upcoming reminders with local-first storage, backups, calendar views, widgets, and lightweight organization. Success means users can find, review, edit, back up, and restore personal memories without losing data or fighting the interface.
 
 ## Brand Personality
 

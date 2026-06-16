@@ -40,7 +40,7 @@ object MemoriaDesign {
 }
 
 @Composable
-fun MemoriaBoxLogoMark(
+fun NianJiLogoMark(
     modifier: Modifier = Modifier,
     size: Dp = 48.dp,
     containerColor: Color = MaterialTheme.colorScheme.primaryContainer,
@@ -60,32 +60,44 @@ fun MemoriaBoxLogoMark(
             ),
         contentAlignment = Alignment.Center
     ) {
-        androidx.compose.foundation.Canvas(modifier = Modifier.size(size * 0.68f)) {
-            val markWidth = this.size.width
-            val markHeight = this.size.height
-            val strokeWidth = markWidth * 0.055f
-            val boxPath = Path().apply {
-                moveTo(markWidth * 0.12f, markHeight * 0.34f)
-                lineTo(markWidth * 0.50f, markHeight * 0.14f)
-                lineTo(markWidth * 0.88f, markHeight * 0.34f)
-                lineTo(markWidth * 0.88f, markHeight * 0.78f)
-                lineTo(markWidth * 0.50f, markHeight * 0.96f)
-                lineTo(markWidth * 0.12f, markHeight * 0.78f)
+        androidx.compose.foundation.Canvas(modifier = Modifier.size(size * 0.64f)) {
+            val w = this.size.width
+            val h = this.size.height
+            val sw = w * 0.045f
+
+            // Envelope body
+            val bodyPath = Path().apply {
+                moveTo(w * 0.15f, h * 0.44f)
+                lineTo(w * 0.85f, h * 0.44f)
+                lineTo(w * 0.85f, h * 0.82f)
+                lineTo(w * 0.80f, h * 0.88f)
+                lineTo(w * 0.20f, h * 0.88f)
+                lineTo(w * 0.15f, h * 0.82f)
                 close()
             }
-            drawPath(boxPath, color = contentColor.copy(alpha = 0.18f))
-            drawPath(boxPath, color = contentColor, style = Stroke(width = strokeWidth))
-            drawRoundRect(
-                color = contentColor.copy(alpha = 0.92f),
-                topLeft = Offset(markWidth * 0.30f, markHeight * 0.40f),
-                size = androidx.compose.ui.geometry.Size(markWidth * 0.24f, markHeight * 0.26f),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(markWidth * 0.04f)
-            )
-            drawCircle(
-                color = accentColor,
-                radius = markWidth * 0.075f,
-                center = Offset(markWidth * 0.68f, markHeight * 0.58f)
-            )
+            drawPath(bodyPath, color = contentColor.copy(alpha = 0.25f))
+            drawPath(bodyPath, color = contentColor, style = Stroke(width = sw))
+
+            // Envelope flap
+            val flapPath = Path().apply {
+                moveTo(w * 0.15f, h * 0.44f)
+                lineTo(w * 0.50f, h * 0.16f)
+                lineTo(w * 0.85f, h * 0.44f)
+                close()
+            }
+            drawPath(flapPath, color = contentColor.copy(alpha = 0.12f))
+            drawPath(flapPath, color = contentColor, style = Stroke(width = sw))
+
+            // Heart seal on flap
+            val cx = w * 0.50f
+            val cy = h * 0.40f
+            val heartR = w * 0.14f
+            val heartPath = Path().apply {
+                moveTo(cx, cy + heartR * 0.3f)
+                cubicTo(cx - heartR, cy - heartR * 0.5f, cx - heartR, cy + heartR * 0.2f, cx, cy + heartR)
+                cubicTo(cx + heartR, cy + heartR * 0.2f, cx + heartR, cy - heartR * 0.5f, cx, cy + heartR * 0.3f)
+            }
+            drawPath(heartPath, color = accentColor)
         }
     }
 }

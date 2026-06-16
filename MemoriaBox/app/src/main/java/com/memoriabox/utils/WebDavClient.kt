@@ -15,7 +15,7 @@ class WebDavClient {
         val serverUrl: String,
         val username: String,
         val password: String,
-        val path: String = "/MemoriaBox/"
+        val path: String = "/NianJi/"
     )
 
     suspend fun testConnection(config: WebDavConfig): Result<Boolean> {
