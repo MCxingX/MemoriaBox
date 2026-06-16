@@ -101,7 +101,7 @@ abstract class AppDatabase : RoomDatabase() {
             return android.util.Base64.decode(encodedKey, android.util.Base64.NO_WRAP)
         }
 
-        private fun repairLegacyData(db: SupportSQLiteDatabase) {
+        fun repairLegacyData(db: SupportSQLiteDatabase) {
             db.execSQL("UPDATE boxes SET bg_type = 'COLOR' WHERE bg_type NOT IN ('COLOR', 'IMAGE')")
             db.execSQL("UPDATE events SET type = 'COUNTDOWN' WHERE type NOT IN ('COUNTDOWN', 'ANNIVERSARY', 'ELAPSED', 'BIRTHDAY', 'TODO')")
             db.execSQL("UPDATE events SET todo_status = 'PENDING' WHERE todo_status NOT IN ('PENDING', 'COMPLETED', 'CANCELLED')")

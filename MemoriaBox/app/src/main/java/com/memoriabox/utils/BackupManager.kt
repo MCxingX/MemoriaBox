@@ -195,6 +195,15 @@ class BackupManager(
         }
     }
 
+    private fun InputStream.readFully(buffer: ByteArray) {
+        var offset = 0
+        while (offset < buffer.size) {
+            val bytesRead = read(buffer, offset, buffer.size - offset)
+            if (bytesRead == -1) throw EOFException("Unexpected end of stream")
+            offset += bytesRead
+        }
+    }
+
     private suspend fun encryptDatabase(dbFile: File, password: String?): File {
         val encryptedFile = File(context.cacheDir, "temp_encrypt_${System.currentTimeMillis()}.mbox")
         if (encryptedFile.exists()) encryptedFile.delete()
@@ -236,8 +245,8 @@ class BackupManager(
     private suspend fun decryptDatabase(encryptedUri: Uri, password: String?, output: File): Boolean {
         return try {
             context.contentResolver.openInputStream(encryptedUri)?.use { input ->
-                val salt = ByteArray(16).also { input.read(it) }
-                val iv = ByteArray(12).also { input.read(it) }
+                val salt = ByteArray(16).also { input.readFully(it) }
+                val iv = ByteArray(12).also { input.readFully(it) }
 
                 val remainingBytes = input.readBytes()
                 val decrypted = decryptBytes(remainingBytes, salt, iv, password)
@@ -266,6 +275,12 @@ class BackupManager(
                 MIGRATION_5_6,
                 MIGRATION_6_7
             )
+            .addCallback(object : androidx.room.RoomDatabase.Callback() {
+                override fun onOpen(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                    super.onOpen(db)
+                    AppDatabase.repairLegacyData(db)
+                }
+            })
             .build()
 
         try {
