@@ -4,22 +4,83 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+
+    <!-- 书本主体外框 -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M26,50 h56 v20 a5,5 0 0,1 -5,5 h-46 a5,5 0 0,1 -5,-5 z"/>
+        android:strokeColor="#000000"
+        android:strokeWidth="3"
+        android:pathData="M24,22 L72,22 A4,4 0 0 1 76,26 L76,82 A4,4 0 0 1 72,86 L24,86 A4,4 0 0 1 20,82 L20,26 A4,4 0 0 1 24,22 Z" />
+
+    <!-- 书本右侧书页线条 -->
     <path
-        android:fillColor="#F5F5F5"
-        android:pathData="M26,50 l28,-18 l28,18 z"/>
+        android:strokeColor="#000000"
+        android:strokeWidth="2"
+        android:pathData="M76,26 L82,26 L82,82 L76,82" />
     <path
+        android:strokeColor="#000000"
+        android:strokeWidth="1.5"
+        android:pathData="M78,30 L78,78 M80,34 L80,74 M78,40 L78,68 M80,46 L80,62 M78,52 L78,56" />
+
+    <!-- 书本底部书页横线 -->
+    <path
+        android:strokeColor="#000000"
+        android:strokeWidth="1.5"
+        android:pathData="M24,80 L72,80 M24,76 L72,76" />
+
+    <!-- 愤怒眉毛 -->
+    <path
+        android:strokeColor="#000000"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M38,44 L44,41 M64,41 L70,44" />
+
+    <!-- 眼睛 -->
+    <circle
+        android:cx="42"
+        android:cy="48"
+        android:r="4.5"
+        android:fillColor="#000000" />
+    <circle
+        android:cx="66"
+        android:cy="48"
+        android:r="4.5"
+        android:fillColor="#000000" />
+
+    <!-- 脸颊腮红 -->
+    <circle
+        android:cx="34"
+        android:cy="56"
+        android:r="5"
+        android:fillColor="#FFD4C8" />
+    <circle
+        android:cx="74"
+        android:cy="56"
+        android:r="5"
+        android:fillColor="#FFD4C8" />
+
+    <!-- 生气嘴巴 -->
+    <path
+        android:strokeColor="#000000"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
         android:fillColor="#FFFFFF"
-        android:pathData="M26,50 l28,-18 l28,18 z"/>
+        android:pathData="M48,56 Q54,52 60,56" />
+
+    <!-- 双手鼓脸轮廓 -->
     <path
-        android:fillColor="#E8E8E8"
-        android:pathData="M26,50 l28,-18 l28,18"/>
+        android:strokeColor="#000000"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:fillColor="transparent"
+        android:pathData="M32,52 A10,10 0 0 0 32,64 M76,52 A10,10 0 0 0 76,64" />
+
+    <!-- 右上角小火苗 -->
     <path
-        android:fillColor="#FF4068"
-        android:pathData="M54,44 c-3,-4.5 -9,-4.5 -9,2 c0,5.5 5,11 9,12.5 c4,-1.5 9,-7 9,-12.5 c0,-6.5 -6,-6.5 -9,-2 z"/>
-    <path
-        android:fillColor="#FF6B8A"
-        android:pathData="M54,47 c-1.8,-2.8 -5.5,-2.8 -5.5,1.2 c0,3.5 3,7 5.5,8 c2.5,-1 5.5,-4.5 5.5,-8 c0,-4 -3.7,-4 -5.5,-1.2 z"/>
+        android:strokeColor="#000000"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:fillColor="transparent"
+        android:pathData="M84,24 C90,20 94,26 90,32 C96,34 92,40 86,38 C88,44 82,42 80,36 C78,30 82,26 84,24 Z" />
+
 </vector>
