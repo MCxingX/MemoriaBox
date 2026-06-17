@@ -103,8 +103,6 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)
 
-    implementation(libs.androidx.datastore.preferences)
-
     implementation(libs.squareup.okhttp)
 
     implementation(libs.io.coil.compose)

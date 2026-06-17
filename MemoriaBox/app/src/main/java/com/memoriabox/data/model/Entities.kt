@@ -12,10 +12,6 @@ enum class BgType {
     COLOR, IMAGE
 }
 
-enum class ImportMode {
-    OVERWRITE, MERGE_SKIP, MERGE_REPLACE
-}
-
 enum class TodoStatus {
     PENDING, COMPLETED, CANCELLED
 }

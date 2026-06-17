@@ -18,8 +18,6 @@ sealed class Screen(val route: String) {
     object PhotoWall : Screen("photo_wall")
     object Export : Screen("export")
     object Timeline : Screen("timeline")
-    object AiSuggestions : Screen("ai_suggestions")
-    object Achievements : Screen("achievements")
     object SyncStatus : Screen("sync_status")
     object DayTools : Screen("day_tools")
     object CustomizationSettings : Screen("customization_settings")

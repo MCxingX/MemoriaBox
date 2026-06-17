@@ -210,8 +210,7 @@ fun MainScreen(
                     onBoxClick = { navController.navigate(Screen.BoxDetail.createRoute(it)) },
                     onNavigateToCalendar = { navController.navigate(Screen.Calendar.route) },
                     onNavigateToPhotoWall = { navController.navigate(Screen.PhotoWall.route) },
-                    onNavigateToStatistics = { navController.navigate(Screen.Statistics.route) },
-                    onNavigateToAiSuggestions = { navController.navigate(Screen.AiSuggestions.route) }
+                    onNavigateToStatistics = { navController.navigate(Screen.Statistics.route) }
                 )
             }
             composable(Screen.BoxDetail.route) { backStackEntry ->
@@ -347,8 +346,6 @@ fun MainScreen(
                     onNavigateToStatistics = { navController.navigate(Screen.Statistics.route) },
                     onNavigateToPhotoWall = { navController.navigate(Screen.PhotoWall.route) },
                     onNavigateToExport = { navController.navigate(Screen.Export.route) },
-                    onNavigateToAiSuggestions = { navController.navigate(Screen.AiSuggestions.route) },
-                    onNavigateToAchievements = { navController.navigate(Screen.Achievements.route) },
                     onNavigateToSyncStatus = { navController.navigate(Screen.SyncStatus.route) },
                     onNavigateToDayTools = { navController.navigate(Screen.DayTools.route) },
                     onNavigateToCustomization = { navController.navigate(Screen.CustomizationSettings.route) },
@@ -384,12 +381,6 @@ fun MainScreen(
             }
             composable(Screen.Timeline.route) {
                 TimelineScreen(application)
-            }
-            composable(Screen.AiSuggestions.route) {
-                AiSuggestionsScreen(application)
-            }
-            composable(Screen.Achievements.route) {
-                AchievementsScreen(application)
             }
             composable(Screen.SyncStatus.route) {
                 SyncStatusScreen(application)
@@ -647,8 +638,7 @@ fun BoxesScreen(
     onBoxClick: (String) -> Unit,
     onNavigateToCalendar: () -> Unit,
     onNavigateToPhotoWall: () -> Unit,
-    onNavigateToStatistics: () -> Unit,
-    onNavigateToAiSuggestions: () -> Unit
+    onNavigateToStatistics: () -> Unit
 ) {
     val viewModel = remember { createMainViewModel(application) }
     val notificationHelper = remember { com.memoriabox.utils.NotificationHelper(application) }
@@ -730,7 +720,6 @@ fun BoxesScreen(
                 onNavigateToCalendar = onNavigateToCalendar,
                 onNavigateToPhotoWall = onNavigateToPhotoWall,
                 onNavigateToStatistics = onNavigateToStatistics,
-                onNavigateToAiSuggestions = onNavigateToAiSuggestions,
                 onEventClick = { event -> selectedEvent = event },
                 onEventLongClick = { event -> eventForActions = event },
                 selectedBoxId = selectedBoxId,
@@ -895,7 +884,6 @@ fun HomeDashboard(
     onNavigateToCalendar: () -> Unit,
     onNavigateToPhotoWall: () -> Unit,
     onNavigateToStatistics: () -> Unit,
-    onNavigateToAiSuggestions: () -> Unit,
     onEventClick: (Event) -> Unit,
     onEventLongClick: (Event) -> Unit,
     adaptiveUi: AdaptiveUiSize,
@@ -2125,8 +2113,6 @@ fun SettingsScreen(
     onNavigateToStatistics: () -> Unit,
     onNavigateToPhotoWall: () -> Unit,
     onNavigateToExport: () -> Unit,
-    onNavigateToAiSuggestions: () -> Unit,
-    onNavigateToAchievements: () -> Unit,
     onNavigateToSyncStatus: () -> Unit,
     onNavigateToDayTools: () -> Unit,
     onNavigateToCustomization: () -> Unit,
@@ -2323,14 +2309,6 @@ fun SettingsScreen(
                 showMoreToolsDialog = false
                 onNavigateToExport()
             },
-            onNavigateToAiSuggestions = {
-                showMoreToolsDialog = false
-                onNavigateToAiSuggestions()
-            },
-            onNavigateToAchievements = {
-                showMoreToolsDialog = false
-                onNavigateToAchievements()
-            },
             onNavigateToSyncStatus = {
                 showMoreToolsDialog = false
                 onNavigateToSyncStatus()
@@ -2345,8 +2323,6 @@ fun MoreToolsDialog(
     onNavigateToStatistics: () -> Unit,
     onNavigateToPhotoWall: () -> Unit,
     onNavigateToExport: () -> Unit,
-    onNavigateToAiSuggestions: () -> Unit,
-    onNavigateToAchievements: () -> Unit,
     onNavigateToSyncStatus: () -> Unit
 ) {
     AlertDialog(
@@ -2363,8 +2339,6 @@ fun MoreToolsDialog(
                 MoreToolActionRow(icon = Icons.Default.BarChart, title = "数据统计", description = "查看事件统计和趋势", onClick = onNavigateToStatistics)
                 MoreToolActionRow(icon = Icons.Default.PhotoLibrary, title = "照片墙", description = "查看所有事件照片", onClick = onNavigateToPhotoWall)
                 MoreToolActionRow(icon = Icons.Default.Share, title = "导出分享", description = "导出数据和分享图片", onClick = onNavigateToExport)
-                MoreToolActionRow(icon = Icons.Default.AutoAwesome, title = "AI 智能建议", description = "整理事件和提醒状态", onClick = onNavigateToAiSuggestions)
-                MoreToolActionRow(icon = Icons.Default.EmojiEvents, title = "成就系统", description = "查看记录进度", onClick = onNavigateToAchievements)
                 MoreToolActionRow(icon = Icons.Default.CloudSync, title = "多设备同步", description = "查看同步状态和建议", onClick = onNavigateToSyncStatus)
             }
         },

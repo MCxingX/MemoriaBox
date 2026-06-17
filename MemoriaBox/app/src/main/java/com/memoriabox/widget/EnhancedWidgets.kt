@@ -10,8 +10,10 @@ import com.memoriabox.MainActivity
 import com.memoriabox.R
 import com.memoriabox.data.model.EventType
 import com.memoriabox.database.AppDatabase
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -30,14 +32,13 @@ class CountdownWidget : AppWidgetProvider() {
     }
 
     companion object {
-        fun updateAppWidget(
+        internal fun updateAppWidget(
             context: Context,
             appWidgetManager: AppWidgetManager,
             appWidgetId: Int
         ) {
             val views = RemoteViews(context.packageName, R.layout.widget_countdown)
-            
-            // Click to open app
+
             val intent = Intent(context, MainActivity::class.java)
             val pendingIntent = PendingIntent.getActivity(
                 context,
@@ -46,29 +47,31 @@ class CountdownWidget : AppWidgetProvider() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             views.setOnClickPendingIntent(R.id.widget_main_container, pendingIntent)
-            
-            val event = runCatching {
-                runBlocking(Dispatchers.IO) {
-                    AppDatabase.getDatabase(context).eventDao().getNextUpcomingEvent(System.currentTimeMillis())
-                }
-            }.getOrNull()
 
-            if (event != null) {
-                val daysLeft = ((event.date - System.currentTimeMillis()) / 86_400_000L).coerceAtLeast(0)
-                views.setTextViewText(R.id.widget_next_event, "下一个${widgetTypeLabel(event.type)}")
-                views.setTextViewText(R.id.widget_event_name, event.name)
-                views.setTextViewText(R.id.widget_event_meta, SimpleDateFormat("yyyy年M月d日", Locale.getDefault()).format(Date(event.date)))
-                views.setTextViewText(R.id.widget_days_left, if (daysLeft == 0L) "今天" else daysLeft.toString())
-                views.setTextViewText(R.id.widget_days_unit, if (daysLeft == 0L) "" else "天")
-            } else {
-                views.setTextViewText(R.id.widget_next_event, "暂无即将到来的日子")
-                views.setTextViewText(R.id.widget_event_name, "添加纪念日")
-                views.setTextViewText(R.id.widget_event_meta, "点击打开 念记")
-                views.setTextViewText(R.id.widget_days_left, "--")
-                views.setTextViewText(R.id.widget_days_unit, "天")
+            CoroutineScope(Dispatchers.IO).launch {
+                val event = runCatching {
+                    AppDatabase.getDatabase(context).eventDao()
+                        .getNextUpcomingEvent(System.currentTimeMillis())
+                }.getOrNull()
+
+                withContext(Dispatchers.Main) {
+                    if (event != null) {
+                        val daysLeft = ((event.date - System.currentTimeMillis()) / 86_400_000L).coerceAtLeast(0)
+                        views.setTextViewText(R.id.widget_next_event, "下一个${widgetTypeLabel(event.type)}")
+                        views.setTextViewText(R.id.widget_event_name, event.name)
+                        views.setTextViewText(R.id.widget_event_meta, SimpleDateFormat("yyyy年M月d日", Locale.getDefault()).format(Date(event.date)))
+                        views.setTextViewText(R.id.widget_days_left, if (daysLeft == 0L) "今天" else daysLeft.toString())
+                        views.setTextViewText(R.id.widget_days_unit, if (daysLeft == 0L) "" else "天")
+                    } else {
+                        views.setTextViewText(R.id.widget_next_event, "暂无即将到来的日子")
+                        views.setTextViewText(R.id.widget_event_name, "添加纪念日")
+                        views.setTextViewText(R.id.widget_event_meta, "点击打开 念记")
+                        views.setTextViewText(R.id.widget_days_left, "--")
+                        views.setTextViewText(R.id.widget_days_unit, "天")
+                    }
+                    appWidgetManager.updateAppWidget(appWidgetId, views)
+                }
             }
-            
-            appWidgetManager.updateAppWidget(appWidgetId, views)
         }
     }
 }
@@ -86,14 +89,13 @@ class CalendarWidget : AppWidgetProvider() {
     }
 
     companion object {
-        fun updateAppWidget(
+        internal fun updateAppWidget(
             context: Context,
             appWidgetManager: AppWidgetManager,
             appWidgetId: Int
         ) {
             val views = RemoteViews(context.packageName, R.layout.widget_calendar)
-            
-            // Click to open app
+
             val intent = Intent(context, MainActivity::class.java)
             val pendingIntent = PendingIntent.getActivity(
                 context,
@@ -102,7 +104,7 @@ class CalendarWidget : AppWidgetProvider() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             views.setOnClickPendingIntent(R.id.widget_calendar_container, pendingIntent)
-            
+
             val calendar = Calendar.getInstance()
             val dateText = SimpleDateFormat("MM月dd日", Locale.getDefault()).format(Date())
             val dayText = calendar.get(Calendar.DAY_OF_MONTH).toString()
@@ -113,26 +115,28 @@ class CalendarWidget : AppWidgetProvider() {
                 set(Calendar.MILLISECOND, 0)
             }.timeInMillis
             val end = start + 86_400_000L - 1
-            val count = runCatching {
-                runBlocking(Dispatchers.IO) {
-                    AppDatabase.getDatabase(context).eventDao().getEventCountBetween(start, end)
-                }
-            }.getOrDefault(0)
-            val nextEvent = runCatching {
-                runBlocking(Dispatchers.IO) {
-                    AppDatabase.getDatabase(context).eventDao().getNextUpcomingEvent(System.currentTimeMillis())
-                }
-            }.getOrNull()
 
             views.setTextViewText(R.id.widget_today_date, dateText)
             views.setTextViewText(R.id.widget_today_day, dayText)
-            views.setTextViewText(R.id.widget_event_count, if (count == 0) "今天暂无日程" else "今天 $count 个日程")
-            views.setTextViewText(
-                R.id.widget_next_event_name,
-                nextEvent?.let { "最近：${it.name}" } ?: "暂无即将到来的日子"
-            )
-            
-            appWidgetManager.updateAppWidget(appWidgetId, views)
+
+            CoroutineScope(Dispatchers.IO).launch {
+                val count = runCatching {
+                    AppDatabase.getDatabase(context).eventDao().getEventCountBetween(start, end)
+                }.getOrDefault(0)
+                val nextEvent = runCatching {
+                    AppDatabase.getDatabase(context).eventDao()
+                        .getNextUpcomingEvent(System.currentTimeMillis())
+                }.getOrNull()
+
+                withContext(Dispatchers.Main) {
+                    views.setTextViewText(R.id.widget_event_count, if (count == 0) "今天暂无日程" else "今天 $count 个日程")
+                    views.setTextViewText(
+                        R.id.widget_next_event_name,
+                        nextEvent?.let { "最近：${it.name}" } ?: "暂无即将到来的日子"
+                    )
+                    appWidgetManager.updateAppWidget(appWidgetId, views)
+                }
+            }
         }
     }
 }
