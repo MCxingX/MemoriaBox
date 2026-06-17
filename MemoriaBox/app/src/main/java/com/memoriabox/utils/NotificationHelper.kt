@@ -22,6 +22,7 @@ import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Calendar
+import org.json.JSONObject
 
 class NotificationHelper(private val context: Context) {
     
@@ -310,15 +311,13 @@ class NotificationHelper(private val context: Context) {
                 connection.setRequestProperty("Content-Type", "application/json")
                 connection.doOutput = true
 
-                val jsonPayload = """
-                    {
-                        "token": "$token",
-                        "title": "$title",
-                        "content": "$content",
-                        "template": "html",
-                        "channel": "$channel"
-                    }
-                """.trimIndent()
+                val jsonPayload = JSONObject().apply {
+                    put("token", token)
+                    put("title", title)
+                    put("content", content)
+                    put("template", "html")
+                    put("channel", channel)
+                }.toString()
 
                 OutputStreamWriter(connection.outputStream).use {
                     it.write(jsonPayload)

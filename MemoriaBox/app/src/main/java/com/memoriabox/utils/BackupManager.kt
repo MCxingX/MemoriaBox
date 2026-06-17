@@ -252,7 +252,7 @@ class BackupManager(
                 val decrypted = decryptBytes(remainingBytes, salt, iv, password)
 
                 FileOutputStream(output).use { it.write(decrypted) }
-            }
+            } ?: throw IOException("Cannot open backup file")
             true
         } catch (e: Exception) {
             Log.e(TAG, "Decryption failed", e)
