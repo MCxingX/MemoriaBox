@@ -496,11 +496,11 @@ class BackupViewModel(
         _operationState.value = OperationState(inProgress = true, message = "正在导入备份")
         runCatching {
             backupManager.importBackup(uri, password).getOrThrow()
-        }.onSuccess {
+        }.onSuccess { result ->
             _operationState.value = OperationState(
-                message = "备份导入成功，已合并到当前数据。",
+                message = "备份导入成功：日子 ${result.events} 个，日记 ${result.diaries} 篇。",
                 importRestored = true,
-                importSummary = "导入方式：合并导入\n当前数据：已保留\n日子、日记和素材：已尝试恢复\n如存在同名或重复内容，会在原列表中继续保留，方便你手动整理。"
+                importSummary = result.toSummary()
             )
             runCatching { logRepository.logBackupOperation("IMPORT", "success") }
         }.onFailure { e ->

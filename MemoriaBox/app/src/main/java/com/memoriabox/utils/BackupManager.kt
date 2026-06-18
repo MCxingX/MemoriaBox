@@ -30,6 +30,31 @@ class BackupManager(
     private val context: Context,
     private val database: AppDatabase
 ) {
+    data class ImportResult(
+        val boxes: Int,
+        val labels: Int,
+        val friends: Int,
+        val friendRelations: Int,
+        val events: Int,
+        val eventLabels: Int,
+        val diaries: Int,
+        val media: Int,
+        val logs: Int
+    ) {
+        val userContentCount: Int
+            get() = events + diaries + media + friends + boxes
+
+        fun toSummary(): String = "导入方式：合并导入\n" +
+            "分组：${boxes} 个\n" +
+            "日子：${events} 个\n" +
+            "日记：${diaries} 篇\n" +
+            "素材：${media} 个\n" +
+            "好友：${friends} 个\n" +
+            "标签：${labels} 个\n" +
+            "当前数据：已保留\n" +
+            "如存在同名或重复内容，会按备份数据合并更新。"
+    }
+
     private var debounceJob: Job? = null
     private var config = BackupConfig()
     private var backupDirUri: Uri? = null
@@ -149,7 +174,7 @@ class BackupManager(
         backupUri: Uri,
         password: String = "",
         onProgress: (Int) -> Unit = {}
-    ): Result<Unit> {
+    ): Result<ImportResult> {
         val tempFile = File(context.cacheDir, "temp_import_backup_${System.currentTimeMillis()}.db")
         tempFile.delete()
         return try {
@@ -161,10 +186,13 @@ class BackupManager(
             }
             
             onProgress(60)
-            mergeDatabase(tempFile)
+            val result = mergeDatabase(tempFile)
+            if (result.userContentCount == 0) {
+                return Result.failure(IllegalStateException("备份文件中没有可导入的日子、日记、素材、好友或分组"))
+            }
             onProgress(100)
             
-            Result.success(Unit)
+            Result.success(result)
         } catch (e: Exception) {
             Result.failure(e)
         } finally {
@@ -260,7 +288,7 @@ class BackupManager(
         }
     }
 
-    private suspend fun mergeDatabase(tempFile: File) {
+    private suspend fun mergeDatabase(tempFile: File): ImportResult {
         val importDbName = "import_${tempFile.name}"
         val importDbPath = context.getDatabasePath(importDbName)
         clearDatabaseFiles(importDbPath)
@@ -284,19 +312,39 @@ class BackupManager(
             .build()
 
         try {
+            val boxes = importDb.boxDao().getAllBoxesOnce()
+            val labels = importDb.labelDao().getAllLabelsOnce()
+            val friends = importDb.friendDao().getAllFriendsOnce()
+            val friendRelations = importDb.friendDao().getAllFriendRelationsOnce()
+            val events = importDb.eventDao().getAllEventsOnce()
+            val eventLabels = importDb.labelDao().getAllEventLabelsOnce()
+            val diaries = importDb.diaryDao().getAllDiariesOnce()
+            val media = importDb.diaryDao().getAllMediaOnce()
+            val logs = importDb.logDao().getAllLogsOnce()
+
             database.withTransaction {
-                importDb.boxDao().getAllBoxesOnce().takeIf { it.isNotEmpty() }?.let { database.boxDao().insertBoxes(it) }
-                importDb.labelDao().getAllLabelsOnce().takeIf { it.isNotEmpty() }?.let { database.labelDao().insertLabels(it) }
-                importDb.friendDao().getAllFriendsOnce().takeIf { it.isNotEmpty() }?.let { database.friendDao().upsertFriends(it) }
-                importDb.friendDao().getAllFriendRelationsOnce().takeIf { it.isNotEmpty() }?.let { database.friendDao().upsertFriendRelations(it) }
-                importDb.eventDao().getAllEventsOnce().takeIf { it.isNotEmpty() }?.let { database.eventDao().insertEvents(it) }
-                importDb.labelDao().getAllEventLabelsOnce().takeIf { it.isNotEmpty() }?.let { database.labelDao().addEventLabels(it) }
-                importDb.diaryDao().getAllDiariesOnce().takeIf { it.isNotEmpty() }?.let { database.diaryDao().upsertDiaries(it) }
-                importDb.diaryDao().getAllMediaOnce().takeIf { it.isNotEmpty() }?.let { database.diaryDao().upsertMedia(it) }
-                importDb.logDao().getAllLogsOnce().takeIf { it.isNotEmpty() }?.let { logs ->
-                    database.logDao().insertLogs(logs.map { it.copy(id = 0) })
-                }
+                boxes.takeIf { it.isNotEmpty() }?.let { database.boxDao().insertBoxes(it) }
+                labels.takeIf { it.isNotEmpty() }?.let { database.labelDao().insertLabels(it) }
+                friends.takeIf { it.isNotEmpty() }?.let { database.friendDao().upsertFriends(it) }
+                friendRelations.takeIf { it.isNotEmpty() }?.let { database.friendDao().upsertFriendRelations(it) }
+                events.takeIf { it.isNotEmpty() }?.let { database.eventDao().insertEvents(it) }
+                eventLabels.takeIf { it.isNotEmpty() }?.let { database.labelDao().addEventLabels(it) }
+                diaries.takeIf { it.isNotEmpty() }?.let { database.diaryDao().upsertDiaries(it) }
+                media.takeIf { it.isNotEmpty() }?.let { database.diaryDao().upsertMedia(it) }
+                logs.takeIf { it.isNotEmpty() }?.let { database.logDao().insertLogs(it.map { log -> log.copy(id = 0) }) }
             }
+
+            return ImportResult(
+                boxes = boxes.count { it.id != "default_1" },
+                labels = labels.size,
+                friends = friends.size,
+                friendRelations = friendRelations.size,
+                events = events.size,
+                eventLabels = eventLabels.size,
+                diaries = diaries.size,
+                media = media.size,
+                logs = logs.size
+            )
         } finally {
             importDb.close()
             clearDatabaseFiles(importDbPath)

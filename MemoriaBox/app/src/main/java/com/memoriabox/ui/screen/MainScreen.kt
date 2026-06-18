@@ -661,6 +661,12 @@ fun BoxesScreen(
     val settingsVersion = AppSettings.settingsVersion
     val homeBgUri = remember(settingsVersion) { AppSettings.getHomeBgUri(context) }
 
+    LaunchedEffect(boxes, events) {
+        if (selectedBoxId != null && boxes.none { it.id == selectedBoxId }) {
+            selectedBoxId = null
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         if (!homeBgUri.isNullOrBlank()) {
             AsyncImage(model = homeBgUri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
