@@ -131,6 +131,7 @@ class BackupManager(
             }
 
             checkpointDatabase()
+            validateDatabaseForBackup(dbPath)
             val encryptedFile = encryptDatabase(dbPath, config.backupPassword)
             val resultUri = copyFileToDir(encryptedFile, dir, fileName)
             if (resultUri != null) {
@@ -158,6 +159,7 @@ class BackupManager(
 
             onProgress(20)
             checkpointDatabase()
+            validateDatabaseForBackup(dbPath)
             val encryptedFile = encryptDatabase(dbPath, password)
             onProgress(60)
             
@@ -352,7 +354,28 @@ class BackupManager(
     }
 
     private fun checkpointDatabase() {
-        database.openHelper.writableDatabase.query("PRAGMA wal_checkpoint(FULL)").use { }
+        database.openHelper.writableDatabase.query("PRAGMA wal_checkpoint(TRUNCATE)").use { cursor ->
+            if (cursor.moveToFirst()) {
+                val busy = cursor.getInt(0)
+                if (busy != 0) {
+                    throw IOException("Database checkpoint is busy")
+                }
+            }
+        }
+    }
+
+    private fun validateDatabaseForBackup(dbFile: File) {
+        if (!dbFile.exists() || dbFile.length() <= 4096L) {
+            throw IOException("Database file is empty after checkpoint")
+        }
+
+        database.openHelper.readableDatabase.query(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('boxes', 'events')"
+        ).use { cursor ->
+            if (!cursor.moveToFirst() || cursor.getInt(0) < 2) {
+                throw IOException("Database schema is incomplete")
+            }
+        }
     }
 
     private fun clearDatabaseFiles(dbPath: File) {
