@@ -26,6 +26,7 @@ import coil.compose.AsyncImage
 import com.memoriabox.ui.utils.rememberAdaptiveUiSize
 import com.memoriabox.utils.AppSettings
 import com.memoriabox.utils.ImageImportUtils
+import com.memoriabox.BuildConfig
 
 @Composable
 fun SettingsList(
@@ -60,7 +61,7 @@ fun SettingsList(
         SettingsItem(
             icon = Icons.Default.Info,
             title = "关于",
-            description = "版本 3.3.3"
+            description = "版本 ${BuildConfig.VERSION_NAME}"
         )
     }
 }

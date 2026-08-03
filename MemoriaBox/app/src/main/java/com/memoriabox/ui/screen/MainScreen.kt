@@ -47,6 +47,7 @@ import com.memoriabox.ui.screen.dialogs.MoveToBoxDialog
 import com.memoriabox.ui.utils.AdaptiveUiSize
 import com.memoriabox.ui.utils.rememberAdaptiveUiSize
 import com.memoriabox.data.model.*
+import com.memoriabox.BuildConfig
 import com.memoriabox.ui.theme.AppThemeMode
 import com.memoriabox.ui.theme.AppThemeGroup
 import com.memoriabox.ui.theme.NianJiLogoMark
@@ -2268,7 +2269,7 @@ fun SettingsScreen(
         SettingsItem(
             icon = Icons.Default.Info,
             title = "关于",
-            description = "版本 3.3.3 · 念记",
+            description = "版本 ${BuildConfig.VERSION_NAME} · 念记",
             onClick = { showAboutDialog = true }
         )
     }
@@ -2279,7 +2280,7 @@ fun SettingsScreen(
             title = { Text("关于 念记") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("版本：3.3.3", style = MaterialTheme.typography.bodyMedium)
+                    Text("版本：${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodyMedium)
                     Text("念记 是一个本地优先的日子、纪念日、待办和照片记录工具。", style = MaterialTheme.typography.bodyMedium)
                     Text("数据默认保存在本机，可通过备份和 WebDAV 功能进行迁移或同步。", style = MaterialTheme.typography.bodyMedium)
                     Text("著名木羽制作", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
