@@ -70,6 +70,7 @@ object AppSettings {
     const val UPCOMING_EVENTS_URGENT_COLOR = "upcoming_events_urgent_color"
     const val UPCOMING_EVENTS_NORMAL_COLOR = "upcoming_events_normal_color"
     const val UPCOMING_EVENTS_REMINDER_ENABLED = "upcoming_events_reminder_enabled"
+    const val HOLIDAY_REMINDER_ENABLED = "holiday_reminder_enabled"
 
     fun getHomeBgUri(context: Context) = getPrefs(context).getString(HOME_BG_URI, null)
     fun setHomeBgUri(context: Context, uri: String?) = saveString(context, HOME_BG_URI, uri)
@@ -200,6 +201,9 @@ object AppSettings {
 
     fun getUpcomingEventsReminderEnabled(context: Context) = getPrefs(context).getBoolean(UPCOMING_EVENTS_REMINDER_ENABLED, true)
     fun setUpcomingEventsReminderEnabled(context: Context, enabled: Boolean) = saveBoolean(context, UPCOMING_EVENTS_REMINDER_ENABLED, enabled)
+
+    fun getHolidayReminderEnabled(context: Context) = getPrefs(context).getBoolean(HOLIDAY_REMINDER_ENABLED, true)
+    fun setHolidayReminderEnabled(context: Context, enabled: Boolean) = saveBoolean(context, HOLIDAY_REMINDER_ENABLED, enabled)
 
     private fun getStringList(context: Context, key: String): List<String> {
         val stored = getPrefs(context).getString(key, null) ?: return emptyList()

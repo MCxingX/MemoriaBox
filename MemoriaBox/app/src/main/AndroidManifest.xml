@@ -63,6 +63,20 @@
             android:exported="false" />
         
         <receiver
+            android:name=".receiver.HolidayReminderReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+        <receiver
+            android:name=".receiver.BootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+        
+        <receiver
             android:name=".widget.MemoriaBoxWidget"
             android:exported="true">
             <intent-filter>

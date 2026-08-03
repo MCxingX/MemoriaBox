@@ -49,6 +49,7 @@ import com.memoriabox.ui.utils.rememberAdaptiveUiSize
 import com.memoriabox.utils.AppSettings
 import com.memoriabox.utils.ColorUtils
 import com.memoriabox.utils.LunarDateUtils
+import com.memoriabox.utils.HolidayUtils
 import com.memoriabox.utils.MonthlySummaryUiState
 import com.memoriabox.utils.startOfMonth
 import java.text.SimpleDateFormat
@@ -1169,7 +1170,16 @@ private fun SelectedDaySummaryCard(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f)
     ) {
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(formatDate(date), style = MaterialTheme.typography.titleMedium)
+            val holidayLabel = HolidayUtils.holidayForDay(date)
+            if (holidayLabel != null) {
+                Text(
+                    text = "今日是$holidayLabel",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = LocalMemoriaThemeTokens.current.festivalMarker
+                )
+            } else {
+                Text(formatDate(date), style = MaterialTheme.typography.titleMedium)
+            }
             val firstEvent = events.firstOrNull()
             if (firstEvent != null) {
                 Text("${firstEvent.name} · ${eventTypeText(firstEvent.type)} · ${kotlin.math.abs(calculateDays(firstEvent))} 天", style = MaterialTheme.typography.bodyMedium)
@@ -1241,9 +1251,11 @@ fun CalendarGrid(
                         val dayEvents = events.filter { event -> occursOnDay(event, dayCal) }
                         val dayDiaries = diaryMap[startOfDayMillis(dayCal.timeInMillis)] ?: emptyList()
                         val lunarDayLabel = LunarDateUtils.dayLabelForGregorian(dayCal.timeInMillis)
+                        val holidayLabel = HolidayUtils.holidayForDay(dayCal.timeInMillis)
                         CalendarDayCell(
                             day = dayNumber,
                             lunarDayLabel = lunarDayLabel,
+                            holidayLabel = holidayLabel,
                             isToday = isToday,
                             events = dayEvents,
                             diaries = dayDiaries,
@@ -1280,6 +1292,7 @@ private fun CalendarWeekView(
                 CalendarDayCell(
                     day = dayCal.get(Calendar.DAY_OF_MONTH),
                     lunarDayLabel = LunarDateUtils.dayLabelForGregorian(dayCal.timeInMillis),
+                    holidayLabel = HolidayUtils.holidayForDay(dayCal.timeInMillis),
                     isToday = startOfDayMillis(dayCal.timeInMillis) == startOfDayMillis(System.currentTimeMillis()),
                     events = dayEvents,
                     diaries = dayDiaries,
@@ -1356,6 +1369,7 @@ private fun MonthJumpDialog(initialMonth: Long, onDismiss: () -> Unit, onConfirm
 fun CalendarDayCell(
     day: Int,
     lunarDayLabel: String,
+    holidayLabel: String? = null,
     isToday: Boolean,
     events: List<Event>,
     diaries: List<DiaryEntry> = emptyList(),
@@ -1393,9 +1407,15 @@ fun CalendarDayCell(
                 textAlign = TextAlign.Center
             )
             Text(
-                text = lunarDayLabel,
+                text = holidayLabel ?: lunarDayLabel,
                 style = MaterialTheme.typography.labelSmall,
-                color = if (isToday) MaterialTheme.colorScheme.primary.copy(alpha = 0.78f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (holidayLabel != null) {
+                    tokens.festivalMarker
+                } else if (isToday) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.78f)
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
                 maxLines = 1,
                 textAlign = TextAlign.Center
             )

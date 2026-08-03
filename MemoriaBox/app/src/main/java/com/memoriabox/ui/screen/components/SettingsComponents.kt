@@ -708,3 +708,73 @@ fun UpcomingEventsSettingsDialog(
         }
     )
 }
+
+@Composable
+fun HolidaySettingsDialog(
+    onDismiss: () -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var reminderEnabled by remember { mutableStateOf(com.memoriabox.utils.AppSettings.getHolidayReminderEnabled(context)) }
+    var testResult by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("节假日提醒") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("每天上午提醒", style = MaterialTheme.typography.titleSmall)
+                        Text("8:00 检查当天是否为节假日，若是则推送通知", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(
+                        checked = reminderEnabled,
+                        onCheckedChange = { checked ->
+                            reminderEnabled = checked
+                            com.memoriabox.utils.AppSettings.setHolidayReminderEnabled(context, checked)
+                            if (checked) {
+                                com.memoriabox.receiver.HolidayReminderReceiver.schedule(context)
+                            } else {
+                                com.memoriabox.receiver.HolidayReminderReceiver.cancel(context)
+                            }
+                        }
+                    )
+                }
+
+                HorizontalDivider()
+
+                Text(
+                    text = "覆盖的节假日：",
+                    style = MaterialTheme.typography.titleSmall
+                )
+                Text(
+                    text = "春节、元宵节、清明节、劳动节、端午节、中秋节、国庆节、元旦、七夕、重阳、腊八等，以及二十四节气。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Text(
+                    text = testResult ?: "点击下方按钮查看今天是否是节假日",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 2
+                )
+
+                TextButton(
+                    onClick = {
+                        testResult = com.memoriabox.utils.HolidayUtils.holidayForDay(System.currentTimeMillis())?.let {
+                            "今天是 $it"
+                        } ?: "今天不是节假日"
+                    }
+                ) { Text("检查今天") }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("完成") }
+        }
+    )
+}

@@ -57,6 +57,7 @@ import com.memoriabox.utils.AppSettings
 import com.memoriabox.utils.MonthlySummaryHelper
 import com.memoriabox.utils.NotificationHelper
 import com.memoriabox.utils.LunarDateUtils
+import com.memoriabox.utils.HolidayUtils
 import com.memoriabox.utils.startOfMonth
 import com.memoriabox.viewmodel.*
 import kotlinx.coroutines.launch
@@ -993,6 +994,7 @@ private fun TodayHeader(
     val now = remember { Date() }
     val dateText = remember(now) { SimpleDateFormat("M月d日 EEEE", Locale.getDefault()).format(now) }
     val lunarText = remember(now) { LunarDateUtils.dayLabelForGregorian(now.time) }
+    val holidayText = remember(now) { HolidayUtils.holidayForDay(now.time) }
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(adaptiveUi.cardRadius),
@@ -1014,9 +1016,9 @@ private fun TodayHeader(
                 ) {
                     Text("今天", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
                     Text(
-                        "$dateText · $lunarText",
+                        text = if (holidayText != null) "$dateText · $lunarText · $holidayText" else "$dateText · $lunarText",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (holidayText != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -2135,6 +2137,7 @@ fun SettingsScreen(
     var showDiarySettings by remember { mutableStateOf(false) }
     var showMonthlySummarySettings by remember { mutableStateOf(false) }
     var showUpcomingSettings by remember { mutableStateOf(false) }
+    var showHolidaySettings by remember { mutableStateOf(false) }
     var showMoreToolsDialog by remember { mutableStateOf(false) }
     val adaptiveUi = rememberAdaptiveUiSize()
 
@@ -2169,7 +2172,7 @@ fun SettingsScreen(
         SettingsItem(
             icon = Icons.Default.MoreHoriz,
             title = "更多工具",
-            description = "统计、照片墙、导出、AI、成就和同步",
+            description = "统计、照片墙、导出和同步",
             onClick = { showMoreToolsDialog = true }
         )
 
@@ -2207,6 +2210,13 @@ fun SettingsScreen(
             title = "即将到来",
             description = "首页显示、天数范围、颜色和提醒",
             onClick = { showUpcomingSettings = true }
+        )
+
+        SettingsItem(
+            icon = Icons.Default.Celebration,
+            title = "节假日提醒",
+            description = "每天上午提醒春节、中秋、国庆等节假日",
+            onClick = { showHolidaySettings = true }
         )
 
         // PushPlus settings inline
@@ -2300,6 +2310,9 @@ fun SettingsScreen(
     }
     if (showUpcomingSettings) {
         UpcomingEventsSettingsDialog(onDismiss = { showUpcomingSettings = false })
+    }
+    if (showHolidaySettings) {
+        HolidaySettingsDialog(onDismiss = { showHolidaySettings = false })
     }
     if (showMoreToolsDialog) {
         MoreToolsDialog(

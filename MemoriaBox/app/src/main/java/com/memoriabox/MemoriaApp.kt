@@ -3,6 +3,8 @@ package com.memoriabox
 import android.app.Application
 import android.util.Log
 import com.memoriabox.database.AppDatabase
+import com.memoriabox.receiver.HolidayReminderReceiver
+import com.memoriabox.utils.AppSettings
 import com.memoriabox.utils.BackupManager
 
 class MemoriaApp : Application() {
@@ -38,6 +40,15 @@ class MemoriaApp : Application() {
             Log.d(TAG, "Backup manager initialized")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize backup manager", e)
+        }
+
+        try {
+            if (AppSettings.getHolidayReminderEnabled(this)) {
+                HolidayReminderReceiver.schedule(this)
+                Log.d(TAG, "Holiday reminder scheduled")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to schedule holiday reminder", e)
         }
     }
     
