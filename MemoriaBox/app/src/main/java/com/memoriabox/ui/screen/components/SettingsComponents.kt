@@ -138,7 +138,7 @@ fun BackupSettingsContent(
                     value = backupPassword,
                     onValueChange = onBackupPasswordChange,
                     label = { Text("备份密码（可选）") },
-                    supportingText = { Text("留空会使用默认保护；跨设备导入建议设置密码。") },
+                    supportingText = { Text("留空导出为明文备份，可在新设备免密码导入；设置密码后备份会加密。") },
                     visualTransformation = PasswordVisualTransformation(),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),

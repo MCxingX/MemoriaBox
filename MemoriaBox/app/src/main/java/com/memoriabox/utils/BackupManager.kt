@@ -6,6 +6,7 @@ import android.util.Log
 import androidx.documentfile.provider.DocumentFile
 import androidx.room.Room
 import androidx.room.withTransaction
+import com.memoriabox.BuildConfig
 import com.memoriabox.database.AppDatabase
 import com.memoriabox.database.MIGRATION_1_2
 import com.memoriabox.database.MIGRATION_2_3
@@ -16,7 +17,6 @@ import com.memoriabox.database.MIGRATION_6_7
 import com.memoriabox.data.model.BackupConfig
 import kotlinx.coroutines.*
 import java.io.*
-import java.security.SecureRandom
 import java.text.SimpleDateFormat
 import java.util.*
 import javax.crypto.Cipher
@@ -39,7 +39,8 @@ class BackupManager(
         val eventLabels: Int,
         val diaries: Int,
         val media: Int,
-        val logs: Int
+        val logs: Int,
+        val restoredMediaFiles: Int = 0
     ) {
         val userContentCount: Int
             get() = events + diaries + media + friends + boxes
@@ -51,6 +52,7 @@ class BackupManager(
             "素材：${media} 个\n" +
             "好友：${friends} 个\n" +
             "标签：${labels} 个\n" +
+            "恢复媒体文件：${restoredMediaFiles} 个\n" +
             "当前数据：已保留\n" +
             "如存在同名或重复内容，会按备份数据合并更新。"
     }
@@ -65,6 +67,19 @@ class BackupManager(
         private const val AUTO_BACKUP_DIR = "auto_backup"
         private const val BACKUP_EXTENSION = ".mbox"
         private const val BACKUP_KEY_ALIAS = "memoriabox-portable-backup"
+        private const val DB_ENTRY = "database.db"
+        private const val MEDIA_PREFIX = "media/"
+        private const val SETTINGS_PREFIX = "settings/"
+        private const val URI_MAP_ENTRY = "uris.txt"
+        private val SETTINGS_FILES = listOf("app_settings", "ui_settings", "pushplus_config")
+    }
+
+    fun inspectBackup(uri: Uri): Header? {
+        return runCatching {
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                BackupArchive.inspect(input)
+            }
+        }.getOrNull()
     }
 
     fun initialize() {
@@ -124,7 +139,7 @@ class BackupManager(
             val timestamp = System.currentTimeMillis()
             val fileName = "auto_${formatTimestamp(timestamp)}$BACKUP_EXTENSION"
             val dbPath = context.getDatabasePath("memoriabox.db")
-            
+
             if (!dbPath.exists()) {
                 Log.w(TAG, "Database file not found")
                 return
@@ -132,8 +147,8 @@ class BackupManager(
 
             checkpointDatabase()
             validateDatabaseForBackup(dbPath)
-            val encryptedFile = encryptDatabase(dbPath, config.backupPassword)
-            val resultUri = copyFileToDir(encryptedFile, dir, fileName)
+            val archiveFile = buildArchive(dbPath, config.backupPassword)
+            val resultUri = copyFileToDir(archiveFile, dir, fileName)
             if (resultUri != null) {
                 rotateBackups(dir)
             }
@@ -152,7 +167,7 @@ class BackupManager(
             val timestamp = System.currentTimeMillis()
             val fileName = "manual_${formatTimestamp(timestamp)}$BACKUP_EXTENSION"
             val dbPath = context.getDatabasePath("memoriabox.db")
-            
+
             if (!dbPath.exists()) {
                 return Result.failure(IllegalStateException("Database file not found"))
             }
@@ -160,12 +175,12 @@ class BackupManager(
             onProgress(20)
             checkpointDatabase()
             validateDatabaseForBackup(dbPath)
-            val encryptedFile = encryptDatabase(dbPath, password)
+            val archiveFile = buildArchive(dbPath, password)
             onProgress(60)
-            
-            val resultUri = copyFileToDir(encryptedFile, outputDir, fileName)
+
+            val resultUri = copyFileToDir(archiveFile, outputDir, fileName)
             onProgress(100)
-            
+
             Result.success(resultUri)
         } catch (e: Exception) {
             Result.failure(e)
@@ -177,31 +192,250 @@ class BackupManager(
         password: String = "",
         onProgress: (Int) -> Unit = {}
     ): Result<ImportResult> {
-        val tempFile = File(context.cacheDir, "temp_import_backup_${System.currentTimeMillis()}.db")
-        tempFile.delete()
         return try {
             onProgress(20)
-            
-            val decrypted = decryptDatabase(backupUri, password, tempFile)
-            if (!decrypted) {
-                return Result.failure(IllegalStateException("Decryption failed or wrong password"))
+            val header = inspectBackup(backupUri)
+            if (header == null) {
+                return Result.failure(IllegalStateException("无法识别的备份文件"))
             }
-            
-            onProgress(60)
-            val result = mergeDatabase(tempFile)
-            if (result.userContentCount == 0) {
-                return Result.failure(IllegalStateException("备份文件中没有可导入的日子、日记、素材、好友或分组"))
+
+            val workDir = File(context.cacheDir, "import_${System.currentTimeMillis()}").apply { mkdirs() }
+            try {
+                if (header.legacy) {
+                    val dbFile = File(workDir, "legacy.db")
+                    if (!decryptLegacyDatabase(backupUri, password, dbFile)) {
+                        return Result.failure(IllegalStateException("备份解密失败，请检查密码是否正确"))
+                    }
+                    onProgress(60)
+                    val result = mergeDatabase(dbFile)
+                    if (result.userContentCount == 0) {
+                        return Result.failure(IllegalStateException("备份文件中没有可导入的日子、日记、素材、好友或分组"))
+                    }
+                    onProgress(100)
+                    return Result.success(result)
+                }
+
+                if (header.encrypted && password.isNullOrEmpty()) {
+                    return Result.failure(IllegalStateException("此备份已加密，请输入备份密码"))
+                }
+
+                val payload = File(workDir, "payload.zip")
+                decryptToFile(backupUri, password ?: "", payload)
+
+                val manifest = BackupPackage.readManifest(payload)
+                if (manifest.format != 2) {
+                    return Result.failure(IllegalStateException("备份格式版本 ${manifest.format} 暂不受支持"))
+                }
+                BackupPackage.extractAll(
+                    payload,
+                    workDir,
+                    manifest.entries.associateBy { it.name }
+                )
+
+                val dbFile = File(workDir, DB_ENTRY)
+                if (!dbFile.exists()) {
+                    return Result.failure(IllegalStateException("备份中缺少数据库文件"))
+                }
+
+                onProgress(60)
+                val restoredMedia = restoreMedia(workDir, dbFile)
+                restoreSettings(workDir)
+                val result = mergeDatabase(dbFile)
+                if (result.userContentCount == 0) {
+                    return Result.failure(IllegalStateException("备份文件中没有可导入的日子、日记、素材、好友或分组"))
+                }
+                onProgress(100)
+                Result.success(result.copy(restoredMediaFiles = restoredMedia))
+            } finally {
+                workDir.deleteRecursively()
             }
-            onProgress(100)
-            
-            Result.success(result)
         } catch (e: Exception) {
+            Log.e(TAG, "Import backup failed", e)
             Result.failure(e)
+        }
+    }
+
+    private suspend fun buildArchive(dbFile: File, password: String): File {
+        val workDir = File(context.cacheDir, "archive_${System.currentTimeMillis()}").apply { mkdirs() }
+        try {
+            val dbCopy = File(workDir, DB_ENTRY)
+            dbFile.copyTo(dbCopy, overwrite = true)
+
+            val settingsDir = File(workDir, SETTINGS_PREFIX).apply { mkdirs() }
+            val settingsFiles = SETTINGS_FILES.mapNotNull { name ->
+                val prefsFile = File(context.applicationInfo.dataDir, "shared_prefs/$name.xml")
+                if (prefsFile.exists()) {
+                    val target = File(settingsDir, "$name.xml")
+                    prefsFile.copyTo(target, overwrite = true)
+                    SETTINGS_PREFIX + name + ".xml" to target
+                } else {
+                    null
+                }
+            }
+
+            val mediaDir = File(workDir, MEDIA_PREFIX).apply { mkdirs() }
+            val mediaEntries = collectMediaEntries(mediaDir)
+
+            val uriMapFile = File(workDir, URI_MAP_ENTRY)
+            val uriLines = mediaEntries.map { (zipName, source, originalUri) ->
+                "$originalUri\t$zipName"
+            }
+            uriMapFile.writeText(uriLines.joinToString("\n"))
+
+            val allFiles = listOf(DB_ENTRY to dbCopy) +
+                settingsFiles +
+                mediaEntries.map { (zipName, source, _) -> zipName to source } +
+                (URI_MAP_ENTRY to uriMapFile)
+
+            val payload = File(workDir, "payload.zip")
+            BackupPackage.build(
+                archiveFile = payload,
+                createdAt = System.currentTimeMillis(),
+                appVersion = BuildConfig.VERSION_NAME,
+                files = allFiles
+            )
+
+            val outFile = File(context.cacheDir, "temp_encrypt_${System.currentTimeMillis()}.mbox")
+            if (outFile.exists()) outFile.delete()
+            FileOutputStream(outFile).use { output ->
+                BackupArchive.openOutput(output, password).use { archive ->
+                    payload.inputStream().use { it.copyTo(archive) }
+                }
+            }
+            return outFile
         } finally {
-            if (tempFile.exists()) {
-                tempFile.delete()
+            workDir.deleteRecursively()
+        }
+    }
+
+    private suspend fun collectMediaEntries(mediaDir: File): List<Triple<String, File, String>> {
+        val result = mutableListOf<Triple<String, File, String>>()
+        val referencedUris = mutableSetOf<String>()
+        runCatching {
+            database.diaryDao().getAllMediaOnce().forEach { referencedUris += it.mediaUri }
+            database.diaryDao().getAllDiariesOnce().forEach { referencedUris += it.backgroundMediaUri.orEmpty() }
+            database.eventDao().getAllEventsOnce().forEach { referencedUris += it.avatarUri.orEmpty() }
+            database.friendDao().getAllFriendsOnce().forEach { referencedUris += it.avatarUri.orEmpty() }
+        }
+        val seenFiles = mutableSetOf<File>()
+        referencedUris.filter { it.startsWith("file://") }.forEach { uriString ->
+            runCatching {
+                val file = File(Uri.parse(uriString).path ?: return@runCatching)
+                if (file.exists() && file.isFile && file.length() > 0 && seenFiles.add(file)) {
+                    val folder = file.parentFile?.name ?: "misc"
+                    val target = File(mediaDir, "$folder/${file.name}")
+                    target.parentFile?.mkdirs()
+                    file.copyTo(target, overwrite = true)
+                    result += Triple(MEDIA_PREFIX + folder + "/" + file.name, target, uriString)
+                }
             }
         }
+        return result
+    }
+
+    private fun restoreMedia(workDir: File, dbFile: File): Int {
+        val mediaRoot = File(workDir, MEDIA_PREFIX)
+        if (!mediaRoot.exists()) return 0
+
+        val zipToOriginal = mutableMapOf<String, String>()
+        runCatching {
+            val uriMapFile = File(workDir, URI_MAP_ENTRY)
+            if (uriMapFile.exists()) {
+                uriMapFile.readLines().forEach { line ->
+                    val parts = line.split("\t")
+                    if (parts.size == 2) zipToOriginal[parts[1]] = parts[0]
+                }
+            }
+        }
+
+        val restoreRoot = File(context.filesDir, "restored_${System.currentTimeMillis()}")
+        val uriMap = mutableMapOf<String, String>()
+        var count = 0
+
+        mediaRoot.walkTopDown().filter { it.isFile }.forEach { file ->
+            val relative = file.relativeTo(mediaRoot).path
+            val newFile = File(restoreRoot, relative)
+            newFile.parentFile?.mkdirs()
+            file.copyTo(newFile, overwrite = true)
+            val originalUri = zipToOriginal[MEDIA_PREFIX + relative] ?: Uri.fromFile(file).toString()
+            uriMap[originalUri] = Uri.fromFile(newFile).toString()
+            count++
+        }
+        if (uriMap.isEmpty()) return 0
+
+        rewriteUris(dbFile, uriMap)
+        return count
+    }
+
+    private fun rewriteUris(dbFile: File, uriMap: Map<String, String>) {
+        if (uriMap.isEmpty()) return
+        val importDbName = "import_rewrite_${dbFile.name}"
+        val importDbPath = context.getDatabasePath(importDbName)
+        clearDatabaseFiles(importDbPath)
+        dbFile.copyTo(importDbPath, overwrite = true)
+
+        val importDb = Room.databaseBuilder(context, AppDatabase::class.java, importDbName).build()
+        try {
+            val db = importDb.openHelper.writableDatabase
+            val updates = listOf(
+                "UPDATE diary_media SET media_uri = ? WHERE media_uri = ?",
+                "UPDATE diary_entries SET background_media_uri = ? WHERE background_media_uri = ?",
+                "UPDATE events SET avatar_uri = ? WHERE avatar_uri = ?",
+                "UPDATE friends SET avatar_uri = ? WHERE avatar_uri = ?"
+            )
+            for ((oldUri, newUri) in uriMap) {
+                for (sql in updates) {
+                    runCatching { db.execSQL(sql, arrayOf(newUri, oldUri)) }
+                }
+            }
+            importDb.close()
+            importDbPath.copyTo(dbFile, overwrite = true)
+        } finally {
+            runCatching { importDb.close() }
+            clearDatabaseFiles(importDbPath)
+        }
+    }
+
+    private fun restoreSettings(workDir: File) {
+        val settingsDir = File(workDir, SETTINGS_PREFIX)
+        if (!settingsDir.exists()) return
+        for (name in SETTINGS_FILES) {
+            val xml = File(settingsDir, "$name.xml")
+            if (!xml.exists()) continue
+            runCatching { applyPreferencesXml(name, xml) }
+        }
+    }
+
+    private fun applyPreferencesXml(name: String, xmlFile: File) {
+        val doc = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder()
+            .parse(xmlFile)
+        val root = doc.documentElement
+        val mapTag = root.getElementsByTagName("map")
+        if (mapTag.length == 0) return
+        val prefs = context.getSharedPreferences(name, Context.MODE_PRIVATE)
+        val editor = prefs.edit()
+        val nodes = mapTag.item(0).childNodes
+        for (i in 0 until nodes.length) {
+            val node = nodes.item(i)
+            if (node.nodeType != org.w3c.dom.Node.ELEMENT_NODE) continue
+            val key = node.attributes.getNamedItem("name")?.nodeValue ?: continue
+            when (node.nodeName) {
+                "string" -> editor.putString(key, node.attributes.getNamedItem("value")?.nodeValue ?: "")
+                "int" -> editor.putInt(key, (node.attributes.getNamedItem("value")?.nodeValue ?: "0").toIntOrNull() ?: 0)
+                "long" -> editor.putLong(key, (node.attributes.getNamedItem("value")?.nodeValue ?: "0").toLongOrNull() ?: 0L)
+                "boolean" -> editor.putBoolean(key, (node.attributes.getNamedItem("value")?.nodeValue ?: "false").toBooleanStrictOrNull() ?: false)
+                "float" -> editor.putFloat(key, (node.attributes.getNamedItem("value")?.nodeValue ?: "0").toFloatOrNull() ?: 0f)
+            }
+        }
+        editor.apply()
+    }
+
+    private fun decryptToFile(backupUri: Uri, password: String, output: File) {
+        context.contentResolver.openInputStream(backupUri)?.use { input ->
+            BackupArchive.openInput(input, password).use { archive ->
+                output.outputStream().use { archive.copyTo(it) }
+            }
+        } ?: throw IOException("Cannot open backup file")
     }
 
     private fun getOrCreateAutoBackupDir(): Uri? {
@@ -214,7 +448,7 @@ class BackupManager(
         return try {
             val pickedDir = DocumentFile.fromTreeUri(context, parentUri) ?: return null
             var subDir = pickedDir.findFile(subDirName)
-            
+
             if (subDir == null) {
                 subDir = pickedDir.createDirectory(subDirName)
             }
@@ -234,45 +468,7 @@ class BackupManager(
         }
     }
 
-    private suspend fun encryptDatabase(dbFile: File, password: String?): File {
-        val encryptedFile = File(context.cacheDir, "temp_encrypt_${System.currentTimeMillis()}.mbox")
-        if (encryptedFile.exists()) encryptedFile.delete()
-        
-        val salt = ByteArray(16)
-        SecureRandom().nextBytes(salt)
-        val iv = ByteArray(12)
-        SecureRandom().nextBytes(iv)
-
-        val key = if (!password.isNullOrEmpty()) {
-            deriveKeyFromPassword(password, salt)
-        } else {
-            deriveKeyFromPassword(BACKUP_KEY_ALIAS, salt)
-        }
-
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        val spec = GCMParameterSpec(128, iv)
-        cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"), spec)
-
-        FileInputStream(dbFile).use { input ->
-            FileOutputStream(encryptedFile).use { output ->
-                output.write(salt)
-                output.write(iv)
-                
-                val buffer = ByteArray(4096)
-                var bytesRead: Int
-                while (input.read(buffer).also { bytesRead = it } != -1) {
-                    val encrypted = cipher.update(buffer, 0, bytesRead)
-                    if (encrypted != null) output.write(encrypted)
-                }
-                val finalBlock = cipher.doFinal()
-                output.write(finalBlock)
-            }
-        }
-
-        return encryptedFile
-    }
-
-    private suspend fun decryptDatabase(encryptedUri: Uri, password: String?, output: File): Boolean {
+    private suspend fun decryptLegacyDatabase(encryptedUri: Uri, password: String?, output: File): Boolean {
         return try {
             context.contentResolver.openInputStream(encryptedUri)?.use { input ->
                 val salt = ByteArray(16).also { input.readFully(it) }
@@ -285,7 +481,7 @@ class BackupManager(
             } ?: throw IOException("Cannot open backup file")
             true
         } catch (e: Exception) {
-            Log.e(TAG, "Decryption failed", e)
+            Log.e(TAG, "Legacy decryption failed", e)
             false
         }
     }

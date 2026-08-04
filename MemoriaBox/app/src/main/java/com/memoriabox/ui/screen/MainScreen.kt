@@ -54,6 +54,7 @@ import com.memoriabox.ui.theme.NianJiLogoMark
 import com.memoriabox.ui.theme.MemoriaDesign
 import com.memoriabox.ui.theme.group
 import com.memoriabox.utils.AppSettings
+import com.memoriabox.utils.Header
 import com.memoriabox.utils.MonthlySummaryHelper
 import com.memoriabox.utils.NotificationHelper
 import com.memoriabox.utils.LunarDateUtils
@@ -2594,6 +2595,18 @@ fun BackupSettingsScreen(
     ) { uri ->
         if (uri != null) {
             pendingImportUri = uri
+            snackbarScope.launch {
+                val header = viewModel.inspectBackup(uri)
+                if (header == null) {
+                    importSummary = "无法识别的备份文件，导入已取消"
+                    pendingImportUri = null
+                } else if (header.encrypted) {
+                    pendingImportUri = uri
+                } else {
+                    pendingImportUri = null
+                    viewModel.importBackup(uri, "")
+                }
+            }
         } else {
             snackbarScope.launch { snackbarHostState.showSnackbar("未选择备份文件") }
         }
@@ -2628,7 +2641,7 @@ fun BackupSettingsScreen(
             onDismissRequest = { pendingImportUri = null },
             title = { Text("确认导入备份") },
             text = {
-                Text("导入会合并到当前数据，现有日子、日记和素材会保留。若备份设置了密码，请确认上方密码已填写。")
+                Text("该备份已加密，请输入备份密码后导入。导入会合并到当前数据，现有日子、日记和素材会保留。")
             },
             confirmButton = {
                 TextButton(onClick = {

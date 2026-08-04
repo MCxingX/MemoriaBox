@@ -14,6 +14,8 @@ import com.memoriabox.repository.LogRepository
 import com.memoriabox.repository.LabelRepository
 import com.memoriabox.repository.DiaryRepository
 import com.memoriabox.utils.BackupManager
+import com.memoriabox.utils.BackupArchive
+import com.memoriabox.utils.Header
 import com.memoriabox.utils.AppSettings
 import com.memoriabox.utils.MonthlySummaryHelper
 import com.memoriabox.utils.MonthlySummaryUiState
@@ -508,6 +510,9 @@ class BackupViewModel(
             runCatching { logRepository.logBackupOperation("IMPORT", "failed", e.message) }
         }
     }
+
+    suspend fun inspectBackup(uri: Uri): Header? =
+        backupManager.inspectBackup(uri)
 }
 
 private fun AndroidViewModel.runEventSideEffects(event: Event, notificationHelper: NotificationHelper, backupManager: BackupManager) {
