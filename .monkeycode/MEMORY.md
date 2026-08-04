@@ -43,3 +43,14 @@ MemoriaBox Android 构建环境
   - Release APK 签名验证使用命令：`/opt/android-sdk/build-tools/34.0.0/apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk`。
   - 签名配置位于 `keystore.properties`（已被 .gitignore 忽略），Release 构建必须依赖该文件存在。
   - GitHub Release 发布使用 `gh release create <tag> <apk> --title ... --notes ...`。
+
+MemoriaBox 正式签名规则
+- Date: 2026-08-04
+- Context: 用户明确要求将所有 GitHub Release APK 改用正式签名
+- Category: 工作流协作
+- Instructions:
+  - 上传 GitHub Release 的 APK 一律使用正式签名，禁止使用调试签名。
+  - 正式签名 keystore：`app/membox-release.keystore`，别名 `membox`，有效期 25 年（10,950 天）。
+  - 密码保存在本机 `keystore.properties` 与 `/tmp/membox-keystore-pw.txt`，两文件均不入库。
+  - 密钥库与密码是唯一正式签名凭证，丢失后将无法更新已发布应用，务必提醒用户妥善备份。
+  - 替换 Release 资产流程：`gh release delete-asset <tag> app-release.apk --yes`，然后 `gh release upload <tag> <new-apk>`。
