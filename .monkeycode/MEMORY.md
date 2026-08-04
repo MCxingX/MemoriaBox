@@ -44,13 +44,13 @@ MemoriaBox Android 构建环境
   - 签名配置位于 `keystore.properties`（已被 .gitignore 忽略），Release 构建必须依赖该文件存在。
   - GitHub Release 发布使用 `gh release create <tag> <apk> --title ... --notes ...`。
 
-MemoriaBox 正式签名规则
+MemoriaBox 签名策略
 - Date: 2026-08-04
-- Context: 用户明确要求将所有 GitHub Release APK 改用正式签名
+- Context: 用户决定维持使用调试密钥（曾尝试正式密钥，最终切回）
 - Category: 工作流协作
 - Instructions:
-  - 上传 GitHub Release 的 APK 一律使用正式签名，禁止使用调试签名。
-  - 正式签名 keystore：`app/membox-release.keystore`，别名 `membox`，有效期 25 年（10,950 天）。
-  - 密码保存在本机 `keystore.properties` 与 `/tmp/membox-keystore-pw.txt`，两文件均不入库。
-  - 密钥库与密码是唯一正式签名凭证，丢失后将无法更新已发布应用，务必提醒用户妥善备份。
+  - GitHub Release APK 使用调试密钥签名：`app/membox-debug.keystore`，别名 `membox`，store/key 密码均为 `android`。
+  - 正式密钥 `app/membox-release.keystore` 不再使用；若再次需要其密码可查看 `/tmp/membox-keystore-pw.txt`（若环境保留）。
+  - 调试密钥丢失后同样无法用新密钥覆盖升级（Android 按签名识别应用），任何密钥都有此限制。
   - 替换 Release 资产流程：`gh release delete-asset <tag> app-release.apk --yes`，然后 `gh release upload <tag> <new-apk>`。
+  - 构建验证命令：`/opt/android-sdk/build-tools/34.0.0/apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk`，预期 SHA-256 指纹 `b8b434d797525f47f036e4c58386d02acb7a59524acd98bc9a257b56f4216e37`。
