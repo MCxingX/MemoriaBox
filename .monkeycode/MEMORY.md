@@ -31,12 +31,15 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
 
 ## 条目
 
-MemoriaBox Android Debug 构建环境
-- Date: 2026-06-03
-- Context: Agent 在执行 Android Debug APK 构建验证时发现
+MemoriaBox Android 构建环境
+- Date: 2026-08-04
+- Context: Agent 在构建 Release APK 验证备份格式改动时更新
 - Category: 构建方法
 - Instructions:
-  - 构建 MemoriaBox Debug APK 使用 OpenJDK 17、Android SDK `/usr/lib/android-sdk` 和 Gradle 8.7。
-  - 推荐命令：`export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 ANDROID_HOME=/usr/lib/android-sdk && /tmp/gradle-8.7/bin/gradle :app:assembleDebug --no-daemon`。
-  - 构建 MemoriaBox Release APK 使用命令：`export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 ANDROID_HOME=/usr/lib/android-sdk && /tmp/gradle-8.7/bin/gradle :app:assembleRelease --no-daemon`。
-  - Release APK 签名验证使用命令：`/usr/lib/android-sdk/build-tools/34.0.0/apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk`。
+  - 构建 MemoriaBox APK 使用 OpenJDK 17、Android SDK `/opt/android-sdk` 和项目自带 `./gradlew`。
+  - 构建命令：`export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 ANDROID_HOME=/opt/android-sdk ANDROID_SDK_ROOT=/opt/android-sdk && ./gradlew :app:assembleRelease --no-daemon`。
+  - Debug 编译验证命令：`./gradlew :app:compileDebugKotlin --no-daemon`。
+  - 单元测试命令：`./gradlew :app:testDebugUnitTest --no-daemon`。
+  - Release APK 签名验证使用命令：`/opt/android-sdk/build-tools/34.0.0/apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk`。
+  - 签名配置位于 `keystore.properties`（已被 .gitignore 忽略），Release 构建必须依赖该文件存在。
+  - GitHub Release 发布使用 `gh release create <tag> <apk> --title ... --notes ...`。
