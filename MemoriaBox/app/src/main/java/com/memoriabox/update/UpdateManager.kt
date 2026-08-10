@@ -109,22 +109,24 @@ object UpdateManager {
             }
         }
         require(apkUrl.isNotEmpty()) { "GitHub Release 缺少 APK 资产" }
-        require(checksumUrl.isNotEmpty()) { "GitHub Release 缺少 APK SHA-256 资产" }
-        val checksumRequest = Request.Builder()
-            .url(checksumUrl)
-            .header("User-Agent", "MemoriaBox/${BuildConfig.VERSION_NAME}")
-            .build()
-        val sha256 = UpdateFormat.parseSha256(executeText(checksumRequest))
-            ?: error("官方 SHA-256 文件格式无效")
+        val releaseBody = release.optString("body", "")
+        val sha256 = UpdateFormat.parseSha256(releaseBody)
+            ?: if (checksumUrl.isNotEmpty()) {
+                val checksumRequest = Request.Builder()
+                    .url(checksumUrl)
+                    .header("User-Agent", "MemoriaBox/${BuildConfig.VERSION_NAME}")
+                    .build()
+                UpdateFormat.parseSha256(executeText(checksumRequest))
+            } else null
         return UpdateInfo(
             versionName = versionName,
             releaseName = release.optString("name", "v$versionName"),
-            releaseNotes = release.optString("body", "本次更新未提供说明。"),
+            releaseNotes = releaseBody.ifBlank { "本次更新未提供说明。" },
             publishedAt = release.optString("published_at"),
             apkName = apkName,
             apkUrl = apkUrl,
             apkSize = apkSize,
-            sha256 = sha256
+            sha256 = sha256.orEmpty()
         )
     }
 

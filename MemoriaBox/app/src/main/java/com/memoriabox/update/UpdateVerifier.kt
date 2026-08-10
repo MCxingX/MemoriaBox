@@ -27,7 +27,9 @@ object UpdateVerifier {
 
     fun verify(context: Context, file: File, info: UpdateInfo): Result<Unit> = runCatching {
         require(file.isFile && file.length() > 0) { "更新包为空" }
-        require(sha256(file).equals(info.sha256, ignoreCase = true)) { "更新包 SHA-256 校验失败" }
+        if (info.sha256.isNotBlank()) {
+            require(sha256(file).equals(info.sha256, ignoreCase = true)) { "更新包 SHA-256 校验失败" }
+        }
 
         val packageInfo = archivePackageInfo(context.packageManager, file)
             ?: error("无法读取更新包信息")
