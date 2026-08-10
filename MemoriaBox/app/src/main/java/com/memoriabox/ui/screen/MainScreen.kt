@@ -370,6 +370,9 @@ fun MainScreen(
                     onNavigateToDayTools = { navController.navigate(Screen.DayTools.route) },
                     onNavigateToCustomization = { navController.navigate(Screen.CustomizationSettings.route) },
                     onNavigateToFriends = { navController.navigate(Screen.Friends.route) },
+                    onNavigateToEchoTime = { navController.navigate(Screen.EchoTime.route) },
+                    onNavigateToMood = { navController.navigate(Screen.Mood.route) },
+                    onNavigateToLabels = { navController.navigate(Screen.Labels.route) },
                     onBackupSettingsClick = { navController.navigate(Screen.BackupSettings.route) },
                     onWebDavSettingsClick = { navController.navigate(Screen.WebDavSettings.route) }
                 )
@@ -422,6 +425,38 @@ fun MainScreen(
             composable(Screen.Friends.route) {
                 FriendsScreen(
                     application = application,
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToFriendDetail = { friendId ->
+                        navController.navigate(Screen.FriendDetail.createRoute(friendId))
+                    }
+                )
+            }
+            composable(Screen.EchoTime.route) {
+                EchoTimeScreen(
+                    application = application,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+            composable(Screen.Mood.route) {
+                MoodScreen(
+                    application = application,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+            composable(Screen.Labels.route) {
+                LabelManageScreen(
+                    application = application,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+            composable(
+                route = Screen.FriendDetail.route,
+                arguments = listOf(androidx.navigation.navArgument("friendId") { type = androidx.navigation.NavType.StringType })
+            ) { backStackEntry ->
+                val friendId = backStackEntry.arguments?.getString("friendId").orEmpty()
+                FriendDetailScreen(
+                    application = application,
+                    friendId = friendId,
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
@@ -2211,6 +2246,10 @@ fun ScreenBgWrapper(context: android.content.Context, page: String, content: @Co
 fun TodoScreen(application: Application) {
     val todoVM = remember { createTodoViewModel(application) }
     val todoEvents by todoVM.todoEvents.collectAsState(initial = emptyList())
+    val subtaskMap by todoVM.subtaskMap.collectAsState(initial = emptyMap())
+    LaunchedEffect(todoEvents) {
+        todoVM.loadSubtasks(todoEvents)
+    }
 
     Scaffold(
         containerColor = Color.Transparent,
@@ -2223,7 +2262,13 @@ fun TodoScreen(application: Application) {
     ) { paddingValues ->
         TodoListView(
             events = todoEvents,
+            subtaskMap = subtaskMap,
             onToggleStatus = { todoVM.toggleTodoStatus(it) },
+            onUpdatePriority = { event, priority -> todoVM.updatePriority(event, priority) },
+            onAddSubtask = { todoId, title -> todoVM.addSubtask(todoId, title) },
+            onToggleSubtask = { todoVM.toggleSubtask(it) },
+            onDeleteSubtask = { todoVM.deleteSubtask(it) },
+            isOverdue = { todoVM.isOverdue(it) },
             modifier = Modifier.padding(paddingValues)
         )
     }
@@ -2259,6 +2304,9 @@ fun SettingsScreen(
     onNavigateToDayTools: () -> Unit,
     onNavigateToCustomization: () -> Unit,
     onNavigateToFriends: () -> Unit,
+    onNavigateToEchoTime: () -> Unit,
+    onNavigateToMood: () -> Unit,
+    onNavigateToLabels: () -> Unit,
     onBackupSettingsClick: () -> Unit,
     onWebDavSettingsClick: () -> Unit
 ) {
@@ -2497,6 +2545,18 @@ fun SettingsScreen(
             onNavigateToSyncStatus = {
                 showMoreToolsDialog = false
                 onNavigateToSyncStatus()
+            },
+            onNavigateToEchoTime = {
+                showMoreToolsDialog = false
+                onNavigateToEchoTime()
+            },
+            onNavigateToMood = {
+                showMoreToolsDialog = false
+                onNavigateToMood()
+            },
+            onNavigateToLabels = {
+                showMoreToolsDialog = false
+                onNavigateToLabels()
             }
         )
     }
@@ -2508,7 +2568,10 @@ fun MoreToolsDialog(
     onNavigateToStatistics: () -> Unit,
     onNavigateToPhotoWall: () -> Unit,
     onNavigateToExport: () -> Unit,
-    onNavigateToSyncStatus: () -> Unit
+    onNavigateToSyncStatus: () -> Unit,
+    onNavigateToEchoTime: () -> Unit,
+    onNavigateToMood: () -> Unit,
+    onNavigateToLabels: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -2517,10 +2580,13 @@ fun MoreToolsDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 420.dp)
+                    .heightIn(max = 460.dp)
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
+                MoreToolActionRow(icon = Icons.Default.History, title = "时光回响", description = "往年今日、历史照片和重要节点", onClick = onNavigateToEchoTime)
+                MoreToolActionRow(icon = Icons.Default.Mood, title = "心情打卡", description = "记录每日心情、月度趋势和年度像素图", onClick = onNavigateToMood)
+                MoreToolActionRow(icon = Icons.Default.Label, title = "标签管理", description = "给日子添加标签，方便分类筛选", onClick = onNavigateToLabels)
                 MoreToolActionRow(icon = Icons.Default.BarChart, title = "数据统计", description = "查看事件统计和趋势", onClick = onNavigateToStatistics)
                 MoreToolActionRow(icon = Icons.Default.PhotoLibrary, title = "照片墙", description = "查看所有事件照片", onClick = onNavigateToPhotoWall)
                 MoreToolActionRow(icon = Icons.Default.Share, title = "导出分享", description = "导出数据和分享图片", onClick = onNavigateToExport)

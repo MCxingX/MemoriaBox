@@ -6,6 +6,10 @@ import com.memoriabox.data.dao.FriendDao
 import com.memoriabox.data.dao.LabelDao
 import com.memoriabox.data.dao.LogDao
 import com.memoriabox.data.dao.DiaryDao
+import com.memoriabox.data.dao.MoodDao
+import com.memoriabox.data.dao.SubtaskDao
+import com.memoriabox.data.dao.GiftDao
+import com.memoriabox.data.dao.BirthdayRecordDao
 import com.memoriabox.data.model.*
 import kotlinx.coroutines.flow.Flow
 import java.util.UUID
@@ -26,6 +30,7 @@ class BoxRepository(private val boxDao: BoxDao) {
 class EventRepository(private val eventDao: EventDao) {
     fun getEventsByBoxId(boxId: String): Flow<List<Event>> = eventDao.getEventsByBoxId(boxId)
     fun getAllEvents(): Flow<List<Event>> = eventDao.getAllEvents()
+    suspend fun getAllEventsOnce(): List<Event> = eventDao.getAllEventsOnce()
     fun getTodoEvents(): Flow<List<Event>> = eventDao.getTodoEvents()
     fun getBirthdayEvents(): Flow<List<Event>> = eventDao.getBirthdayEvents()
     suspend fun getEventById(id: String): Event? = eventDao.getEventById(id)
@@ -44,6 +49,10 @@ class FriendRepository(private val friendDao: FriendDao) {
     suspend fun getAllFriendsOnce(): List<Friend> = friendDao.getAllFriendsOnce()
     suspend fun upsertFriend(friend: Friend): Long = friendDao.upsertFriend(friend)
     suspend fun deleteFriend(friend: Friend) = friendDao.deleteFriend(friend)
+    fun getFriendRelations(friendId: String): Flow<List<String>> = friendDao.getFriendRelations(friendId)
+    suspend fun getFriendRelationsOnce(friendId: String): List<String> = friendDao.getFriendRelationsOnce(friendId)
+    suspend fun upsertFriendRelation(relation: FriendRelation) = friendDao.upsertFriendRelation(relation)
+    suspend fun deleteFriendRelations(friendId: String) = friendDao.deleteFriendRelations(friendId)
 }
 
 class LogRepository(private val logDao: LogDao) {
@@ -91,12 +100,12 @@ class LabelRepository(private val labelDao: LabelDao) {
     suspend fun insertLabel(label: Label): Long = labelDao.insertLabel(label)
     suspend fun deleteLabel(label: Label) = labelDao.deleteLabel(label)
     fun getEventLabels(eventId: String): Flow<List<String>> = labelDao.getEventLabels(eventId)
+    suspend fun getAllEventLabelsOnce(): List<EventLabel> = labelDao.getAllEventLabelsOnce()
     suspend fun addEventLabel(eventLabel: EventLabel) = labelDao.addEventLabel(eventLabel)
     suspend fun removeEventLabel(eventLabel: EventLabel) = labelDao.removeEventLabel(eventLabel)
 }
 
-class DiaryRepository(private val diaryDao: DiaryDao) {
-    fun getAllDiaries(): Flow<List<DiaryEntry>> = diaryDao.getAllDiaries()
+class DiaryRepository(private val diaryDao: DiaryDao) {    fun getAllDiaries(): Flow<List<DiaryEntry>> = diaryDao.getAllDiaries()
     fun getDiariesBetween(start: Long, end: Long): Flow<List<DiaryEntry>> = diaryDao.getDiariesBetween(start, end)
     fun getMediaForDiary(diaryId: String): Flow<List<DiaryMedia>> = diaryDao.getMediaForDiary(diaryId)
     fun getMediaForDiaries(diaryIds: List<String>): Flow<List<DiaryMedia>> = diaryDao.getMediaForDiaries(diaryIds)
@@ -117,4 +126,41 @@ class DiaryRepository(private val diaryDao: DiaryDao) {
         diaryDao.deleteMediaForDiary(diary.id)
         diaryDao.deleteDiary(diary)
     }
+}
+
+class MoodRepository(private val moodDao: MoodDao) {
+    fun getAllMoods(): Flow<List<MoodEntry>> = moodDao.getAllMoods()
+    suspend fun getAllMoodsOnce(): List<MoodEntry> = moodDao.getAllMoodsOnce()
+    suspend fun getMoodsBetween(start: Long, end: Long): List<MoodEntry> = moodDao.getMoodsBetween(start, end)
+    suspend fun getMoodByDate(date: Long): MoodEntry? = moodDao.getMoodByDate(date)
+    suspend fun upsertMood(mood: MoodEntry) = moodDao.upsertMood(mood)
+    suspend fun deleteMood(mood: MoodEntry) = moodDao.deleteMood(mood)
+}
+
+class SubtaskRepository(private val subtaskDao: SubtaskDao) {
+    fun getSubtasks(todoId: String): Flow<List<TodoSubtask>> = subtaskDao.getSubtasks(todoId)
+    suspend fun getSubtasksOnce(todoId: String): List<TodoSubtask> = subtaskDao.getSubtasksOnce(todoId)
+    suspend fun getSubtasksForTodosOnce(todoIds: List<String>): List<TodoSubtask> = subtaskDao.getSubtasksForTodos(todoIds)
+    suspend fun upsertSubtask(subtask: TodoSubtask) = subtaskDao.upsertSubtask(subtask)
+    suspend fun updateSubtask(subtask: TodoSubtask) = subtaskDao.updateSubtask(subtask)
+    suspend fun deleteSubtask(subtask: TodoSubtask) = subtaskDao.deleteSubtask(subtask)
+    suspend fun deleteSubtasksForTodo(todoId: String) = subtaskDao.deleteSubtasksForTodo(todoId)
+    suspend fun countSubtasks(todoId: String): Int = subtaskDao.countSubtasks(todoId)
+    suspend fun countDoneSubtasks(todoId: String): Int = subtaskDao.countDoneSubtasks(todoId)
+}
+
+class GiftRepository(private val giftDao: GiftDao) {
+    fun getGifts(friendId: String): Flow<List<FriendGift>> = giftDao.getGifts(friendId)
+    suspend fun getGiftsOnce(friendId: String): List<FriendGift> = giftDao.getGiftsOnce(friendId)
+    suspend fun upsertGift(gift: FriendGift) = giftDao.upsertGift(gift)
+    suspend fun deleteGift(gift: FriendGift) = giftDao.deleteGift(gift)
+    suspend fun deleteGiftsForFriend(friendId: String) = giftDao.deleteGiftsForFriend(friendId)
+}
+
+class BirthdayRecordRepository(private val birthdayRecordDao: BirthdayRecordDao) {
+    fun getBirthdayRecords(friendId: String): Flow<List<FriendBirthdayRecord>> = birthdayRecordDao.getBirthdayRecords(friendId)
+    suspend fun getBirthdayRecordsOnce(friendId: String): List<FriendBirthdayRecord> = birthdayRecordDao.getBirthdayRecordsOnce(friendId)
+    suspend fun upsertBirthdayRecord(record: FriendBirthdayRecord) = birthdayRecordDao.upsertBirthdayRecord(record)
+    suspend fun deleteBirthdayRecord(record: FriendBirthdayRecord) = birthdayRecordDao.deleteBirthdayRecord(record)
+    suspend fun deleteRecordsForFriend(friendId: String) = birthdayRecordDao.deleteRecordsForFriend(friendId)
 }

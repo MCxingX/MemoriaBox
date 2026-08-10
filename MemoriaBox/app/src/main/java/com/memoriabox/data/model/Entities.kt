@@ -16,6 +16,14 @@ enum class TodoStatus {
     PENDING, COMPLETED, CANCELLED
 }
 
+enum class TodoPriority {
+    HIGH, MEDIUM, LOW
+}
+
+enum class GiftStatus {
+    PLANNED, PURCHASED, GIVEN
+}
+
 enum class RepeatMode {
     NONE, YEARLY, MONTHLY, CUSTOM_DAYS, CUSTOM_WEEKS, CUSTOM_MONTHS
 }
@@ -99,6 +107,8 @@ data class Event(
     val todoStatus: TodoStatus = TodoStatus.PENDING,
     @ColumnInfo(name = "due_date")
     val dueDate: Long? = null,
+    @ColumnInfo(name = "todo_priority")
+    val todoPriority: TodoPriority = TodoPriority.MEDIUM,
     @ColumnInfo(name = "created_at")
     val createdAt: Long = System.currentTimeMillis()
 )
@@ -209,4 +219,56 @@ data class BackupConfig(
     val maxLogEntries: Int = 2000,
     val backupPassword: String = "",
     val backupDirUri: String = ""
+)
+
+@Entity(tableName = "mood_entries")
+data class MoodEntry(
+    @PrimaryKey
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val date: Long = 0L,
+    val level: Int = 3,
+    val activity: String = "",
+    val note: String = "",
+    @ColumnInfo(name = "created_at")
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "todo_subtasks")
+data class TodoSubtask(
+    @PrimaryKey
+    val id: String = java.util.UUID.randomUUID().toString(),
+    @ColumnInfo(name = "todo_id", index = true)
+    val todoId: String,
+    val title: String,
+    val done: Boolean = false,
+    @ColumnInfo(name = "sort_order")
+    val sortOrder: Int = 0,
+    @ColumnInfo(name = "created_at")
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "friend_gifts")
+data class FriendGift(
+    @PrimaryKey
+    val id: String = java.util.UUID.randomUUID().toString(),
+    @ColumnInfo(name = "friend_id", index = true)
+    val friendId: String,
+    val name: String,
+    val price: Double = 0.0,
+    val status: GiftStatus = GiftStatus.PLANNED,
+    val year: Int = 0,
+    @ColumnInfo(name = "created_at")
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "friend_birthday_records")
+data class FriendBirthdayRecord(
+    @PrimaryKey
+    val id: String = java.util.UUID.randomUUID().toString(),
+    @ColumnInfo(name = "friend_id", index = true)
+    val friendId: String,
+    val year: Int,
+    val note: String = "",
+    @ColumnInfo(name = "created_at")
+    val createdAt: Long = System.currentTimeMillis()
 )

@@ -22,6 +22,12 @@ sealed class Screen(val route: String) {
     object DayTools : Screen("day_tools")
     object CustomizationSettings : Screen("customization_settings")
     object Friends : Screen("friends")
+    object EchoTime : Screen("echo_time")
+    object Mood : Screen("mood")
+    object Labels : Screen("labels")
+    object FriendDetail : Screen("friend_detail/{friendId}") {
+        fun createRoute(friendId: String) = "friend_detail/$friendId"
+    }
 }
 
 sealed class BottomNavigationItem(

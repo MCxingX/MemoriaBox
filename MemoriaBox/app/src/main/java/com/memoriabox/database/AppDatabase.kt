@@ -15,9 +15,11 @@ import javax.crypto.SecretKeyFactory
     entities = [
         Box::class, Event::class, Friend::class, Label::class,
         FriendRelation::class, EventLabel::class, LogEntry::class,
-        DiaryEntry::class, DiaryMedia::class
+        DiaryEntry::class, DiaryMedia::class,
+        MoodEntry::class, TodoSubtask::class, FriendGift::class,
+        FriendBirthdayRecord::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -28,6 +30,10 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun logDao(): LogDao
     abstract fun diaryDao(): DiaryDao
     abstract fun friendDao(): FriendDao
+    abstract fun moodDao(): MoodDao
+    abstract fun subtaskDao(): SubtaskDao
+    abstract fun giftDao(): GiftDao
+    abstract fun birthdayRecordDao(): BirthdayRecordDao
     
     companion object {
         @Volatile
@@ -51,7 +57,8 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_3_4,
                     MIGRATION_4_5,
                     MIGRATION_5_6,
-                    MIGRATION_6_7
+                    MIGRATION_6_7,
+                    MIGRATION_7_8
                 )
                 
                 dbBuilder.addCallback(object : Callback() {
@@ -114,7 +121,10 @@ abstract class AppDatabase : RoomDatabase() {
             ensureEventRepeatColumns(db)
             ensureDiaryTables(db)
             ensureColumnExists(db, "diary_media", "aspect_ratio", "TEXT NOT NULL DEFAULT '16:9'")
+            ensureColumnExists(db, "events", "todo_priority", "TEXT NOT NULL DEFAULT 'MEDIUM'")
+            ensureNextFeaturesTables(db)
             db.execSQL("UPDATE events SET repeat_mode = 'NONE' WHERE repeat_mode NOT IN ('NONE', 'YEARLY', 'MONTHLY', 'CUSTOM_DAYS', 'CUSTOM_WEEKS', 'CUSTOM_MONTHS')")
+            db.execSQL("UPDATE events SET todo_priority = 'MEDIUM' WHERE todo_priority NOT IN ('HIGH', 'MEDIUM', 'LOW')")
             db.execSQL("""
                 INSERT OR IGNORE INTO boxes (id, name, icon, bg_type, bg_value, sort_order, is_archived, created_at)
                 VALUES ('default_1', '我的日子', '*', 'COLOR', '#7C4DFF', 0, 0, strftime('%s', 'now') * 1000)
@@ -189,6 +199,60 @@ val MIGRATION_6_7 = object : Migration(6, 7) {
         ensureColumnExists(database, "events", "calendar_sync_enabled", "INTEGER NOT NULL DEFAULT 0")
         ensureColumnExists(database, "diary_media", "aspect_ratio", "TEXT NOT NULL DEFAULT '16:9'")
     }
+}
+
+val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        ensureColumnExists(database, "events", "todo_priority", "TEXT NOT NULL DEFAULT 'MEDIUM'")
+        ensureNextFeaturesTables(database)
+    }
+}
+
+private fun ensureNextFeaturesTables(database: SupportSQLiteDatabase) {
+    database.execSQL("""
+        CREATE TABLE IF NOT EXISTS mood_entries (
+            id TEXT NOT NULL PRIMARY KEY,
+            date INTEGER NOT NULL,
+            level INTEGER NOT NULL,
+            activity TEXT NOT NULL DEFAULT '',
+            note TEXT NOT NULL DEFAULT '',
+            created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
+        )
+    """.trimIndent())
+    database.execSQL("CREATE INDEX IF NOT EXISTS index_mood_entries_date ON mood_entries(date)")
+    database.execSQL("""
+        CREATE TABLE IF NOT EXISTS todo_subtasks (
+            id TEXT NOT NULL PRIMARY KEY,
+            todo_id TEXT NOT NULL,
+            title TEXT NOT NULL,
+            done INTEGER NOT NULL DEFAULT 0,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
+        )
+    """.trimIndent())
+    database.execSQL("CREATE INDEX IF NOT EXISTS index_todo_subtasks_todo_id ON todo_subtasks(todo_id)")
+    database.execSQL("""
+        CREATE TABLE IF NOT EXISTS friend_gifts (
+            id TEXT NOT NULL PRIMARY KEY,
+            friend_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            price REAL NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'PLANNED',
+            year INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
+        )
+    """.trimIndent())
+    database.execSQL("CREATE INDEX IF NOT EXISTS index_friend_gifts_friend_id ON friend_gifts(friend_id)")
+    database.execSQL("""
+        CREATE TABLE IF NOT EXISTS friend_birthday_records (
+            id TEXT NOT NULL PRIMARY KEY,
+            friend_id TEXT NOT NULL,
+            year INTEGER NOT NULL,
+            note TEXT NOT NULL DEFAULT '',
+            created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
+        )
+    """.trimIndent())
+    database.execSQL("CREATE INDEX IF NOT EXISTS index_friend_birthday_records_friend_id ON friend_birthday_records(friend_id)")
 }
 
 private fun ensureEventStyleColumns(database: SupportSQLiteDatabase) {

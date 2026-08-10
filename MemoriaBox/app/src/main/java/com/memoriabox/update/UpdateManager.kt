@@ -135,16 +135,26 @@ object UpdateManager {
             mutableState.value = UpdateState.Ready(info, destination.absolutePath)
             return
         }
-        mutableState.value = UpdateState.Downloading(info, 0)
+        val temporary = File(destination.parentFile, "${destination.name}.part")
+        if (temporary.isFile && temporary.length() > 0 && UpdateVerifier.verify(context, temporary, info).isSuccess) {
+            destination.delete()
+            if (temporary.renameTo(destination)) {
+                mutableState.value = UpdateState.Ready(info, destination.absolutePath)
+                return
+            }
+        }
+        mutableState.value = UpdateState.Downloading(info, progressFromPart(temporary, info.apkSize))
         val directResult = runCatching { download(info.apkUrl, destination, info) }
         if (directResult.isFailure) {
             val mirror = fastestMirror(info.apkUrl) ?: run {
+                temporary.delete()
                 destination.delete()
                 mutableState.value = UpdateState.Error("GitHub 直连和 HTTPS 镜像均下载失败", info)
                 return
             }
             runCatching { download(mirror, destination, info) }
                 .onFailure { error ->
+                    temporary.delete()
                     destination.delete()
                     mutableState.value = UpdateState.Error(error.message ?: "镜像下载失败", info)
                     return
@@ -153,6 +163,7 @@ object UpdateManager {
         UpdateVerifier.verify(context, destination, info)
             .onSuccess { mutableState.value = UpdateState.Ready(info, destination.absolutePath) }
             .onFailure { error ->
+                temporary.delete()
                 destination.delete()
                 mutableState.value = UpdateState.Error(error.message ?: "更新包校验失败", info)
             }
@@ -160,20 +171,27 @@ object UpdateManager {
 
     private fun download(url: String, destination: File, info: UpdateInfo) {
         val temporary = File(destination.parentFile, "${destination.name}.part")
-        temporary.delete()
-        val request = Request.Builder()
+        val resumeFrom = temporary.length().takeIf { it > 0 } ?: 0L
+        val requestBuilder = Request.Builder()
             .url(url)
             .header("Accept", "application/octet-stream")
             .header("User-Agent", "MemoriaBox/${BuildConfig.VERSION_NAME}")
-            .build()
+        if (resumeFrom > 0) {
+            requestBuilder.header("Range", "bytes=$resumeFrom-")
+        }
+        val request = requestBuilder.build()
         client.newCall(request).execute().use { response ->
-            require(response.isSuccessful) { "下载失败：HTTP ${response.code}" }
+            require(response.isSuccessful || response.code == 206) { "下载失败：HTTP ${response.code}" }
             val body = response.body ?: error("下载内容为空")
-            val total = body.contentLength().takeIf { it > 0 } ?: info.apkSize
+            val resumed = resumeFrom > 0 && response.code == 206
+            val total = when {
+                resumed -> (resumeFrom + body.contentLength()).takeIf { it > resumeFrom } ?: info.apkSize
+                else -> body.contentLength().takeIf { it > 0 } ?: info.apkSize
+            }
             body.byteStream().use { input ->
-                FileOutputStream(temporary).use { output ->
+                FileOutputStream(temporary, resumed).use { output ->
                     val buffer = ByteArray(64 * 1024)
-                    var downloaded = 0L
+                    var downloaded = resumeFrom
                     var lastProgress = -1
                     while (true) {
                         val count = input.read(buffer)
@@ -194,6 +212,9 @@ object UpdateManager {
         destination.delete()
         require(temporary.renameTo(destination)) { "无法保存更新包" }
     }
+
+    private fun progressFromPart(temporary: File, total: Long): Int =
+        if (total > 0 && temporary.isFile) ((temporary.length() * 100) / total).toInt().coerceIn(0, 99) else 0
 
     private suspend fun fastestMirror(originalUrl: String): String? =
         UpdateFormat.mirrorUrls(originalUrl)

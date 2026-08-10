@@ -13,6 +13,10 @@ import com.memoriabox.repository.FriendRepository
 import com.memoriabox.repository.LogRepository
 import com.memoriabox.repository.LabelRepository
 import com.memoriabox.repository.DiaryRepository
+import com.memoriabox.repository.MoodRepository
+import com.memoriabox.repository.SubtaskRepository
+import com.memoriabox.repository.GiftRepository
+import com.memoriabox.repository.BirthdayRecordRepository
 import com.memoriabox.utils.BackupManager
 import com.memoriabox.utils.BackupArchive
 import com.memoriabox.utils.Header
@@ -365,11 +369,25 @@ class CalendarViewModel(
 
 class TodoViewModel(
     application: Application,
-    private val eventRepository: EventRepository
+    private val eventRepository: EventRepository,
+    private val subtaskRepository: SubtaskRepository
 ) : AndroidViewModel(application) {
 
     val todoEvents = eventRepository.getTodoEvents()
+        .map { list -> list.sortedWith(compareBy<Event> { if (it.todoStatus == TodoStatus.PENDING) 0 else 1 }.thenByDescending { it.todoPriority.ordinal }.thenBy { it.dueDate ?: Long.MAX_VALUE }.thenBy { it.createdAt }) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _subtaskMap = MutableStateFlow<Map<String, List<TodoSubtask>>>(emptyMap())
+    val subtaskMap: StateFlow<Map<String, List<TodoSubtask>>> = _subtaskMap.asStateFlow()
+
+    fun loadSubtasks(events: List<Event>) = viewModelScope.launch {
+        if (events.isEmpty()) {
+            _subtaskMap.value = emptyMap()
+            return@launch
+        }
+        val subtasks = subtaskRepository.getSubtasksForTodosOnce(events.map { it.id })
+        _subtaskMap.value = subtasks.groupBy { it.todoId }
+    }
 
     fun toggleTodoStatus(event: Event) = viewModelScope.launch {
         val updated = event.copy(
@@ -377,6 +395,39 @@ class TodoViewModel(
         )
         eventRepository.updateEvent(updated)
     }
+
+    fun updatePriority(event: Event, priority: TodoPriority) = viewModelScope.launch {
+        eventRepository.updateEvent(event.copy(todoPriority = priority))
+    }
+
+    fun addSubtask(todoId: String, title: String) = viewModelScope.launch {
+        val trimmed = title.trim()
+        if (trimmed.isEmpty()) return@launch
+        val existing = subtaskRepository.getSubtasksOnce(todoId)
+        subtaskRepository.upsertSubtask(
+            TodoSubtask(todoId = todoId, title = trimmed, sortOrder = existing.size)
+        )
+        refreshSubtasks()
+    }
+
+    fun toggleSubtask(subtask: TodoSubtask) = viewModelScope.launch {
+        subtaskRepository.updateSubtask(subtask.copy(done = !subtask.done))
+        refreshSubtasks()
+    }
+
+    fun deleteSubtask(subtask: TodoSubtask) = viewModelScope.launch {
+        subtaskRepository.deleteSubtask(subtask)
+        refreshSubtasks()
+    }
+
+    private suspend fun refreshSubtasks() {
+        val ids = eventRepository.getAllEventsOnce().filter { it.type == EventType.TODO }.map { it.id }
+        _subtaskMap.value = if (ids.isEmpty()) emptyMap()
+            else subtaskRepository.getSubtasksForTodosOnce(ids).groupBy { it.todoId }
+    }
+
+    fun isOverdue(event: Event): Boolean =
+        com.memoriabox.utils.NextFeaturesLogic.isTodoOverdue(event.todoStatus, event.dueDate, System.currentTimeMillis())
 }
 
 class FriendViewModel(
@@ -542,20 +593,44 @@ class LabelViewModel(
     val labels = labelRepository.getAllLabels()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val allEvents = eventRepository.getAllEvents()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _eventLabelsMap = MutableStateFlow<Map<String, List<String>>>(emptyMap())
+    val eventLabelsMap: StateFlow<Map<String, List<String>>> = _eventLabelsMap.asStateFlow()
+
+    fun refreshEventLabels() = viewModelScope.launch {
+        _eventLabelsMap.value = labelRepository.getAllEventLabelsOnce()
+            .groupBy { it.eventId }
+            .mapValues { (_, list) -> list.map { it.label } }
+    }
+
     fun createLabel(name: String, color: String = "#7C4DFF") = viewModelScope.launch {
         labelRepository.insertLabel(Label(name = name, color = color))
     }
 
     fun deleteLabel(label: Label) = viewModelScope.launch {
         labelRepository.deleteLabel(label)
+        refreshEventLabels()
+    }
+
+    fun setEventLabels(eventId: String, labels: Set<String>) = viewModelScope.launch {
+        val current = labelRepository.getAllEventLabelsOnce().filter { it.eventId == eventId }.map { it.label }.toSet()
+        val toAdd = labels - current
+        val toRemove = current - labels
+        toAdd.forEach { labelRepository.addEventLabel(EventLabel(eventId, it)) }
+        toRemove.forEach { labelRepository.removeEventLabel(EventLabel(eventId, it)) }
+        refreshEventLabels()
     }
 
     fun addEventLabel(eventId: String, label: String) = viewModelScope.launch {
         labelRepository.addEventLabel(com.memoriabox.data.model.EventLabel(eventId, label))
+        refreshEventLabels()
     }
 
     fun removeEventLabel(eventId: String, label: String) = viewModelScope.launch {
         labelRepository.removeEventLabel(com.memoriabox.data.model.EventLabel(eventId, label))
+        refreshEventLabels()
     }
 }
 
@@ -597,7 +672,8 @@ fun createTodoViewModel(application: Application): TodoViewModel {
     val app = application as com.memoriabox.MemoriaApp
     return TodoViewModel(
         application,
-        EventRepository(app.database.eventDao())
+        EventRepository(app.database.eventDao()),
+        SubtaskRepository(app.database.subtaskDao())
     )
 }
 
@@ -622,5 +698,201 @@ fun createLabelViewModel(application: Application): LabelViewModel {
         application,
         LabelRepository(app.database.labelDao()),
         EventRepository(app.database.eventDao())
+    )
+}
+
+class MoodViewModel(
+    application: Application,
+    private val moodRepository: MoodRepository,
+    private val backupManager: BackupManager
+) : AndroidViewModel(application) {
+
+    val moods = moodRepository.getAllMoods()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun upsertMood(date: Long, level: Int, activity: String, note: String) = viewModelScope.launch {
+        val safeLevel = com.memoriabox.utils.NextFeaturesLogic.coerceMoodLevel(level)
+        val existing = moodRepository.getMoodByDate(date)
+        val mood = existing?.copy(level = safeLevel, activity = activity, note = note) ?: MoodEntry(
+            date = date,
+            level = safeLevel,
+            activity = activity,
+            note = note
+        )
+        moodRepository.upsertMood(mood)
+        backupManager.onDataChanged()
+    }
+
+    fun deleteMood(date: Long) = viewModelScope.launch {
+        moodRepository.getMoodByDate(date)?.let { moodRepository.deleteMood(it) }
+        backupManager.onDataChanged()
+    }
+
+    fun moodForDate(date: Long): MoodEntry? {
+        val dayStart = (date / 86400000L) * 86400000L
+        return moods.value.firstOrNull { (it.date / 86400000L) * 86400000L == dayStart }
+    }
+}
+
+class EchoTimeViewModel(
+    application: Application,
+    private val diaryRepository: DiaryRepository,
+    private val eventRepository: EventRepository
+) : AndroidViewModel(application) {
+
+    val allDiaries = diaryRepository.getAllDiaries()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val allEvents = eventRepository.getAllEvents()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val allDiaryMedia = allDiaries
+        .flatMapLatest { diaries ->
+            if (diaries.isEmpty()) flowOf(emptyList()) else diaryRepository.getMediaForDiaries(diaries.map { it.id })
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun historicalPhotos(media: List<DiaryMedia>): List<DiaryMedia> =
+        media.filter { it.mediaType == DiaryMediaType.IMAGE }
+}
+
+class FriendDetailViewModel(
+    application: Application,
+    private val friendRepository: FriendRepository,
+    private val giftRepository: GiftRepository,
+    private val birthdayRecordRepository: BirthdayRecordRepository,
+    private val eventRepository: EventRepository,
+    private val logRepository: LogRepository,
+    private val backupManager: BackupManager
+) : AndroidViewModel(application) {
+
+    private val _friendId = MutableStateFlow<String?>(null)
+    private val _friend = MutableStateFlow<Friend?>(null)
+    private val _relations = MutableStateFlow<List<String>>(emptyList())
+    private val _birthdayEvent = MutableStateFlow<Event?>(null)
+
+    val friend = _friend.asStateFlow()
+    val relations = _relations.asStateFlow()
+    val birthdayEvent = _birthdayEvent.asStateFlow()
+
+    val gifts: StateFlow<List<FriendGift>> = _friendId.flatMapLatest { id ->
+        if (id == null) flowOf(emptyList()) else giftRepository.getGifts(id)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val birthdayRecords: StateFlow<List<FriendBirthdayRecord>> = _friendId.flatMapLatest { id ->
+        if (id == null) flowOf(emptyList()) else birthdayRecordRepository.getBirthdayRecords(id)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun load(friendId: String) = viewModelScope.launch {
+        _friendId.value = friendId
+        _friend.value = friendRepository.getAllFriendsOnce().firstOrNull { it.id == friendId }
+        _relations.value = friendRepository.getFriendRelationsOnce(friendId)
+        _birthdayEvent.value = eventRepository.getAllEventsOnce()
+            .firstOrNull { it.type == EventType.BIRTHDAY && it.avatarUri == "friend:$friendId" }
+    }
+
+    fun updateFriend(name: String, birthdayDate: Long?, avatarUri: String?, relations: List<String>) = viewModelScope.launch {
+        val current = _friend.value ?: return@launch
+        val updated = current.copy(
+            name = name.trim().ifBlank { current.name },
+            birthdayDate = birthdayDate,
+            avatarUri = avatarUri
+        )
+        friendRepository.upsertFriend(updated)
+        _friend.value = updated
+        friendRepository.deleteFriendRelations(current.id)
+        relations.filter { it.isNotBlank() }.distinct().forEach { label ->
+            friendRepository.upsertFriendRelation(FriendRelation(current.id, label.trim()))
+        }
+        _relations.value = relations
+        syncBirthdayEvent(updated)
+        backupManager.onDataChanged()
+    }
+
+    fun addGift(name: String, price: Double, status: GiftStatus, year: Int) = viewModelScope.launch {
+        val id = _friendId.value ?: return@launch
+        giftRepository.upsertGift(FriendGift(friendId = id, name = name, price = price, status = status, year = year))
+        backupManager.onDataChanged()
+    }
+
+    fun deleteGift(gift: FriendGift) = viewModelScope.launch {
+        giftRepository.deleteGift(gift)
+        backupManager.onDataChanged()
+    }
+
+    fun addBirthdayRecord(note: String) = viewModelScope.launch {
+        val id = _friendId.value ?: return@launch
+        val currentYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
+        birthdayRecordRepository.upsertBirthdayRecord(
+            FriendBirthdayRecord(friendId = id, year = currentYear, note = note)
+        )
+        backupManager.onDataChanged()
+    }
+
+    fun deleteBirthdayRecord(record: FriendBirthdayRecord) = viewModelScope.launch {
+        birthdayRecordRepository.deleteBirthdayRecord(record)
+        backupManager.onDataChanged()
+    }
+
+    private suspend fun syncBirthdayEvent(friend: Friend) {
+        val birthday = friend.birthdayDate ?: return
+        val existing = eventRepository.getAllEventsOnce()
+            .firstOrNull { it.type == EventType.BIRTHDAY && it.avatarUri == "friend:${friend.id}" }
+        val defaultBoxId = "default_1"
+        if (existing == null) {
+            val calendar = java.util.Calendar.getInstance().apply { timeInMillis = birthday }
+            calendar.set(java.util.Calendar.YEAR, java.util.Calendar.getInstance().get(java.util.Calendar.YEAR))
+            val event = Event(
+                boxId = defaultBoxId,
+                name = "${friend.name}的生日",
+                date = calendar.timeInMillis,
+                type = EventType.BIRTHDAY,
+                isBirthday = true,
+                repeatYearly = true,
+                avatarUri = "friend:${friend.id}"
+            )
+            eventRepository.insertEvent(event)
+            _birthdayEvent.value = event
+            logRepository.logEventOperation("AUTO_CREATE", event.id, event.name)
+        } else if (existing.name != "${friend.name}的生日") {
+            val updated = existing.copy(name = "${friend.name}的生日")
+            eventRepository.updateEvent(updated)
+            _birthdayEvent.value = updated
+        }
+    }
+
+    fun deleteBirthdayEvent() = viewModelScope.launch {
+        val event = _birthdayEvent.value ?: return@launch
+        eventRepository.deleteEvent(event)
+        _birthdayEvent.value = null
+        backupManager.onDataChanged()
+    }
+}
+
+fun createMoodViewModel(application: Application): MoodViewModel {
+    val app = application as com.memoriabox.MemoriaApp
+    return MoodViewModel(application, MoodRepository(app.database.moodDao()), app.backupManager)
+}
+
+fun createEchoTimeViewModel(application: Application): EchoTimeViewModel {
+    val app = application as com.memoriabox.MemoriaApp
+    return EchoTimeViewModel(
+        application,
+        DiaryRepository(app.database.diaryDao()),
+        EventRepository(app.database.eventDao())
+    )
+}
+
+fun createFriendDetailViewModel(application: Application): FriendDetailViewModel {
+    val app = application as com.memoriabox.MemoriaApp
+    return FriendDetailViewModel(
+        application,
+        FriendRepository(app.database.friendDao()),
+        GiftRepository(app.database.giftDao()),
+        BirthdayRecordRepository(app.database.birthdayRecordDao()),
+        EventRepository(app.database.eventDao()),
+        LogRepository(app.database.logDao()),
+        app.backupManager
     )
 }

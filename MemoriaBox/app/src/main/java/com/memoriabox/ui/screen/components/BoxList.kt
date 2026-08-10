@@ -14,13 +14,16 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.memoriabox.data.model.Box
 import com.memoriabox.data.model.Event
 import com.memoriabox.data.model.LogEntry
+import com.memoriabox.data.model.TodoPriority
 import com.memoriabox.data.model.TodoStatus
+import com.memoriabox.data.model.TodoSubtask
 import com.memoriabox.utils.ColorUtils
 import java.text.SimpleDateFormat
 import java.util.*
@@ -94,7 +97,13 @@ private fun String.isImageUri(): Boolean = startsWith("content://") || startsWit
 @Composable
 fun TodoListView(
     events: List<Event>,
+    subtaskMap: Map<String, List<TodoSubtask>>,
     onToggleStatus: (Event) -> Unit,
+    onUpdatePriority: (Event, TodoPriority) -> Unit,
+    onAddSubtask: (String, String) -> Unit,
+    onToggleSubtask: (TodoSubtask) -> Unit,
+    onDeleteSubtask: (TodoSubtask) -> Unit,
+    isOverdue: (Event) -> Boolean,
     modifier: Modifier = Modifier
 ) {
     if (events.isEmpty()) {
@@ -107,39 +116,158 @@ fun TodoListView(
         }
     } else {
         LazyColumn(modifier = modifier) {
-            items(events) { event ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Checkbox(
-                            checked = event.todoStatus == TodoStatus.COMPLETED,
-                            onCheckedChange = { onToggleStatus(event) }
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Column {
+            items(events, key = { it.id }) { event ->
+                TodoCard(
+                    event = event,
+                    subtasks = subtaskMap[event.id].orEmpty(),
+                    onToggleStatus = { onToggleStatus(event) },
+                    onUpdatePriority = { onUpdatePriority(event, it) },
+                    onAddSubtask = { onAddSubtask(event.id, it) },
+                    onToggleSubtask = onToggleSubtask,
+                    onDeleteSubtask = onDeleteSubtask,
+                    overdue = isOverdue(event)
+                )
+            }
+        }
+    }
+}
+
+private val priorityTint: Map<TodoPriority, Color> = mapOf(
+    TodoPriority.HIGH to Color(0xFFE53935),
+    TodoPriority.MEDIUM to Color(0xFFFB8C00),
+    TodoPriority.LOW to Color(0xFF43A047)
+)
+
+private val priorityLabel: Map<TodoPriority, String> = mapOf(
+    TodoPriority.HIGH to "高",
+    TodoPriority.MEDIUM to "中",
+    TodoPriority.LOW to "低"
+)
+
+@Composable
+private fun TodoCard(
+    event: Event,
+    subtasks: List<TodoSubtask>,
+    onToggleStatus: () -> Unit,
+    onUpdatePriority: (TodoPriority) -> Unit,
+    onAddSubtask: (String) -> Unit,
+    onToggleSubtask: (TodoSubtask) -> Unit,
+    onDeleteSubtask: (TodoSubtask) -> Unit,
+    overdue: Boolean
+) {
+    var expanded by remember { mutableStateOf(false) }
+    var showPriorityMenu by remember { mutableStateOf(false) }
+    var newSubtask by remember { mutableStateOf("") }
+    val completed = event.todoStatus == TodoStatus.COMPLETED
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Checkbox(checked = completed, onCheckedChange = { onToggleStatus() })
+                Spacer(Modifier.width(4.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = event.name,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = if (completed) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        else MaterialTheme.colorScheme.onSurface
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        event.dueDate?.let { due ->
+                            val overdueNow = overdue
                             Text(
-                                text = event.name,
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = if (event.todoStatus == TodoStatus.COMPLETED) {
-                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                                } else {
-                                    MaterialTheme.colorScheme.onSurface
+                                "截止: ${SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(due))}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (overdueNow) Color(0xFFE53935) else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        if (overdue) {
+                            Text(
+                                "已逾期",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White,
+                                modifier = Modifier
+                                    .clip(MaterialTheme.shapes.small)
+                                    .background(Color(0xFFE53935))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
+                Box {
+                    IconButton(onClick = { showPriorityMenu = true }) {
+                        Text(
+                            priorityLabel[event.todoPriority] ?: "中",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = priorityTint[event.todoPriority] ?: MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    DropdownMenu(expanded = showPriorityMenu, onDismissRequest = { showPriorityMenu = false }) {
+                        TodoPriority.entries.forEach { p ->
+                            DropdownMenuItem(
+                                text = { Text("${priorityLabel[p]} 优先级") },
+                                onClick = {
+                                    onUpdatePriority(p)
+                                    showPriorityMenu = false
                                 }
                             )
-                            event.dueDate?.let { due ->
-                                val cal = Calendar.getInstance()
-                                cal.timeInMillis = due
-                                Text(
-                                    "截止: ${SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(cal.time)}",
-                                    style = MaterialTheme.typography.bodySmall
-                                )
+                        }
+                    }
+                }
+                IconButton(onClick = { expanded = !expanded }) {
+                    Icon(
+                        if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = "展开子任务"
+                    )
+                }
+            }
+            if (expanded) {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    subtasks.forEach { subtask ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(
+                                checked = subtask.done,
+                                onCheckedChange = { onToggleSubtask(subtask) }
+                            )
+                            Text(
+                                subtask.title,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (subtask.done) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                else MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(onClick = { onDeleteSubtask(subtask) }, modifier = Modifier.size(28.dp)) {
+                                Icon(Icons.Default.Close, contentDescription = "删除子任务", tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(16.dp))
                             }
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(
+                            value = newSubtask,
+                            onValueChange = { newSubtask = it },
+                            placeholder = { Text("添加子任务") },
+                            singleLine = true,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp),
+                            textStyle = MaterialTheme.typography.bodyMedium
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        IconButton(onClick = {
+                            if (newSubtask.isNotBlank()) {
+                                onAddSubtask(newSubtask.trim())
+                                newSubtask = ""
+                            }
+                        }) {
+                            Icon(Icons.Default.Add, contentDescription = "添加子任务")
                         }
                     }
                 }

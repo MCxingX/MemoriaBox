@@ -98,6 +98,111 @@ interface EventDao {
 }
 
 @Dao
+interface MoodDao {
+    @Query("SELECT * FROM mood_entries ORDER BY date DESC")
+    fun getAllMoods(): Flow<List<MoodEntry>>
+
+    @Query("SELECT * FROM mood_entries ORDER BY date DESC")
+    suspend fun getAllMoodsOnce(): List<MoodEntry>
+
+    @Query("SELECT * FROM mood_entries WHERE date BETWEEN :start AND :end ORDER BY date ASC")
+    suspend fun getMoodsBetween(start: Long, end: Long): List<MoodEntry>
+
+    @Query("SELECT * FROM mood_entries WHERE date = :date LIMIT 1")
+    suspend fun getMoodByDate(date: Long): MoodEntry?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertMood(mood: MoodEntry)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertMoods(moods: List<MoodEntry>)
+
+    @Delete
+    suspend fun deleteMood(mood: MoodEntry)
+}
+
+@Dao
+interface SubtaskDao {
+    @Query("SELECT * FROM todo_subtasks WHERE todo_id = :todoId ORDER BY sort_order ASC, created_at ASC")
+    fun getSubtasks(todoId: String): Flow<List<TodoSubtask>>
+
+    @Query("SELECT * FROM todo_subtasks WHERE todo_id = :todoId ORDER BY sort_order ASC, created_at ASC")
+    suspend fun getSubtasksOnce(todoId: String): List<TodoSubtask>
+
+    @Query("SELECT * FROM todo_subtasks WHERE todo_id IN (:todoIds) ORDER BY sort_order ASC, created_at ASC")
+    suspend fun getSubtasksForTodos(todoIds: List<String>): List<TodoSubtask>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertSubtask(subtask: TodoSubtask)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertSubtasks(subtasks: List<TodoSubtask>)
+
+    @Update
+    suspend fun updateSubtask(subtask: TodoSubtask)
+
+    @Delete
+    suspend fun deleteSubtask(subtask: TodoSubtask)
+
+    @Query("DELETE FROM todo_subtasks WHERE todo_id = :todoId")
+    suspend fun deleteSubtasksForTodo(todoId: String)
+
+    @Query("SELECT COUNT(*) FROM todo_subtasks WHERE todo_id = :todoId")
+    suspend fun countSubtasks(todoId: String): Int
+
+    @Query("SELECT COUNT(*) FROM todo_subtasks WHERE todo_id = :todoId AND done = 1")
+    suspend fun countDoneSubtasks(todoId: String): Int
+}
+
+@Dao
+interface GiftDao {
+    @Query("SELECT * FROM friend_gifts WHERE friend_id = :friendId ORDER BY year DESC, created_at DESC")
+    fun getGifts(friendId: String): Flow<List<FriendGift>>
+
+    @Query("SELECT * FROM friend_gifts WHERE friend_id = :friendId ORDER BY year DESC, created_at DESC")
+    suspend fun getGiftsOnce(friendId: String): List<FriendGift>
+
+    @Query("SELECT * FROM friend_gifts")
+    suspend fun getAllGiftsOnce(): List<FriendGift>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertGift(gift: FriendGift)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertGifts(gifts: List<FriendGift>)
+
+    @Delete
+    suspend fun deleteGift(gift: FriendGift)
+
+    @Query("DELETE FROM friend_gifts WHERE friend_id = :friendId")
+    suspend fun deleteGiftsForFriend(friendId: String)
+}
+
+@Dao
+interface BirthdayRecordDao {
+    @Query("SELECT * FROM friend_birthday_records WHERE friend_id = :friendId ORDER BY year DESC")
+    fun getBirthdayRecords(friendId: String): Flow<List<FriendBirthdayRecord>>
+
+    @Query("SELECT * FROM friend_birthday_records WHERE friend_id = :friendId ORDER BY year DESC")
+    suspend fun getBirthdayRecordsOnce(friendId: String): List<FriendBirthdayRecord>
+
+    @Query("SELECT * FROM friend_birthday_records")
+    suspend fun getAllBirthdayRecordsOnce(): List<FriendBirthdayRecord>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertBirthdayRecord(record: FriendBirthdayRecord)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertBirthdayRecords(records: List<FriendBirthdayRecord>)
+
+    @Delete
+    suspend fun deleteBirthdayRecord(record: FriendBirthdayRecord)
+
+    @Query("DELETE FROM friend_birthday_records WHERE friend_id = :friendId")
+    suspend fun deleteRecordsForFriend(friendId: String)
+}
+
+@Dao
 interface FriendDao {
     @Query("SELECT * FROM friends ORDER BY created_at ASC")
     fun getAllFriends(): Flow<List<Friend>>
@@ -107,6 +212,18 @@ interface FriendDao {
 
     @Query("SELECT * FROM friend_relations")
     suspend fun getAllFriendRelationsOnce(): List<FriendRelation>
+
+    @Query("SELECT label FROM friend_relations WHERE friend_id = :friendId")
+    fun getFriendRelations(friendId: String): Flow<List<String>>
+
+    @Query("SELECT label FROM friend_relations WHERE friend_id = :friendId")
+    suspend fun getFriendRelationsOnce(friendId: String): List<String>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertFriendRelation(relation: FriendRelation): Long
+
+    @Query("DELETE FROM friend_relations WHERE friend_id = :friendId")
+    suspend fun deleteFriendRelations(friendId: String)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertFriend(friend: Friend): Long

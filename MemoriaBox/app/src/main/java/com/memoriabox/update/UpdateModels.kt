@@ -47,8 +47,10 @@ object UpdateFormat {
     fun mirrorUrls(originalUrl: String): List<String> = listOf(
         "https://ghfast.top/$originalUrl",
         "https://gh-proxy.com/$originalUrl",
-        "https://github.moeyy.xyz/$originalUrl"
-    )
+        "https://github.moeyy.xyz/$originalUrl",
+        "https://ghproxy.net/$originalUrl",
+        "https://gh.ddlc.top/$originalUrl"
+    ).distinct()
 
     private fun versionParts(value: String): List<Int> = normalizeVersion(value)
         .substringBefore('-')

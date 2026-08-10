@@ -29,6 +29,22 @@ class Converters {
     }.getOrDefault(TodoStatus.PENDING)
 
     @TypeConverter
+    fun fromTodoPriority(value: TodoPriority): String = value.name
+
+    @TypeConverter
+    fun toTodoPriority(value: String): TodoPriority = runCatching {
+        TodoPriority.valueOf(value)
+    }.getOrDefault(TodoPriority.MEDIUM)
+
+    @TypeConverter
+    fun fromGiftStatus(value: GiftStatus): String = value.name
+
+    @TypeConverter
+    fun toGiftStatus(value: String): GiftStatus = runCatching {
+        GiftStatus.valueOf(value)
+    }.getOrDefault(GiftStatus.PLANNED)
+
+    @TypeConverter
     fun fromRepeatMode(value: RepeatMode): String = value.name
 
     @TypeConverter

@@ -14,6 +14,7 @@ import com.memoriabox.database.MIGRATION_3_4
 import com.memoriabox.database.MIGRATION_4_5
 import com.memoriabox.database.MIGRATION_5_6
 import com.memoriabox.database.MIGRATION_6_7
+import com.memoriabox.database.MIGRATION_7_8
 import com.memoriabox.data.model.BackupConfig
 import kotlinx.coroutines.*
 import java.io.*
@@ -40,10 +41,14 @@ class BackupManager(
         val diaries: Int,
         val media: Int,
         val logs: Int,
+        val moods: Int = 0,
+        val subtasks: Int = 0,
+        val gifts: Int = 0,
+        val birthdayRecords: Int = 0,
         val restoredMediaFiles: Int = 0
     ) {
         val userContentCount: Int
-            get() = events + diaries + media + friends + boxes
+            get() = events + diaries + media + friends + boxes + moods + gifts
 
         fun toSummary(): String = "导入方式：合并导入\n" +
             "分组：${boxes} 个\n" +
@@ -52,6 +57,8 @@ class BackupManager(
             "素材：${media} 个\n" +
             "好友：${friends} 个\n" +
             "标签：${labels} 个\n" +
+            "心情打卡：${moods} 条\n" +
+            "礼物：${gifts} 条\n" +
             "恢复媒体文件：${restoredMediaFiles} 个\n" +
             "当前数据：已保留\n" +
             "如存在同名或重复内容，会按备份数据合并更新。"
@@ -499,7 +506,8 @@ class BackupManager(
                 MIGRATION_3_4,
                 MIGRATION_4_5,
                 MIGRATION_5_6,
-                MIGRATION_6_7
+                MIGRATION_6_7,
+                MIGRATION_7_8
             )
             .addCallback(object : androidx.room.RoomDatabase.Callback() {
                 override fun onOpen(db: androidx.sqlite.db.SupportSQLiteDatabase) {
@@ -519,6 +527,13 @@ class BackupManager(
             val diaries = importDb.diaryDao().getAllDiariesOnce()
             val media = importDb.diaryDao().getAllMediaOnce()
             val logs = importDb.logDao().getAllLogsOnce()
+            val moods = runCatching { importDb.moodDao().getAllMoodsOnce() }.getOrDefault(emptyList())
+            val subtasks = runCatching {
+                val ids = events.map { it.id }
+                if (ids.isEmpty()) emptyList() else importDb.subtaskDao().getSubtasksForTodos(ids)
+            }.getOrDefault(emptyList())
+            val gifts = runCatching { importDb.giftDao().getAllGiftsOnce() }.getOrDefault(emptyList())
+            val birthdayRecords = runCatching { importDb.birthdayRecordDao().getAllBirthdayRecordsOnce() }.getOrDefault(emptyList())
 
             database.withTransaction {
                 boxes.takeIf { it.isNotEmpty() }?.let { database.boxDao().insertBoxes(it) }
@@ -530,6 +545,10 @@ class BackupManager(
                 diaries.takeIf { it.isNotEmpty() }?.let { database.diaryDao().upsertDiaries(it) }
                 media.takeIf { it.isNotEmpty() }?.let { database.diaryDao().upsertMedia(it) }
                 logs.takeIf { it.isNotEmpty() }?.let { database.logDao().insertLogs(it.map { log -> log.copy(id = 0) }) }
+                moods.takeIf { it.isNotEmpty() }?.let { database.moodDao().upsertMoods(it) }
+                subtasks.takeIf { it.isNotEmpty() }?.let { database.subtaskDao().upsertSubtasks(it) }
+                gifts.takeIf { it.isNotEmpty() }?.let { database.giftDao().upsertGifts(it) }
+                birthdayRecords.takeIf { it.isNotEmpty() }?.let { database.birthdayRecordDao().upsertBirthdayRecords(it) }
             }
 
             return ImportResult(
@@ -541,7 +560,11 @@ class BackupManager(
                 eventLabels = eventLabels.size,
                 diaries = diaries.size,
                 media = media.size,
-                logs = logs.size
+                logs = logs.size,
+                moods = moods.size,
+                subtasks = subtasks.size,
+                gifts = gifts.size,
+                birthdayRecords = birthdayRecords.size
             )
         } finally {
             importDb.close()

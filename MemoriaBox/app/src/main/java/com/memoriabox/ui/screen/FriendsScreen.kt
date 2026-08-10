@@ -1,6 +1,7 @@
 package com.memoriabox.ui.screen
 
 import android.app.Application
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -61,7 +62,8 @@ import java.util.concurrent.TimeUnit
 @Composable
 fun FriendsScreen(
     application: Application,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onNavigateToFriendDetail: (String) -> Unit
 ) {
     val viewModel = remember { createFriendViewModel(application) }
     val friends by viewModel.friends.collectAsState()
@@ -107,6 +109,7 @@ fun FriendsScreen(
                     items(friends, key = { it.id }) { friend ->
                         FriendCard(
                             friend = friend,
+                            onClick = { onNavigateToFriendDetail(friend.id) },
                             onEdit = {
                                 editingFriend = friend
                                 showEditor = true
@@ -170,11 +173,13 @@ private fun FriendBirthdayGuide() {
 }
 
 @Composable
-private fun FriendCard(friend: Friend, onEdit: () -> Unit, onDelete: () -> Unit) {
+private fun FriendCard(friend: Friend, onClick: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit) {
     val daysUntilBirthday = remember(friend.birthdayDate) { friend.birthdayDate?.let { nextBirthdayDistance(it) } }
     val isSoon = daysUntilBirthday != null && daysUntilBirthday in 0..30
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
             containerColor = if (isSoon) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f) else MaterialTheme.colorScheme.surface
         ),
