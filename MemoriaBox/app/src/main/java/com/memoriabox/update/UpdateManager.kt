@@ -1,0 +1,244 @@
+package com.memoriabox.update
+
+import android.content.Context
+import com.memoriabox.BuildConfig
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import org.json.JSONObject
+import java.io.File
+import java.io.FileOutputStream
+import java.util.concurrent.TimeUnit
+
+object UpdateManager {
+    private const val RELEASE_API = "https://api.github.com/repos/MCxingX/MemoriaBox/releases/latest"
+    private const val PREFS_NAME = "update_settings"
+    private const val LAST_CHECK_KEY = "last_auto_check"
+    private const val AUTO_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000L
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(12, TimeUnit.SECONDS)
+        .readTimeout(45, TimeUnit.SECONDS)
+        .callTimeout(20, TimeUnit.MINUTES)
+        .followRedirects(true)
+        .build()
+    private val speedClient = client.newBuilder()
+        .readTimeout(8, TimeUnit.SECONDS)
+        .callTimeout(10, TimeUnit.SECONDS)
+        .build()
+
+    private val mutableState = MutableStateFlow<UpdateState>(UpdateState.Idle)
+    val state: StateFlow<UpdateState> = mutableState.asStateFlow()
+
+    fun check(context: Context, manual: Boolean = false) {
+        if (mutableState.value is UpdateState.Checking || mutableState.value is UpdateState.Downloading) return
+        if (!manual && !autoCheckDue(context)) return
+        scope.launch {
+            mutableState.value = UpdateState.Checking(manual)
+            if (!manual) markAutoCheck(context)
+            runCatching { fetchLatestRelease() }
+                .onSuccess { info ->
+                    if (UpdateFormat.isNewer(info.versionName, BuildConfig.VERSION_NAME)) {
+                        mutableState.value = UpdateState.Available(info)
+                    } else {
+                        mutableState.value = UpdateState.UpToDate(manual)
+                    }
+                }
+                .onFailure { error ->
+                    mutableState.value = UpdateState.Error(error.message ?: "版本检测失败")
+                }
+        }
+    }
+
+    fun retry(context: Context, info: UpdateInfo?) {
+        if (info == null) {
+            check(context, manual = true)
+            return
+        }
+        scope.launch { downloadAndVerify(context.applicationContext, info) }
+    }
+
+    fun download(context: Context, info: UpdateInfo) {
+        if (mutableState.value is UpdateState.Downloading) return
+        scope.launch { downloadAndVerify(context.applicationContext, info) }
+    }
+
+    fun resetTransientState() {
+        if (mutableState.value is UpdateState.UpToDate || mutableState.value is UpdateState.Error) {
+            mutableState.value = UpdateState.Idle
+        }
+    }
+
+    private suspend fun fetchLatestRelease(): UpdateInfo {
+        val request = Request.Builder()
+            .url(RELEASE_API)
+            .header("Accept", "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .header("User-Agent", "MemoriaBox/${BuildConfig.VERSION_NAME}")
+            .build()
+        val releaseJson = executeText(request)
+        val release = JSONObject(releaseJson)
+        require(!release.optBoolean("draft") && !release.optBoolean("prerelease")) { "最新版本尚未正式发布" }
+        val versionName = UpdateFormat.normalizeVersion(release.getString("tag_name"))
+        val assets = release.getJSONArray("assets")
+        var apkName = ""
+        var apkUrl = ""
+        var apkSize = 0L
+        var checksumUrl = ""
+        for (index in 0 until assets.length()) {
+            val asset = assets.getJSONObject(index)
+            val name = asset.getString("name")
+            when {
+                name.endsWith(".apk", ignoreCase = true) && apkUrl.isEmpty() -> {
+                    apkName = name
+                    apkUrl = asset.getString("browser_download_url")
+                    apkSize = asset.optLong("size")
+                }
+                name.endsWith(".apk.sha256", ignoreCase = true) -> {
+                    checksumUrl = asset.getString("browser_download_url")
+                }
+            }
+        }
+        require(apkUrl.isNotEmpty()) { "GitHub Release 缺少 APK 资产" }
+        require(checksumUrl.isNotEmpty()) { "GitHub Release 缺少 APK SHA-256 资产" }
+        val checksumRequest = Request.Builder()
+            .url(checksumUrl)
+            .header("User-Agent", "MemoriaBox/${BuildConfig.VERSION_NAME}")
+            .build()
+        val sha256 = UpdateFormat.parseSha256(executeText(checksumRequest))
+            ?: error("官方 SHA-256 文件格式无效")
+        return UpdateInfo(
+            versionName = versionName,
+            releaseName = release.optString("name", "v$versionName"),
+            releaseNotes = release.optString("body", "本次更新未提供说明。"),
+            publishedAt = release.optString("published_at"),
+            apkName = apkName,
+            apkUrl = apkUrl,
+            apkSize = apkSize,
+            sha256 = sha256
+        )
+    }
+
+    private suspend fun downloadAndVerify(context: Context, info: UpdateInfo) {
+        val updateDir = File(context.filesDir, "updates").apply { mkdirs() }
+        val destination = File(updateDir, "MemoriaBox-${info.versionName}.apk")
+        if (destination.isFile && UpdateVerifier.verify(context, destination, info).isSuccess) {
+            mutableState.value = UpdateState.Ready(info, destination.absolutePath)
+            return
+        }
+        mutableState.value = UpdateState.Downloading(info, 0)
+        val directResult = runCatching { download(info.apkUrl, destination, info) }
+        if (directResult.isFailure) {
+            val mirror = fastestMirror(info.apkUrl) ?: run {
+                destination.delete()
+                mutableState.value = UpdateState.Error("GitHub 直连和 HTTPS 镜像均下载失败", info)
+                return
+            }
+            runCatching { download(mirror, destination, info) }
+                .onFailure { error ->
+                    destination.delete()
+                    mutableState.value = UpdateState.Error(error.message ?: "镜像下载失败", info)
+                    return
+                }
+        }
+        UpdateVerifier.verify(context, destination, info)
+            .onSuccess { mutableState.value = UpdateState.Ready(info, destination.absolutePath) }
+            .onFailure { error ->
+                destination.delete()
+                mutableState.value = UpdateState.Error(error.message ?: "更新包校验失败", info)
+            }
+    }
+
+    private fun download(url: String, destination: File, info: UpdateInfo) {
+        val temporary = File(destination.parentFile, "${destination.name}.part")
+        temporary.delete()
+        val request = Request.Builder()
+            .url(url)
+            .header("Accept", "application/octet-stream")
+            .header("User-Agent", "MemoriaBox/${BuildConfig.VERSION_NAME}")
+            .build()
+        client.newCall(request).execute().use { response ->
+            require(response.isSuccessful) { "下载失败：HTTP ${response.code}" }
+            val body = response.body ?: error("下载内容为空")
+            val total = body.contentLength().takeIf { it > 0 } ?: info.apkSize
+            body.byteStream().use { input ->
+                FileOutputStream(temporary).use { output ->
+                    val buffer = ByteArray(64 * 1024)
+                    var downloaded = 0L
+                    var lastProgress = -1
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        if (count == 0) continue
+                        output.write(buffer, 0, count)
+                        downloaded += count
+                        val progress = if (total > 0) ((downloaded * 100) / total).toInt().coerceIn(0, 99) else 0
+                        if (progress != lastProgress) {
+                            lastProgress = progress
+                            mutableState.value = UpdateState.Downloading(info, progress)
+                        }
+                    }
+                }
+            }
+        }
+        require(temporary.length() > 0) { "下载内容为空" }
+        destination.delete()
+        require(temporary.renameTo(destination)) { "无法保存更新包" }
+    }
+
+    private suspend fun fastestMirror(originalUrl: String): String? =
+        UpdateFormat.mirrorUrls(originalUrl)
+            .map { url -> scope.async { probe(url) } }
+            .awaitAll()
+            .filterNotNull()
+            .minByOrNull { it.second }
+            ?.first
+
+    private fun probe(url: String): Pair<String, Long>? = runCatching {
+        val started = System.nanoTime()
+        val request = Request.Builder()
+            .url(url)
+            .header("Range", "bytes=0-65535")
+            .header("User-Agent", "MemoriaBox/${BuildConfig.VERSION_NAME}")
+            .build()
+        speedClient.newCall(request).execute().use { response ->
+            require(response.isSuccessful || response.code == 206) { "HTTP ${response.code}" }
+            val input = response.body?.byteStream() ?: error("空响应")
+            val buffer = ByteArray(8 * 1024)
+            var received = 0
+            while (received < 64 * 1024) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                received += count
+            }
+            require(received > 0) { "空响应" }
+        }
+        url to TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started)
+    }.getOrNull()
+
+    private fun executeText(request: Request): String = client.newCall(request).execute().use { response ->
+        require(response.isSuccessful) { "GitHub 请求失败：HTTP ${response.code}" }
+        response.body?.string() ?: error("GitHub 返回空内容")
+    }
+
+    private fun autoCheckDue(context: Context): Boolean {
+        val lastCheck = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getLong(LAST_CHECK_KEY, 0L)
+        return System.currentTimeMillis() - lastCheck >= AUTO_CHECK_INTERVAL_MS
+    }
+
+    private fun markAutoCheck(context: Context) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putLong(LAST_CHECK_KEY, System.currentTimeMillis())
+            .apply()
+    }
+}

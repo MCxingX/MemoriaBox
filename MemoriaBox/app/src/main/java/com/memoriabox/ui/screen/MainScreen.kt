@@ -53,6 +53,10 @@ import com.memoriabox.ui.theme.AppThemeGroup
 import com.memoriabox.ui.theme.NianJiLogoMark
 import com.memoriabox.ui.theme.MemoriaDesign
 import com.memoriabox.ui.theme.group
+import com.memoriabox.update.ApkInstaller
+import com.memoriabox.update.UpdateInfo
+import com.memoriabox.update.UpdateManager
+import com.memoriabox.update.UpdateState
 import com.memoriabox.utils.AppSettings
 import com.memoriabox.utils.Header
 import com.memoriabox.utils.MonthlySummaryHelper
@@ -62,6 +66,7 @@ import com.memoriabox.utils.HolidayUtils
 import com.memoriabox.utils.startOfMonth
 import com.memoriabox.viewmodel.*
 import kotlinx.coroutines.launch
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -84,8 +89,20 @@ fun MainScreen(
     var showNewMonthPrompt by remember { mutableStateOf(false) }
     var newMonthTarget by remember { mutableStateOf<Long?>(null) }
     var autoOpenCalendarSummary by remember { mutableStateOf<Long?>(null) }
+    val updateState by UpdateManager.state.collectAsState()
+    var dismissedUpdateVersion by rememberSaveable { mutableStateOf<String?>(null) }
+    var showInstallConfirmation by remember { mutableStateOf(false) }
+    var pendingInstallPath by rememberSaveable { mutableStateOf<String?>(null) }
+    val installPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        val path = pendingInstallPath
+        if (path != null && ApkInstaller.canInstallPackages(context)) {
+            ApkInstaller.install(context, File(path))
+            pendingInstallPath = null
+        }
+    }
     val mainViewModel = remember { createMainViewModel(application) }
     LaunchedEffect(Unit) {
+        UpdateManager.check(context, manual = false)
         val now = System.currentTimeMillis()
         if (AppSettings.getMonthlySummaryEnabled(context) &&
             MonthlySummaryHelper.isNewMonthFirstOpenCandidate(now) &&
@@ -505,6 +522,121 @@ fun MainScreen(
             }
         )
     }
+
+    val visibleUpdateInfo = when (val state = updateState) {
+        is UpdateState.Available -> state.info
+        is UpdateState.Downloading -> state.info
+        is UpdateState.Ready -> state.info
+        is UpdateState.Error -> state.info
+        else -> null
+    }
+    if (visibleUpdateInfo != null && dismissedUpdateVersion != visibleUpdateInfo.versionName) {
+        UpdateAvailableDialog(
+            info = visibleUpdateInfo,
+            state = updateState,
+            onDismiss = {
+                dismissedUpdateVersion = visibleUpdateInfo.versionName
+            },
+            onUpdate = {
+                when (val state = updateState) {
+                    is UpdateState.Available -> UpdateManager.download(context, state.info)
+                    is UpdateState.Ready -> showInstallConfirmation = true
+                    is UpdateState.Error -> UpdateManager.retry(context, state.info)
+                    else -> Unit
+                }
+            }
+        )
+    }
+
+    if (showInstallConfirmation) {
+        val ready = updateState as? UpdateState.Ready
+        AlertDialog(
+            onDismissRequest = { showInstallConfirmation = false },
+            title = { Text("确认安装更新") },
+            text = {
+                Text("更新包已通过官方 SHA-256、版本、包名和签名校验。继续后将打开 Android 系统安装器覆盖安装 v${ready?.info?.versionName.orEmpty()}。")
+            },
+            dismissButton = {
+                TextButton(onClick = { showInstallConfirmation = false }) { Text("稍后") }
+            },
+            confirmButton = {
+                Button(
+                    enabled = ready != null,
+                    onClick = {
+                        val apkPath = ready?.apkPath ?: return@Button
+                        showInstallConfirmation = false
+                        if (ApkInstaller.canInstallPackages(context)) {
+                            ApkInstaller.install(context, File(apkPath))
+                        } else {
+                            pendingInstallPath = apkPath
+                            installPermissionLauncher.launch(ApkInstaller.permissionIntent(context))
+                        }
+                    }
+                ) { Text("继续安装") }
+            }
+        )
+    }
+}
+
+@Composable
+private fun UpdateAvailableDialog(
+    info: UpdateInfo,
+    state: UpdateState,
+    onDismiss: () -> Unit,
+    onUpdate: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = {
+            if (state !is UpdateState.Downloading) onDismiss()
+        },
+        title = { Text("发现新版本 v${info.versionName}") },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                if (info.releaseName.isNotBlank()) {
+                    Text(info.releaseName, style = MaterialTheme.typography.titleSmall)
+                }
+                Text(info.releaseNotes.ifBlank { "本次更新未提供说明。" })
+                when (state) {
+                    is UpdateState.Available -> Text("是否下载此版本？下载仅在你确认后开始。")
+                    is UpdateState.Downloading -> {
+                        LinearProgressIndicator(
+                            progress = { state.progress / 100f },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Text("正在下载并校验：${state.progress}%", style = MaterialTheme.typography.bodySmall)
+                    }
+                    is UpdateState.Ready -> Text("更新包已下载并完成全部校验。", color = MaterialTheme.colorScheme.primary)
+                    is UpdateState.Error -> Text(state.message, color = MaterialTheme.colorScheme.error)
+                    else -> Unit
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(
+                enabled = state !is UpdateState.Downloading,
+                onClick = onDismiss
+            ) { Text("稍后") }
+        },
+        confirmButton = {
+            Button(
+                enabled = state !is UpdateState.Downloading,
+                onClick = onUpdate
+            ) {
+                Text(
+                    when (state) {
+                        is UpdateState.Available -> "下载更新"
+                        is UpdateState.Downloading -> "正在下载"
+                        is UpdateState.Ready -> "安装更新"
+                        is UpdateState.Error -> "重新下载"
+                        else -> "下载更新"
+                    }
+                )
+            }
+        }
+    )
 }
 
 @Composable
@@ -2130,6 +2262,7 @@ fun SettingsScreen(
     onBackupSettingsClick: () -> Unit,
     onWebDavSettingsClick: () -> Unit
 ) {
+    val context = LocalContext.current
     val pushPlusHelper = remember { com.memoriabox.utils.NotificationHelper(application) }
     var pushPlusToken by remember { mutableStateOf(pushPlusHelper.getPushPlusToken()) }
     var pushPlusEnabled by remember { mutableStateOf(pushPlusHelper.isPushPlusEnabled()) }
@@ -2140,6 +2273,7 @@ fun SettingsScreen(
     var showUpcomingSettings by remember { mutableStateOf(false) }
     var showHolidaySettings by remember { mutableStateOf(false) }
     var showMoreToolsDialog by remember { mutableStateOf(false) }
+    val updateState by UpdateManager.state.collectAsState()
     val adaptiveUi = rememberAdaptiveUiSize()
 
     Column(
@@ -2295,10 +2429,40 @@ fun SettingsScreen(
                     Text("念记 是一个本地优先的日子、纪念日、待办和照片记录工具。", style = MaterialTheme.typography.bodyMedium)
                     Text("数据默认保存在本机，可通过备份和 WebDAV 功能进行迁移或同步。", style = MaterialTheme.typography.bodyMedium)
                     Text("著名木羽制作", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                    HorizontalDivider()
+                    Text(
+                        text = when (val state = updateState) {
+                            is UpdateState.Checking -> "正在检查 GitHub Release…"
+                            is UpdateState.Available -> "发现 v${state.info.versionName}，等待选择是否下载"
+                            is UpdateState.Downloading -> "正在下载 v${state.info.versionName}：${state.progress}%"
+                            is UpdateState.Ready -> "v${state.info.versionName} 已下载并完成校验"
+                            is UpdateState.UpToDate -> "当前已是最新版本"
+                            is UpdateState.Error -> state.message
+                            UpdateState.Idle -> "可从官方 GitHub Release 检查更新"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (updateState is UpdateState.Error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = updateState !is UpdateState.Checking && updateState !is UpdateState.Downloading,
+                    onClick = {
+                        when (val state = updateState) {
+                            is UpdateState.Error -> UpdateManager.retry(context, state.info)
+                            else -> UpdateManager.check(context, manual = true)
+                        }
+                    }
+                ) {
+                    Text(if (updateState is UpdateState.Error) "重试" else "检查更新")
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showAboutDialog = false }) { Text("知道了") }
+                TextButton(onClick = {
+                    showAboutDialog = false
+                    UpdateManager.resetTransientState()
+                }) { Text("知道了") }
             }
         )
     }
