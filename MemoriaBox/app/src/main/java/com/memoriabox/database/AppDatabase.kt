@@ -204,6 +204,10 @@ val MIGRATION_6_7 = object : Migration(6, 7) {
 val MIGRATION_7_8 = object : Migration(7, 8) {
     override fun migrate(database: SupportSQLiteDatabase) {
         ensureColumnExists(database, "events", "todo_priority", "TEXT NOT NULL DEFAULT 'MEDIUM'")
+        database.execSQL("DROP TABLE IF EXISTS mood_entries")
+        database.execSQL("DROP TABLE IF EXISTS todo_subtasks")
+        database.execSQL("DROP TABLE IF EXISTS friend_gifts")
+        database.execSQL("DROP TABLE IF EXISTS friend_birthday_records")
         ensureNextFeaturesTables(database)
     }
 }
@@ -214,20 +218,19 @@ private fun ensureNextFeaturesTables(database: SupportSQLiteDatabase) {
             id TEXT NOT NULL PRIMARY KEY,
             date INTEGER NOT NULL,
             level INTEGER NOT NULL,
-            activity TEXT NOT NULL DEFAULT '',
-            note TEXT NOT NULL DEFAULT '',
-            created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
+            activity TEXT NOT NULL,
+            note TEXT NOT NULL,
+            created_at INTEGER NOT NULL
         )
     """.trimIndent())
-    database.execSQL("CREATE INDEX IF NOT EXISTS index_mood_entries_date ON mood_entries(date)")
     database.execSQL("""
         CREATE TABLE IF NOT EXISTS todo_subtasks (
             id TEXT NOT NULL PRIMARY KEY,
             todo_id TEXT NOT NULL,
             title TEXT NOT NULL,
-            done INTEGER NOT NULL DEFAULT 0,
-            sort_order INTEGER NOT NULL DEFAULT 0,
-            created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
+            done INTEGER NOT NULL,
+            sort_order INTEGER NOT NULL,
+            created_at INTEGER NOT NULL
         )
     """.trimIndent())
     database.execSQL("CREATE INDEX IF NOT EXISTS index_todo_subtasks_todo_id ON todo_subtasks(todo_id)")
@@ -236,10 +239,10 @@ private fun ensureNextFeaturesTables(database: SupportSQLiteDatabase) {
             id TEXT NOT NULL PRIMARY KEY,
             friend_id TEXT NOT NULL,
             name TEXT NOT NULL,
-            price REAL NOT NULL DEFAULT 0,
-            status TEXT NOT NULL DEFAULT 'PLANNED',
-            year INTEGER NOT NULL DEFAULT 0,
-            created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
+            price REAL NOT NULL,
+            status TEXT NOT NULL,
+            year INTEGER NOT NULL,
+            created_at INTEGER NOT NULL
         )
     """.trimIndent())
     database.execSQL("CREATE INDEX IF NOT EXISTS index_friend_gifts_friend_id ON friend_gifts(friend_id)")
@@ -248,8 +251,8 @@ private fun ensureNextFeaturesTables(database: SupportSQLiteDatabase) {
             id TEXT NOT NULL PRIMARY KEY,
             friend_id TEXT NOT NULL,
             year INTEGER NOT NULL,
-            note TEXT NOT NULL DEFAULT '',
-            created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
+            note TEXT NOT NULL,
+            created_at INTEGER NOT NULL
         )
     """.trimIndent())
     database.execSQL("CREATE INDEX IF NOT EXISTS index_friend_birthday_records_friend_id ON friend_birthday_records(friend_id)")
