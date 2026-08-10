@@ -1,4 +1,5 @@
 import java.util.Properties
+import java.security.MessageDigest
 
 plugins {
     alias(libs.plugins.android.application)
@@ -23,8 +24,8 @@ android {
         applicationId = "com.memoriabox"
         minSdk = 24
         targetSdk = 35
-        versionCode = 39
-        versionName = "3.4.0"
+        versionCode = 41
+        versionName = "3.6.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
@@ -115,4 +116,28 @@ dependencies {
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+}
+
+tasks.register("generateReleaseApkSha256") {
+    group = "build"
+    description = "Generate SHA-256 files for release APKs"
+    dependsOn("assembleRelease")
+    doLast {
+        val releaseDirectory = layout.buildDirectory.dir("outputs/apk/release").get().asFile
+        val apkFiles = releaseDirectory.listFiles { file -> file.isFile && file.extension == "apk" }.orEmpty()
+        require(apkFiles.isNotEmpty()) { "No release APK found in ${releaseDirectory.absolutePath}" }
+        apkFiles.forEach { apkFile ->
+            val digest = MessageDigest.getInstance("SHA-256")
+            apkFile.inputStream().buffered().use { input ->
+                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    if (count > 0) digest.update(buffer, 0, count)
+                }
+            }
+            val hash = digest.digest().joinToString("") { "%02x".format(it) }
+            apkFile.resolveSibling("${apkFile.name}.sha256").writeText("$hash  ${apkFile.name}\n")
+        }
+    }
 }
