@@ -137,7 +137,7 @@ fun FriendDetailScreen(
                 relations = relations,
                 onDismiss = { showEditDialog = false },
                 onSave = { name, birthday, newRelations ->
-                    viewModel.updateFriend(name, birthday, null, newRelations)
+                    viewModel.updateFriend(name, birthday, f.avatarUri, newRelations)
                     showEditDialog = false
                 }
             )
