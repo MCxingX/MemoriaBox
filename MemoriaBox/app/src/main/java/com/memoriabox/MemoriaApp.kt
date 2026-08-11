@@ -1,6 +1,8 @@
 package com.memoriabox
 
 import android.app.Application
+import android.content.Context
+import android.os.Process
 import android.util.Log
 import com.memoriabox.database.AppDatabase
 import com.memoriabox.receiver.HolidayReminderReceiver
@@ -31,10 +33,17 @@ class MemoriaApp : Application() {
         }
     }
 
+    override fun attachBaseContext(base: Context) {
+        super.attachBaseContext(base)
+        PROCESS_ATTACHED_AT = System.currentTimeMillis()
+    }
+
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "Application onCreate")
         
+        killIfRunningOldBinary()
+
         try {
             backupManager.initialize()
             Log.d(TAG, "Backup manager initialized")
@@ -51,6 +60,18 @@ class MemoriaApp : Application() {
             Log.e(TAG, "Failed to schedule holiday reminder", e)
         }
     }
+
+    private fun killIfRunningOldBinary() {
+        runCatching {
+            val packageInfo = packageManager.getPackageInfo(packageName, 0)
+            val lastUpdateTime = packageInfo.lastUpdateTime
+            val processStartTime = PROCESS_ATTACHED_AT
+            if (lastUpdateTime > processStartTime) {
+                Log.w(TAG, "Detected stale process from before last package update. Restarting.")
+                Process.killProcess(Process.myPid())
+            }
+        }
+    }
     
     override fun onTerminate() {
         super.onTerminate()
@@ -65,5 +86,10 @@ class MemoriaApp : Application() {
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
         Log.d(TAG, "Trim memory: $level")
+    }
+
+    companion object {
+        @Volatile
+        private var PROCESS_ATTACHED_AT: Long = 0L
     }
 }
