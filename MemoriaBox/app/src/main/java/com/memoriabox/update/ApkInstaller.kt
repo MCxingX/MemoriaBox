@@ -5,8 +5,6 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
-import androidx.core.content.FileProvider
-import java.io.File
 
 object ApkInstaller {
     fun canInstallPackages(context: Context): Boolean =
@@ -17,10 +15,9 @@ object ApkInstaller {
         Uri.parse("package:${context.packageName}")
     )
 
-    fun install(context: Context, apkFile: File) {
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", apkFile)
+    fun install(context: Context, apkUri: Uri) {
         val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, "application/vnd.android.package-archive")
+            setDataAndType(apkUri, "application/vnd.android.package-archive")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }

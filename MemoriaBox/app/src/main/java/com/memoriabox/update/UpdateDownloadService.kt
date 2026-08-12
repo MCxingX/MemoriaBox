@@ -36,13 +36,6 @@ class UpdateDownloadService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_CANCEL) {
-            UpdateManager.cancelActiveDownload()
-            NotificationManagerCompat.from(this).cancel(NOTIFICATION_ID)
-            stopForegroundCompat()
-            stopSelf()
-            return START_NOT_STICKY
-        }
         val info = intent?.getStringExtra(EXTRA_INFO)?.let { UpdateInfoJson.fromJson(it) }
         if (info == null) {
             stopForegroundCompat()
@@ -86,7 +79,7 @@ class UpdateDownloadService : Service() {
             }
         }
         serviceScope.launch {
-            UpdateManager.executeDownload(applicationContext, info)
+            UpdateDownloadWorker.enqueue(applicationContext, info)
         }
         return START_NOT_STICKY
     }
@@ -114,13 +107,6 @@ class UpdateDownloadService : Service() {
             .setContentIntent(contentIntent)
         if (downloading) {
             builder.setProgress(100, progress, false)
-            val cancelIntent = PendingIntent.getService(
-                this,
-                CANCEL_REQUEST_CODE,
-                Intent(this, UpdateDownloadService::class.java).setAction(ACTION_CANCEL),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            builder.addAction(0, "取消", cancelIntent)
         }
         return builder.build()
     }
@@ -186,9 +172,7 @@ class UpdateDownloadService : Service() {
         const val CHANNEL_ID = "update_download"
         const val NOTIFICATION_ID = 1001
         private const val NOTIFICATION_REQUEST_CODE = 2001
-        private const val CANCEL_REQUEST_CODE = 2002
         private const val EXTRA_INFO = "extra_info"
-        private const val ACTION_CANCEL = "com.memoriabox.update.ACTION_CANCEL_DOWNLOAD"
 
         fun start(context: Context, info: UpdateInfo) {
             val intent = Intent(context, UpdateDownloadService::class.java).apply {
@@ -197,11 +181,5 @@ class UpdateDownloadService : Service() {
             ContextCompat.startForegroundService(context, intent)
         }
 
-        fun cancel(context: Context) {
-            runCatching {
-                val intent = Intent(context, UpdateDownloadService::class.java).setAction(ACTION_CANCEL)
-                context.startService(intent)
-            }
-        }
     }
 }

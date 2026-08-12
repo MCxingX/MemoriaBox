@@ -1,6 +1,11 @@
 package com.memoriabox.update
 
 import android.content.Context
+import android.content.ContentValues
+import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import com.memoriabox.BuildConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -147,50 +152,39 @@ object UpdateManager {
         val updateDir = File(context.filesDir, "updates").apply { mkdirs() }
         val destination = File(updateDir, "MemoriaBox-${info.versionName}.apk")
         if (destination.isFile && UpdateVerifier.verify(context, destination, info).isSuccess) {
-            mutableState.value = UpdateState.Ready(info, destination.absolutePath)
+            mutableState.value = UpdateState.Ready(info, existingOrSaveToDownloads(context, destination).toString())
             return
         }
         val temporary = File(destination.parentFile, "${destination.name}.part")
         if (temporary.isFile && temporary.length() > 0 && UpdateVerifier.verify(context, temporary, info).isSuccess) {
             destination.delete()
             if (temporary.renameTo(destination)) {
-                mutableState.value = UpdateState.Ready(info, destination.absolutePath)
+                mutableState.value = UpdateState.Ready(info, existingOrSaveToDownloads(context, destination).toString())
                 return
             }
         }
         mutableState.value = UpdateState.Downloading(info, progressFromPart(temporary, info.apkSize))
-        val directResult = runCatching { download(info.apkUrl, destination, info) }
-        if (directResult.isFailure) {
-            if (downloadCancelled) {
-                mutableState.value = UpdateState.Available(info)
-                return
-            }
-            val mirror = fastestMirror(info.apkUrl) ?: run {
-                temporary.delete()
-                destination.delete()
-                mutableState.value = UpdateState.Error("GitHub 直连和 HTTPS 镜像均下载失败", info)
-                return
-            }
-            runCatching { download(mirror, destination, info) }
-                .onFailure { error ->
-                    temporary.delete()
-                    destination.delete()
-                    if (downloadCancelled) {
-                        mutableState.value = UpdateState.Available(info)
-                    } else {
-                        mutableState.value = UpdateState.Error(error.message ?: "镜像下载失败", info)
-                    }
-                    return
-                }
+        val mirror = fastestMirror(info.apkUrl) ?: run {
+            mutableState.value = UpdateState.Error("更新镜像测速失败，请检查网络后重试", info)
+            return
         }
+        runCatching { download(mirror, destination, info) }
+            .onFailure { error ->
+                if (downloadCancelled) {
+                    mutableState.value = UpdateState.Available(info)
+                } else {
+                    mutableState.value = UpdateState.Error(error.message ?: "镜像下载失败", info)
+                }
+                return
+            }
         if (downloadCancelled) {
-            temporary.delete()
-            destination.delete()
             mutableState.value = UpdateState.Available(info)
             return
         }
         UpdateVerifier.verify(context, destination, info)
-            .onSuccess { mutableState.value = UpdateState.Ready(info, destination.absolutePath) }
+            .onSuccess {
+                mutableState.value = UpdateState.Ready(info, existingOrSaveToDownloads(context, destination).toString())
+            }
             .onFailure { error ->
                 temporary.delete()
                 destination.delete()
@@ -251,6 +245,44 @@ object UpdateManager {
     private fun progressFromPart(temporary: File, total: Long): Int =
         if (total > 0 && temporary.isFile) ((temporary.length() * 100) / total).toInt().coerceIn(0, 99) else 0
 
+    private fun saveToDownloads(context: Context, source: File): Uri {
+        val resolver = context.contentResolver
+        val values = ContentValues().apply {
+            put(MediaStore.Downloads.DISPLAY_NAME, "MemoriaBox-${System.currentTimeMillis()}.apk")
+            put(MediaStore.Downloads.MIME_TYPE, "application/vnd.android.package-archive")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                put(MediaStore.Downloads.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/MemoriaBox")
+                put(MediaStore.Downloads.IS_PENDING, 1)
+            }
+        }
+        val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+            ?: error("无法保存更新包到下载目录")
+        runCatching {
+            resolver.openOutputStream(uri)?.use { output -> source.inputStream().use { it.copyTo(output) } }
+                ?: error("无法写入下载目录")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                resolver.update(uri, ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) }, null, null)
+            }
+        }.getOrElse { error ->
+            resolver.delete(uri, null, null)
+            throw error
+        }
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().putString(DOWNLOAD_URI_KEY, uri.toString()).apply()
+        return uri
+    }
+
+    private fun existingOrSaveToDownloads(context: Context, source: File): Uri {
+        val preferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val savedUri = preferences.getString(DOWNLOAD_URI_KEY, null)?.let(Uri::parse)
+        if (savedUri != null && runCatching {
+                context.contentResolver.openInputStream(savedUri)?.close() ?: error("更新包已清理")
+            }.isSuccess
+        ) {
+            return savedUri
+        }
+        return saveToDownloads(context, source)
+    }
+
     private suspend fun fastestMirror(originalUrl: String): String? =
         UpdateFormat.mirrorUrls(originalUrl)
             .map { url -> scope.async { probe(url) } }
@@ -297,4 +329,17 @@ object UpdateManager {
             .putLong(LAST_CHECK_KEY, System.currentTimeMillis())
             .apply()
     }
+
+    fun removeInstalledApk(context: Context) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(DOWNLOAD_URI_KEY, null)
+            ?.let(Uri::parse)
+            ?.let { uri -> runCatching { context.contentResolver.delete(uri, null, null) } }
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().remove(DOWNLOAD_URI_KEY).apply()
+        File(context.filesDir, "updates").listFiles()
+            ?.filter { it.extension.equals("apk", ignoreCase = true) }
+            ?.forEach(File::delete)
+    }
+
+    private const val DOWNLOAD_URI_KEY = "download_apk_uri"
 }

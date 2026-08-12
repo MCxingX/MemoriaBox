@@ -75,7 +75,7 @@ fun MainScreen(
     val installPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         val path = pendingInstallPath
         if (path != null && ApkInstaller.canInstallPackages(context)) {
-            ApkInstaller.install(context, File(path))
+            ApkInstaller.install(context, Uri.parse(path))
             pendingInstallPath = null
         }
     }
@@ -616,10 +616,10 @@ fun MainScreen(
                 Button(
                     enabled = ready != null,
                     onClick = {
-                        val apkPath = ready?.apkPath ?: return@Button
+                        val apkPath = ready?.apkUri ?: return@Button
                         showInstallConfirmation = false
                         if (ApkInstaller.canInstallPackages(context)) {
-                            ApkInstaller.install(context, File(apkPath))
+                            ApkInstaller.install(context, Uri.parse(apkPath))
                         } else {
                             pendingInstallPath = apkPath
                             installPermissionLauncher.launch(ApkInstaller.permissionIntent(context))
@@ -640,7 +640,7 @@ private fun UpdateAvailableDialog(
 ) {
     AlertDialog(
         onDismissRequest = {
-            if (state !is UpdateState.Downloading) onDismiss()
+            onDismiss()
         },
         title = { Text("发现新版本 v${info.versionName}") },
         text = {
@@ -669,9 +669,8 @@ private fun UpdateAvailableDialog(
         },
         dismissButton = {
             TextButton(
-                enabled = state !is UpdateState.Downloading,
                 onClick = onDismiss
-            ) { Text("稍后") }
+            ) { Text(if (state is UpdateState.Downloading) "后台下载" else "稍后") }
         },
         confirmButton = {
             Button(
@@ -714,4 +713,3 @@ private fun CustomBottomNavIcon(item: BottomNavigationItem, context: Context, ve
         )
     }
 }
-

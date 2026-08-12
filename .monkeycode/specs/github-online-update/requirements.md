@@ -19,10 +19,10 @@
 
 #### 验收标准
 
-1. WHEN 应用进入主界面，更新系统 SHALL 自动请求官方 Release 元数据。
+1. WHEN 应用进入主界面且距离上次自动检测超过六小时，更新系统 SHALL 请求官方 Release 元数据。
 2. WHEN 用户点击“版本检测”，更新系统 SHALL 立即请求官方 Release 元数据并展示检测结果。
 3. WHEN 官方版本高于当前版本，更新系统 SHALL 展示版本号、更新说明和更新操作。
-4. WHEN 当前版本为最新版本，更新系统 SHALL 向手动检测用户展示“已是最新版本”。
+4. WHEN Release 标签版本等于当前应用版本且 APK 版本码等于当前应用版本码，更新系统 SHALL 向手动检测用户展示“已是最新版本”。
 
 ### 需求 2：用户选择与传输回退
 
@@ -32,10 +32,12 @@
 
 1. WHEN 检测到新版本，更新系统 SHALL 展示“稍后”和“下载更新”操作并等待用户选择。
 2. WHEN 用户选择“下载更新”，更新系统 SHALL 开始下载更新包。
-3. WHEN GitHub 直连下载成功，更新系统 SHALL 使用直连下载结果。
-4. IF GitHub 直连下载失败，更新系统 SHALL 并行测试 HTTPS 镜像候选并选择有效候选中延迟最低的地址。
-5. WHILE 更新包正在下载，更新系统 SHALL 展示下载进度。
-6. IF 下载失败，更新系统 SHALL 保留当前应用并展示可重试的错误信息。
+3. WHEN 用户选择“后台下载”，更新系统 SHALL 关闭下载弹窗并通过系统通知展示下载进度。
+4. WHEN 更新系统创建下载任务，更新系统 SHALL 使用 WorkManager 调度可恢复后台工作。
+5. WHILE 更新包正在下载，更新系统 SHALL 使用 HTTP Range 从已保存的字节位置继续传输。
+6. IF 下载节点传输失败，更新系统 SHALL 测试 gitproxy.dev、cdn.jsdelivr.net 和官方 Release URL 候选并使用首个完成测速的有效节点。
+7. WHEN 用户退出应用，更新系统 SHALL 保留已传输字节和下载任务状态。
+8. IF 下载失败，更新系统 SHALL 保留已传输字节并展示可重试的错误信息。
 
 ### 需求 3：安装包校验
 
@@ -62,6 +64,9 @@
 4. IF Android 未授权当前应用安装未知来源应用，更新系统 SHALL 打开当前应用的安装来源授权页面。
 5. WHEN 安装来源授权有效，更新系统 SHALL 使用 FileProvider URI 打开 Android 系统安装器。
 6. WHEN Android 完成覆盖安装，应用 SHALL 尝试重新打开主界面并提供可点击的启动通知作为回退入口。
+7. WHEN 更新包校验通过，更新系统 SHALL 将 APK 保存到系统 Download 文件夹。
+8. WHEN Android 完成覆盖安装，应用 SHALL 删除系统 Download 文件夹中的安装 APK 和应用内部的临时 APK。
+9. WHEN 发布包含更新下载功能的版本，发布流程 SHALL 使用高于已发布版本的版本名称和版本码。
 
 ### 需求 5：发布资产
 
