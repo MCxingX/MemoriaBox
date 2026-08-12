@@ -14,7 +14,6 @@ data class AdaptiveUiSize(
     val sectionSpacing: Dp,
     val topBarHeight: Dp,
     val buttonHeight: Dp,
-    val heroMinHeight: Dp,
     val cardRadius: Dp,
     val cardPadding: Dp,
     val listItemMinHeight: Dp,
@@ -54,12 +53,6 @@ fun rememberAdaptiveUiSize(): AdaptiveUiSize {
                 else -> 48.dp
             },
             buttonHeight = 48.dp,
-            heroMinHeight = when {
-                compact -> 104.dp
-                tablet -> 148.dp
-                roomy -> 132.dp
-                else -> 116.dp
-            },
             cardRadius = 16.dp,
             cardPadding = when {
                 compact -> 12.dp
