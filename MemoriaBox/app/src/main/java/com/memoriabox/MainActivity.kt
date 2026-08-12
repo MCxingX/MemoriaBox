@@ -94,10 +94,6 @@ class MainActivity : ComponentActivity() {
         val background = when (themeMode) {
             AppThemeMode.DARK -> 0xFF17121A.toInt()
             AppThemeMode.EYE_CARE -> 0xFFFAFCF4.toInt()
-            AppThemeMode.PLAYFUL -> 0xFFFFFBFF.toInt()
-            AppThemeMode.WARM -> 0xFFFFF8EF.toInt()
-            AppThemeMode.CREAM -> 0xFFFFF8EC.toInt()
-            AppThemeMode.MINT -> 0xFFF7FFFC.toInt()
             AppThemeMode.LAVENDER -> 0xFFFCF8FF.toInt()
             AppThemeMode.BLUE_WHITE -> 0xFFFFFFFF.toInt()
         }
