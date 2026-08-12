@@ -34,10 +34,12 @@ class MainActivity : ComponentActivity() {
     
     private val TAG = "MainActivity"
     private var pendingMonthlySummaryMonth by mutableStateOf<Long?>(null)
+    private var pendingOpenUpdate by mutableStateOf(false)
 
     companion object {
         const val EXTRA_OPEN_MONTHLY_SUMMARY = "open_monthly_summary"
         const val EXTRA_MONTHLY_SUMMARY_MONTH_START = "monthly_summary_month_start"
+        const val EXTRA_OPEN_UPDATE = "open_update_dialog"
     }
     
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -46,6 +48,7 @@ class MainActivity : ComponentActivity() {
         
         Log.d(TAG, "onCreate called")
         pendingMonthlySummaryMonth = extractMonthlySummaryMonth(intent)
+        pendingOpenUpdate = intent?.getBooleanExtra(EXTRA_OPEN_UPDATE, false) == true
         
         try {
             requestRequiredPermissions()
@@ -73,6 +76,8 @@ class MainActivity : ComponentActivity() {
                             application = application,
                             initialMonthlySummaryMonth = pendingMonthlySummaryMonth,
                             onMonthlySummaryIntentConsumed = { pendingMonthlySummaryMonth = null },
+                            initialOpenUpdate = pendingOpenUpdate,
+                            onOpenUpdateConsumed = { pendingOpenUpdate = false },
                             currentThemeMode = themeMode,
                             onThemeModeChange = { mode ->
                                 themeMode = mode
@@ -132,6 +137,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         pendingMonthlySummaryMonth = extractMonthlySummaryMonth(intent)
+        pendingOpenUpdate = intent.getBooleanExtra(EXTRA_OPEN_UPDATE, false)
     }
     
     private fun requestRequiredPermissions() {

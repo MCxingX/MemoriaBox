@@ -85,6 +85,11 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
+
+        <service
+            android:name=".update.UpdateDownloadService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
         
         <receiver
             android:name=".widget.MemoriaBoxWidget"

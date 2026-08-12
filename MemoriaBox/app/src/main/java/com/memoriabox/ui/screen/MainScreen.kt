@@ -21,6 +21,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.memoriabox.BuildConfig
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.*
 import androidx.navigation.compose.rememberNavController
@@ -54,6 +55,8 @@ fun MainScreen(
     application: Application,
     initialMonthlySummaryMonth: Long? = null,
     onMonthlySummaryIntentConsumed: () -> Unit = {},
+    initialOpenUpdate: Boolean = false,
+    onOpenUpdateConsumed: () -> Unit = {},
     currentThemeMode: AppThemeMode = AppThemeMode.BLUE_WHITE,
     onThemeModeChange: (AppThemeMode) -> Unit = {},
     navController: NavHostController = rememberNavController()
@@ -65,6 +68,7 @@ fun MainScreen(
     var newMonthTarget by remember { mutableStateOf<Long?>(null) }
     var autoOpenCalendarSummary by remember { mutableStateOf<Long?>(null) }
     val updateState by UpdateManager.state.collectAsState()
+    var showUpdateDialog by remember { mutableStateOf(false) }
     var dismissedUpdateVersion by rememberSaveable { mutableStateOf<String?>(null) }
     var showInstallConfirmation by remember { mutableStateOf(false) }
     var pendingInstallPath by rememberSaveable { mutableStateOf<String?>(null) }
@@ -77,7 +81,6 @@ fun MainScreen(
     }
     val mainViewModel = remember { createMainViewModel(application) }
     LaunchedEffect(Unit) {
-        UpdateManager.check(context, manual = false)
         val now = System.currentTimeMillis()
         if (AppSettings.getMonthlySummaryEnabled(context) &&
             MonthlySummaryHelper.isNewMonthFirstOpenCandidate(now) &&
@@ -137,6 +140,14 @@ fun MainScreen(
                 navigateToRootTab(1, Screen.Calendar.route)
             }
             onMonthlySummaryIntentConsumed()
+        }
+    }
+
+    LaunchedEffect(initialOpenUpdate) {
+        if (initialOpenUpdate) {
+            showUpdateDialog = true
+            dismissedUpdateVersion = null
+            onOpenUpdateConsumed()
         }
     }
 
@@ -349,7 +360,12 @@ fun MainScreen(
                     onNavigateToMood = { navController.navigate(Screen.Mood.route) },
                     onNavigateToLabels = { navController.navigate(Screen.Labels.route) },
                     onBackupSettingsClick = { navController.navigate(Screen.BackupSettings.route) },
-                    onWebDavSettingsClick = { navController.navigate(Screen.WebDavSettings.route) }
+                    onWebDavSettingsClick = { navController.navigate(Screen.WebDavSettings.route) },
+                    onCheckUpdate = {
+                        showUpdateDialog = true
+                        dismissedUpdateVersion = null
+                        UpdateManager.check(context, manual = true)
+                    }
                 )
                 }
             }
@@ -533,29 +549,56 @@ fun MainScreen(
         )
     }
 
-    val visibleUpdateInfo = when (val state = updateState) {
-        is UpdateState.Available -> state.info
-        is UpdateState.Downloading -> state.info
-        is UpdateState.Ready -> state.info
-        is UpdateState.Error -> state.info
-        else -> null
-    }
-    if (visibleUpdateInfo != null && dismissedUpdateVersion != visibleUpdateInfo.versionName) {
-        UpdateAvailableDialog(
-            info = visibleUpdateInfo,
-            state = updateState,
-            onDismiss = {
-                dismissedUpdateVersion = visibleUpdateInfo.versionName
-            },
-            onUpdate = {
-                when (val state = updateState) {
-                    is UpdateState.Available -> UpdateManager.download(context, state.info)
-                    is UpdateState.Ready -> showInstallConfirmation = true
-                    is UpdateState.Error -> UpdateManager.retry(context, state.info)
-                    else -> Unit
+    if (showUpdateDialog) {
+        val visibleUpdateInfo = when (val state = updateState) {
+            is UpdateState.Available -> state.info
+            is UpdateState.Downloading -> state.info
+            is UpdateState.Ready -> state.info
+            is UpdateState.Error -> state.info
+            else -> null
+        }
+        if (visibleUpdateInfo != null && dismissedUpdateVersion != visibleUpdateInfo.versionName) {
+            UpdateAvailableDialog(
+                info = visibleUpdateInfo,
+                state = updateState,
+                onDismiss = {
+                    dismissedUpdateVersion = visibleUpdateInfo.versionName
+                    showUpdateDialog = false
+                },
+                onUpdate = {
+                    when (val state = updateState) {
+                        is UpdateState.Available -> UpdateManager.download(context, state.info)
+                        is UpdateState.Ready -> showInstallConfirmation = true
+                        is UpdateState.Error -> UpdateManager.retry(context, state.info)
+                        else -> Unit
+                    }
                 }
-            }
-        )
+            )
+        } else if (updateState is UpdateState.Checking || updateState is UpdateState.UpToDate || updateState is UpdateState.Error) {
+            val isChecking = updateState is UpdateState.Checking
+            val errorMessage = (updateState as? UpdateState.Error)?.message
+            AlertDialog(
+                onDismissRequest = { showUpdateDialog = false },
+                title = { Text("检查更新") },
+                text = {
+                    when {
+                        isChecking -> Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(modifier = Modifier.size(22.dp))
+                            Spacer(Modifier.width(12.dp))
+                            Text("正在检查 GitHub Release…")
+                        }
+                        errorMessage != null -> Text(errorMessage)
+                        else -> Text("当前已是最新版本 v${BuildConfig.VERSION_NAME}。")
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        enabled = !isChecking,
+                        onClick = { showUpdateDialog = false }
+                    ) { Text("知道了") }
+                }
+            )
+        }
     }
 
     if (showInstallConfirmation) {

@@ -55,7 +55,8 @@ fun SettingsScreen(
     onNavigateToMood: () -> Unit,
     onNavigateToLabels: () -> Unit,
     onBackupSettingsClick: () -> Unit,
-    onWebDavSettingsClick: () -> Unit
+    onWebDavSettingsClick: () -> Unit,
+    onCheckUpdate: () -> Unit
 ) {
     val context = LocalContext.current
     val pushPlusHelper = remember { com.memoriabox.utils.NotificationHelper(application) }
@@ -206,6 +207,21 @@ fun SettingsScreen(
         
         SettingsSectionTitle("关于", "版本和应用信息")
         
+        val updateSummary = when (val state = updateState) {
+            is UpdateState.Checking -> "正在检查 GitHub Release…"
+            is UpdateState.Available -> "发现新版本 v${state.info.versionName}"
+            is UpdateState.Downloading -> "正在下载 v${state.info.versionName}：${state.progress}%"
+            is UpdateState.Ready -> "v${state.info.versionName} 已下载并完成校验"
+            is UpdateState.UpToDate -> "当前已是最新版本"
+            is UpdateState.Error -> state.message
+            UpdateState.Idle -> "检查官方 GitHub Release 更新"
+        }
+        SettingsItem(
+            icon = Icons.Default.SystemUpdate,
+            title = "检查更新",
+            description = updateSummary,
+            onClick = onCheckUpdate
+        )
         SettingsItem(
             icon = Icons.Default.Info,
             title = "关于",
@@ -224,40 +240,10 @@ fun SettingsScreen(
                     Text("念记 是一个本地优先的日子、纪念日、待办和照片记录工具。", style = MaterialTheme.typography.bodyMedium)
                     Text("数据默认保存在本机，可通过备份和 WebDAV 功能进行迁移或同步。", style = MaterialTheme.typography.bodyMedium)
                     Text("著名木羽制作", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-                    HorizontalDivider()
-                    Text(
-                        text = when (val state = updateState) {
-                            is UpdateState.Checking -> "正在检查 GitHub Release…"
-                            is UpdateState.Available -> "发现 v${state.info.versionName}，等待选择是否下载"
-                            is UpdateState.Downloading -> "正在下载 v${state.info.versionName}：${state.progress}%"
-                            is UpdateState.Ready -> "v${state.info.versionName} 已下载并完成校验"
-                            is UpdateState.UpToDate -> "当前已是最新版本"
-                            is UpdateState.Error -> state.message
-                            UpdateState.Idle -> "可从官方 GitHub Release 检查更新"
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (updateState is UpdateState.Error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    enabled = updateState !is UpdateState.Checking && updateState !is UpdateState.Downloading,
-                    onClick = {
-                        when (val state = updateState) {
-                            is UpdateState.Error -> UpdateManager.retry(context, state.info)
-                            else -> UpdateManager.check(context, manual = true)
-                        }
-                    }
-                ) {
-                    Text(if (updateState is UpdateState.Error) "重试" else "检查更新")
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    showAboutDialog = false
-                    UpdateManager.resetTransientState()
-                }) { Text("知道了") }
+                TextButton(onClick = { showAboutDialog = false }) { Text("知道了") }
             }
         )
     }

@@ -36,6 +36,12 @@ object UpdateManager {
         .callTimeout(10, TimeUnit.SECONDS)
         .build()
 
+    @Volatile
+    private var activeCall: okhttp3.Call? = null
+
+    @Volatile
+    private var downloadCancelled = false
+
     private val mutableState = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val state: StateFlow<UpdateState> = mutableState.asStateFlow()
 
@@ -64,12 +70,18 @@ object UpdateManager {
             check(context, manual = true)
             return
         }
-        scope.launch { downloadAndVerify(context.applicationContext, info) }
+        if (mutableState.value is UpdateState.Downloading) return
+        UpdateDownloadService.start(context.applicationContext, info)
     }
 
     fun download(context: Context, info: UpdateInfo) {
         if (mutableState.value is UpdateState.Downloading) return
-        scope.launch { downloadAndVerify(context.applicationContext, info) }
+        UpdateDownloadService.start(context.applicationContext, info)
+    }
+
+    fun cancelActiveDownload() {
+        downloadCancelled = true
+        activeCall?.cancel()
     }
 
     fun resetTransientState() {
@@ -130,7 +142,8 @@ object UpdateManager {
         )
     }
 
-    private suspend fun downloadAndVerify(context: Context, info: UpdateInfo) {
+    internal suspend fun executeDownload(context: Context, info: UpdateInfo) {
+        downloadCancelled = false
         val updateDir = File(context.filesDir, "updates").apply { mkdirs() }
         val destination = File(updateDir, "MemoriaBox-${info.versionName}.apk")
         if (destination.isFile && UpdateVerifier.verify(context, destination, info).isSuccess) {
@@ -148,6 +161,10 @@ object UpdateManager {
         mutableState.value = UpdateState.Downloading(info, progressFromPart(temporary, info.apkSize))
         val directResult = runCatching { download(info.apkUrl, destination, info) }
         if (directResult.isFailure) {
+            if (downloadCancelled) {
+                mutableState.value = UpdateState.Available(info)
+                return
+            }
             val mirror = fastestMirror(info.apkUrl) ?: run {
                 temporary.delete()
                 destination.delete()
@@ -158,9 +175,19 @@ object UpdateManager {
                 .onFailure { error ->
                     temporary.delete()
                     destination.delete()
-                    mutableState.value = UpdateState.Error(error.message ?: "镜像下载失败", info)
+                    if (downloadCancelled) {
+                        mutableState.value = UpdateState.Available(info)
+                    } else {
+                        mutableState.value = UpdateState.Error(error.message ?: "镜像下载失败", info)
+                    }
                     return
                 }
+        }
+        if (downloadCancelled) {
+            temporary.delete()
+            destination.delete()
+            mutableState.value = UpdateState.Available(info)
+            return
         }
         UpdateVerifier.verify(context, destination, info)
             .onSuccess { mutableState.value = UpdateState.Ready(info, destination.absolutePath) }
@@ -182,33 +209,39 @@ object UpdateManager {
             requestBuilder.header("Range", "bytes=$resumeFrom-")
         }
         val request = requestBuilder.build()
-        client.newCall(request).execute().use { response ->
-            require(response.isSuccessful || response.code == 206) { "下载失败：HTTP ${response.code}" }
-            val body = response.body ?: error("下载内容为空")
-            val resumed = resumeFrom > 0 && response.code == 206
-            val total = when {
-                resumed -> (resumeFrom + body.contentLength()).takeIf { it > resumeFrom } ?: info.apkSize
-                else -> body.contentLength().takeIf { it > 0 } ?: info.apkSize
-            }
-            body.byteStream().use { input ->
-                FileOutputStream(temporary, resumed).use { output ->
-                    val buffer = ByteArray(64 * 1024)
-                    var downloaded = resumeFrom
-                    var lastProgress = -1
-                    while (true) {
-                        val count = input.read(buffer)
-                        if (count < 0) break
-                        if (count == 0) continue
-                        output.write(buffer, 0, count)
-                        downloaded += count
-                        val progress = if (total > 0) ((downloaded * 100) / total).toInt().coerceIn(0, 99) else 0
-                        if (progress != lastProgress) {
-                            lastProgress = progress
-                            mutableState.value = UpdateState.Downloading(info, progress)
+        val call = client.newCall(request)
+        activeCall = call
+        try {
+            call.execute().use { response ->
+                require(response.isSuccessful || response.code == 206) { "下载失败：HTTP ${response.code}" }
+                val body = response.body ?: error("下载内容为空")
+                val resumed = resumeFrom > 0 && response.code == 206
+                val total = when {
+                    resumed -> (resumeFrom + body.contentLength()).takeIf { it > resumeFrom } ?: info.apkSize
+                    else -> body.contentLength().takeIf { it > 0 } ?: info.apkSize
+                }
+                body.byteStream().use { input ->
+                    FileOutputStream(temporary, resumed).use { output ->
+                        val buffer = ByteArray(64 * 1024)
+                        var downloaded = resumeFrom
+                        var lastProgress = -1
+                        while (true) {
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            if (count == 0) continue
+                            output.write(buffer, 0, count)
+                            downloaded += count
+                            val progress = if (total > 0) ((downloaded * 100) / total).toInt().coerceIn(0, 99) else 0
+                            if (progress != lastProgress) {
+                                lastProgress = progress
+                                mutableState.value = UpdateState.Downloading(info, progress)
+                            }
                         }
                     }
                 }
             }
+        } finally {
+            activeCall = null
         }
         require(temporary.length() > 0) { "下载内容为空" }
         destination.delete()

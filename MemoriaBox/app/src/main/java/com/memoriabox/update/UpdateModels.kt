@@ -1,5 +1,6 @@
 package com.memoriabox.update
 
+import org.json.JSONObject
 import java.util.Locale
 
 data class UpdateInfo(
@@ -45,6 +46,7 @@ object UpdateFormat {
             ?.lowercase(Locale.US)
 
     fun mirrorUrls(originalUrl: String): List<String> = listOf(
+        "https://api.gitproxy.dev/$originalUrl",
         "https://ghfast.top/$originalUrl",
         "https://gh-proxy.com/$originalUrl",
         "https://github.moeyy.xyz/$originalUrl",
@@ -56,4 +58,31 @@ object UpdateFormat {
         .substringBefore('-')
         .split('.')
         .map { part -> part.takeWhile(Char::isDigit).toIntOrNull() ?: 0 }
+}
+
+object UpdateInfoJson {
+    fun toJson(info: UpdateInfo): String = JSONObject().apply {
+        put("versionName", info.versionName)
+        put("releaseName", info.releaseName)
+        put("releaseNotes", info.releaseNotes)
+        put("publishedAt", info.publishedAt)
+        put("apkName", info.apkName)
+        put("apkUrl", info.apkUrl)
+        put("apkSize", info.apkSize)
+        put("sha256", info.sha256)
+    }.toString()
+
+    fun fromJson(json: String): UpdateInfo? = runCatching {
+        val o = JSONObject(json)
+        UpdateInfo(
+            versionName = o.getString("versionName"),
+            releaseName = o.getString("releaseName"),
+            releaseNotes = o.getString("releaseNotes"),
+            publishedAt = o.getString("publishedAt"),
+            apkName = o.getString("apkName"),
+            apkUrl = o.getString("apkUrl"),
+            apkSize = o.getLong("apkSize"),
+            sha256 = o.getString("sha256")
+        )
+    }.getOrNull()
 }
