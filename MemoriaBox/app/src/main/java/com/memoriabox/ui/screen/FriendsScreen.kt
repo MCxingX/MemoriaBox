@@ -24,8 +24,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -38,7 +36,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -52,11 +49,11 @@ import androidx.compose.ui.unit.dp
 import com.memoriabox.data.model.Friend
 import com.memoriabox.ui.theme.MemoriaDesign
 import com.memoriabox.viewmodel.createFriendViewModel
+import com.memoriabox.utils.AnnualDateUtils
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -224,8 +221,12 @@ private fun EmptyFriendsCard(onAdd: () -> Unit) {
 @Composable
 private fun FriendEditorDialog(friend: Friend?, onDismiss: () -> Unit, onSave: (String, Long?) -> Unit) {
     var name by remember(friend?.id) { mutableStateOf(friend?.name ?: "") }
-    var birthday by remember(friend?.id) { mutableStateOf(friend?.birthdayDate) }
-    var showDatePicker by remember { mutableStateOf(false) }
+    val initialBirthday = remember(friend?.id) {
+        friend?.birthdayDate?.let { timestamp -> Calendar.getInstance().apply { timeInMillis = timestamp } }
+    }
+    var month by remember(friend?.id) { mutableStateOf(initialBirthday?.get(Calendar.MONTH)?.plus(1)?.toString() ?: "") }
+    var day by remember(friend?.id) { mutableStateOf(initialBirthday?.get(Calendar.DAY_OF_MONTH)?.toString() ?: "") }
+    var year by remember(friend?.id) { mutableStateOf(initialBirthday?.get(Calendar.YEAR)?.toString() ?: "") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -233,33 +234,36 @@ private fun FriendEditorDialog(friend: Friend?, onDismiss: () -> Unit, onSave: (
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("好友名称") }, singleLine = true)
-                OutlinedButton(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) {
-                    Text(birthday?.let { "生日：${formatBirthday(it)}" } ?: "选择生日（可选）")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(value = month, onValueChange = { month = it.filter(Char::isDigit).take(2) }, label = { Text("月份*") }, modifier = Modifier.weight(1f), singleLine = true)
+                    OutlinedTextField(value = day, onValueChange = { day = it.filter(Char::isDigit).take(2) }, label = { Text("日期*") }, modifier = Modifier.weight(1f), singleLine = true)
                 }
-                if (birthday != null) {
-                    TextButton(onClick = { birthday = null }) { Text("清除生日") }
-                }
+                OutlinedTextField(value = year, onValueChange = { year = it.filter(Char::isDigit).take(4) }, label = { Text("年份（可选）") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                if (friend?.birthdayDate != null) TextButton(onClick = { month = ""; day = ""; year = "" }) { Text("清除生日") }
             }
         },
         confirmButton = {
-            TextButton(onClick = { onSave(name, birthday) }, enabled = name.isNotBlank()) { Text("保存") }
+                TextButton(onClick = { onSave(name, birthdayTimestamp(year.toIntOrNull(), month.toIntOrNull(), day.toIntOrNull())) }, enabled = name.isNotBlank() && ((month.isBlank() && day.isBlank()) || birthdayTimestamp(year.toIntOrNull(), month.toIntOrNull(), day.toIntOrNull()) != null)) { Text("保存") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
     )
 
-    if (showDatePicker) {
-        val state = rememberDatePickerState(initialSelectedDateMillis = birthday ?: System.currentTimeMillis())
-        DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    birthday = state.selectedDateMillis
-                    showDatePicker = false
-                }) { Text("确定") }
-            },
-            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("取消") } }
-        ) { DatePicker(state = state) }
-    }
+}
+
+fun birthdayTimestamp(year: Int?, month: Int?, day: Int?): Long? {
+    if (month == null || day == null || month !in 1..12 || day !in 1..31) return null
+    return runCatching {
+        Calendar.getInstance().apply {
+            setLenient(false)
+            set(Calendar.YEAR, year ?: Calendar.getInstance().get(Calendar.YEAR))
+            set(Calendar.MONTH, month - 1)
+            set(Calendar.DAY_OF_MONTH, day)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+    }.getOrNull()
 }
 
 private fun friendBirthdayLabel(friend: Friend): String {
@@ -281,13 +285,7 @@ private fun nextBirthdayDistance(birthday: Long): Int {
         set(Calendar.MILLISECOND, 0)
     }
     val source = Calendar.getInstance().apply { timeInMillis = birthday }
-    val next = Calendar.getInstance().apply {
-        timeInMillis = today.timeInMillis
-        set(Calendar.MONTH, source.get(Calendar.MONTH))
-        set(Calendar.DAY_OF_MONTH, source.get(Calendar.DAY_OF_MONTH))
-    }
-    if (next.before(today)) next.add(Calendar.YEAR, 1)
-    return TimeUnit.MILLISECONDS.toDays(next.timeInMillis - today.timeInMillis).toInt()
+    return AnnualDateUtils.daysUntil(birthday, today.timeInMillis).toInt()
 }
 
 private fun formatBirthday(timestamp: Long): String = SimpleDateFormat("M月d日", Locale.getDefault()).format(Date(timestamp))

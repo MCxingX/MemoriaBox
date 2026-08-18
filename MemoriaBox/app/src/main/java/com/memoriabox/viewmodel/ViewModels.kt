@@ -507,20 +507,7 @@ private fun friendBirthdaySortBucket(friend: Friend): Int {
 
 private fun friendNextBirthdayDistance(friend: Friend): Int {
     val birthday = friend.birthdayDate ?: return Int.MAX_VALUE
-    val today = Calendar.getInstance().apply {
-        set(Calendar.HOUR_OF_DAY, 0)
-        set(Calendar.MINUTE, 0)
-        set(Calendar.SECOND, 0)
-        set(Calendar.MILLISECOND, 0)
-    }
-    val source = Calendar.getInstance().apply { timeInMillis = birthday }
-    val next = Calendar.getInstance().apply {
-        timeInMillis = today.timeInMillis
-        set(Calendar.MONTH, source.get(Calendar.MONTH))
-        set(Calendar.DAY_OF_MONTH, source.get(Calendar.DAY_OF_MONTH))
-    }
-    if (next.before(today)) next.add(Calendar.YEAR, 1)
-    return TimeUnit.MILLISECONDS.toDays(next.timeInMillis - today.timeInMillis).toInt()
+    return com.memoriabox.utils.AnnualDateUtils.daysUntil(birthday).toInt()
 }
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)

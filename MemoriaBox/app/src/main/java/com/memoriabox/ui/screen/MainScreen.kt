@@ -21,7 +21,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
-import com.memoriabox.BuildConfig
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.*
 import androidx.navigation.compose.rememberNavController
@@ -37,6 +36,7 @@ import com.memoriabox.update.ApkInstaller
 import com.memoriabox.update.UpdateInfo
 import com.memoriabox.update.UpdateManager
 import com.memoriabox.update.UpdateState
+import com.memoriabox.utils.installedAppVersion
 import com.memoriabox.utils.AppSettings
 import com.memoriabox.utils.MonthlySummaryHelper
 import com.memoriabox.utils.NotificationHelper
@@ -349,16 +349,8 @@ fun MainScreen(
                     application = application,
                     currentThemeMode = currentThemeMode,
                     onThemeModeChange = onThemeModeChange,
-                    onNavigateToStatistics = { navController.navigate(Screen.Statistics.route) },
-                    onNavigateToPhotoWall = { navController.navigate(Screen.PhotoWall.route) },
-                    onNavigateToExport = { navController.navigate(Screen.Export.route) },
-                    onNavigateToSyncStatus = { navController.navigate(Screen.SyncStatus.route) },
-                    onNavigateToDayTools = { navController.navigate(Screen.DayTools.route) },
                     onNavigateToCustomization = { navController.navigate(Screen.CustomizationSettings.route) },
                     onNavigateToFriends = { navController.navigate(Screen.Friends.route) },
-                    onNavigateToEchoTime = { navController.navigate(Screen.EchoTime.route) },
-                    onNavigateToMood = { navController.navigate(Screen.Mood.route) },
-                    onNavigateToLabels = { navController.navigate(Screen.Labels.route) },
                     onBackupSettingsClick = { navController.navigate(Screen.BackupSettings.route) },
                     onWebDavSettingsClick = { navController.navigate(Screen.WebDavSettings.route) },
                     onCheckUpdate = {
@@ -398,15 +390,6 @@ fun MainScreen(
             }
             composable(Screen.SyncStatus.route) {
                 SyncStatusScreen(application)
-            }
-            composable(Screen.DayTools.route) {
-                DayToolsScreen(
-                    application = application,
-                    onNavigateBack = { navController.popBackStack() },
-                    onNavigateToCalendar = { navController.navigate(Screen.Calendar.route) },
-                    onNavigateToPhotoWall = { navController.navigate(Screen.PhotoWall.route) },
-                    onNavigateToExport = { navController.navigate(Screen.Export.route) }
-                )
             }
             composable(Screen.CustomizationSettings.route) {
                 CustomizationSettingsScreen(
@@ -588,7 +571,7 @@ fun MainScreen(
                             Text("正在检查 GitHub Release…")
                         }
                         errorMessage != null -> Text(errorMessage)
-                        else -> Text("当前已是最新版本 v${BuildConfig.VERSION_NAME}。")
+                        else -> Text("当前已是最新版本 v${context.installedAppVersion().name}。")
                     }
                 },
                 confirmButton = {

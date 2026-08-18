@@ -20,13 +20,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.memoriabox.ui.utils.rememberAdaptiveUiSize
 import com.memoriabox.utils.AppSettings
 import com.memoriabox.utils.ImageImportUtils
-import com.memoriabox.BuildConfig
+import com.memoriabox.utils.installedAppVersion
 
 @Composable
 fun SettingsList(
@@ -34,6 +35,8 @@ fun SettingsList(
     onWebDavSettingsClick: () -> Unit = {},
     onDiarySettingsClick: () -> Unit = {}
 ) {
+    val context = LocalContext.current
+    val installedVersion = remember(context) { context.installedAppVersion() }
     Column(modifier = Modifier.fillMaxSize()) {
         SettingsItem(
             icon = Icons.Default.Backup,
@@ -61,7 +64,7 @@ fun SettingsList(
         SettingsItem(
             icon = Icons.Default.Info,
             title = "关于",
-            description = "版本 ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
+            description = "版本 ${installedVersion.name} (${installedVersion.code})"
         )
     }
 }

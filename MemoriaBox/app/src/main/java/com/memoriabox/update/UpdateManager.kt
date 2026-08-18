@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import com.memoriabox.BuildConfig
+import com.memoriabox.utils.installedAppVersion
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -58,7 +59,7 @@ object UpdateManager {
             if (!manual) markAutoCheck(context)
             runCatching { fetchLatestRelease() }
                 .onSuccess { info ->
-                    if (UpdateFormat.isNewer(info.versionName, BuildConfig.VERSION_NAME)) {
+                    if (UpdateFormat.isNewer(info.versionName, context.installedAppVersion().name)) {
                         mutableState.value = UpdateState.Available(info)
                     } else {
                         mutableState.value = UpdateState.UpToDate(manual)

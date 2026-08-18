@@ -27,7 +27,6 @@ import com.memoriabox.ui.screen.components.*
 import com.memoriabox.ui.utils.AdaptiveUiSize
 import com.memoriabox.ui.utils.rememberAdaptiveUiSize
 import com.memoriabox.data.model.*
-import com.memoriabox.BuildConfig
 import com.memoriabox.ui.theme.AppThemeMode
 import com.memoriabox.ui.theme.AppThemeGroup
 import com.memoriabox.ui.theme.NianJiLogoMark
@@ -36,6 +35,7 @@ import com.memoriabox.ui.theme.group
 import com.memoriabox.update.UpdateManager
 import com.memoriabox.update.UpdateState
 import com.memoriabox.utils.NotificationHelper
+import com.memoriabox.utils.installedAppVersion
 import com.memoriabox.viewmodel.*
 import java.util.Date
 
@@ -44,21 +44,14 @@ fun SettingsScreen(
     application: Application,
     currentThemeMode: AppThemeMode,
     onThemeModeChange: (AppThemeMode) -> Unit,
-    onNavigateToStatistics: () -> Unit,
-    onNavigateToPhotoWall: () -> Unit,
-    onNavigateToExport: () -> Unit,
-    onNavigateToSyncStatus: () -> Unit,
-    onNavigateToDayTools: () -> Unit,
     onNavigateToCustomization: () -> Unit,
     onNavigateToFriends: () -> Unit,
-    onNavigateToEchoTime: () -> Unit,
-    onNavigateToMood: () -> Unit,
-    onNavigateToLabels: () -> Unit,
     onBackupSettingsClick: () -> Unit,
     onWebDavSettingsClick: () -> Unit,
     onCheckUpdate: () -> Unit
 ) {
     val context = LocalContext.current
+    val installedVersion = remember(context) { context.installedAppVersion() }
     val pushPlusHelper = remember { com.memoriabox.utils.NotificationHelper(application) }
     var pushPlusToken by remember { mutableStateOf(pushPlusHelper.getPushPlusToken()) }
     var pushPlusEnabled by remember { mutableStateOf(pushPlusHelper.isPushPlusEnabled()) }
@@ -68,7 +61,6 @@ fun SettingsScreen(
     var showMonthlySummarySettings by remember { mutableStateOf(false) }
     var showUpcomingSettings by remember { mutableStateOf(false) }
     var showHolidaySettings by remember { mutableStateOf(false) }
-    var showMoreToolsDialog by remember { mutableStateOf(false) }
     val updateState by UpdateManager.state.collectAsState()
     val adaptiveUi = rememberAdaptiveUiSize()
 
@@ -83,12 +75,6 @@ fun SettingsScreen(
         ThemeModeCard(currentThemeMode = currentThemeMode, onThemeModeChange = onThemeModeChange)
         SettingsSectionTitle("常用", "每天会用到的功能放在这里")
         SettingsItem(
-            icon = Icons.Default.AutoAwesome,
-            title = "日子工具箱",
-            description = "批量导入、搜索筛选、归档建议和分享入口",
-            onClick = onNavigateToDayTools
-        )
-        SettingsItem(
             icon = Icons.Default.Palette,
             title = "个性化设置",
             description = "自定义页面背景、固定每日语录",
@@ -99,12 +85,6 @@ fun SettingsScreen(
             title = "好友管理",
             description = "生日按一个月内临近优先排序，全部好友都会保留",
             onClick = onNavigateToFriends
-        )
-        SettingsItem(
-            icon = Icons.Default.MoreHoriz,
-            title = "更多工具",
-            description = "统计、照片墙、导出和同步",
-            onClick = { showMoreToolsDialog = true }
         )
 
         SettingsSectionTitle("记录和数据", "备份、同步、日记和月度总结")
@@ -224,7 +204,7 @@ fun SettingsScreen(
         SettingsItem(
             icon = Icons.Default.Info,
             title = "关于",
-            description = "版本 ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) · 念记",
+            description = "版本 ${installedVersion.name} (${installedVersion.code}) · 念记",
             onClick = { showAboutDialog = true }
         )
     }
@@ -235,7 +215,7 @@ fun SettingsScreen(
             title = { Text("关于 念记") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("版本：${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})", style = MaterialTheme.typography.bodyMedium)
+                    Text("版本：${installedVersion.name} (${installedVersion.code})", style = MaterialTheme.typography.bodyMedium)
                     Text("念记 是一个本地优先的日子、纪念日、待办和照片记录工具。", style = MaterialTheme.typography.bodyMedium)
                     Text("数据默认保存在本机，可通过备份和 WebDAV 功能进行迁移或同步。", style = MaterialTheme.typography.bodyMedium)
                     Text("著名木羽制作", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
@@ -258,114 +238,6 @@ fun SettingsScreen(
     }
     if (showHolidaySettings) {
         HolidaySettingsDialog(onDismiss = { showHolidaySettings = false })
-    }
-    if (showMoreToolsDialog) {
-        MoreToolsDialog(
-            onDismiss = { showMoreToolsDialog = false },
-            onNavigateToStatistics = {
-                showMoreToolsDialog = false
-                onNavigateToStatistics()
-            },
-            onNavigateToPhotoWall = {
-                showMoreToolsDialog = false
-                onNavigateToPhotoWall()
-            },
-            onNavigateToExport = {
-                showMoreToolsDialog = false
-                onNavigateToExport()
-            },
-            onNavigateToSyncStatus = {
-                showMoreToolsDialog = false
-                onNavigateToSyncStatus()
-            },
-            onNavigateToEchoTime = {
-                showMoreToolsDialog = false
-                onNavigateToEchoTime()
-            },
-            onNavigateToMood = {
-                showMoreToolsDialog = false
-                onNavigateToMood()
-            },
-            onNavigateToLabels = {
-                showMoreToolsDialog = false
-                onNavigateToLabels()
-            }
-        )
-    }
-}
-
-@Composable
-fun MoreToolsDialog(
-    onDismiss: () -> Unit,
-    onNavigateToStatistics: () -> Unit,
-    onNavigateToPhotoWall: () -> Unit,
-    onNavigateToExport: () -> Unit,
-    onNavigateToSyncStatus: () -> Unit,
-    onNavigateToEchoTime: () -> Unit,
-    onNavigateToMood: () -> Unit,
-    onNavigateToLabels: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("更多工具") },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 460.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                MoreToolActionRow(icon = Icons.Default.History, title = "时光回响", description = "往年今日、历史照片和重要节点", onClick = onNavigateToEchoTime)
-                MoreToolActionRow(icon = Icons.Default.Mood, title = "心情打卡", description = "记录每日心情、月度趋势和年度像素图", onClick = onNavigateToMood)
-                MoreToolActionRow(icon = Icons.Default.Label, title = "标签管理", description = "给日子添加标签，方便分类筛选", onClick = onNavigateToLabels)
-                MoreToolActionRow(icon = Icons.Default.BarChart, title = "数据统计", description = "查看事件统计和趋势", onClick = onNavigateToStatistics)
-                MoreToolActionRow(icon = Icons.Default.PhotoLibrary, title = "照片墙", description = "查看所有事件照片", onClick = onNavigateToPhotoWall)
-                MoreToolActionRow(icon = Icons.Default.Share, title = "导出分享", description = "导出数据和分享图片", onClick = onNavigateToExport)
-                MoreToolActionRow(icon = Icons.Default.CloudSync, title = "多设备同步", description = "查看同步状态和建议", onClick = onNavigateToSyncStatus)
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("关闭") }
-        }
-    )
-}
-
-@Composable
-fun MoreToolActionRow(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    title: String,
-    description: String,
-    onClick: () -> Unit
-) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 56.dp)
-            .clip(MaterialTheme.shapes.large)
-            .clickable(onClick = onClick),
-        color = Color.Transparent
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Surface(
-                modifier = Modifier.size(40.dp),
-                shape = MaterialTheme.shapes.medium,
-                color = MaterialTheme.colorScheme.primaryContainer
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(icon, contentDescription = title, tint = MaterialTheme.colorScheme.onPrimaryContainer)
-                }
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(title, style = MaterialTheme.typography.titleSmall)
-                Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.outline)
-        }
     }
 }
 
@@ -502,4 +374,3 @@ fun SettingsSectionTitle(title: String, description: String) {
         Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
-

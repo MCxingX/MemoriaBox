@@ -5,7 +5,6 @@ import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.pm.PackageInfoCompat
-import com.memoriabox.BuildConfig
 import java.io.File
 import java.io.FileInputStream
 import java.security.MessageDigest
@@ -39,11 +38,11 @@ object UpdateVerifier {
         require(
             UpdateFormat.normalizeVersion(archiveVersionName) == UpdateFormat.normalizeVersion(info.versionName)
         ) { "更新包版本与 GitHub Release 不匹配" }
-        require(PackageInfoCompat.getLongVersionCode(packageInfo) > BuildConfig.VERSION_CODE.toLong()) {
+        val currentInfo = currentPackageInfo(context.packageManager, context.packageName)
+        require(PackageInfoCompat.getLongVersionCode(packageInfo) > PackageInfoCompat.getLongVersionCode(currentInfo)) {
             "更新包版本码未高于当前版本"
         }
 
-        val currentInfo = currentPackageInfo(context.packageManager, context.packageName)
         require(signatureDigests(packageInfo) == signatureDigests(currentInfo)) { "更新包签名与当前应用不一致" }
     }
 

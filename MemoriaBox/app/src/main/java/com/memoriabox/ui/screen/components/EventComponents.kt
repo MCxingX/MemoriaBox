@@ -9,6 +9,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -35,6 +36,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.consume
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
@@ -666,6 +668,24 @@ fun CalendarViewScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .pointerInput(currentMonthYear) {
+                        var dragDistance = 0f
+                        detectHorizontalDragGestures(
+                            onHorizontalDrag = { change, amount ->
+                                change.consume()
+                                dragDistance += amount
+                            },
+                            onDragEnd = {
+                                if (abs(dragDistance) >= 36f) {
+                                    val updated = cal.clone() as Calendar
+                                    updated.add(Calendar.MONTH, if (dragDistance < 0f) 1 else -1)
+                                    currentMonthYear = "${updated.get(Calendar.YEAR)}-${updated.get(Calendar.MONTH) + 1}"
+                                }
+                                dragDistance = 0f
+                            },
+                            onDragCancel = { dragDistance = 0f }
+                        )
+                    }
                     .background(Brush.linearGradient(listOf(themeTokens.calendarSelected, themeTokens.calendarToday, themeTokens.anniversaryMarker)))
                     .padding(horizontal = 16.dp, vertical = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1643,22 +1663,7 @@ fun calculateDays(dateMillis: Long, type: EventType, lunar: String? = null): Lon
             lunar?.let { lunarValue ->
                 LunarDateUtils.daysUntilNextOccurrence(lunarValue, now)?.let { return it }
             }
-            val eventCal = Calendar.getInstance().apply { timeInMillis = dateMillis }
-            val todayCal = Calendar.getInstance().apply {
-                set(Calendar.HOUR_OF_DAY, 0)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }
-            val targetCal = todayCal.clone() as Calendar
-            val eventMonth = eventCal.get(Calendar.MONTH)
-            val eventDay = eventCal.get(Calendar.DAY_OF_MONTH)
-            targetCal.set(Calendar.MONTH, eventMonth)
-            targetCal.set(Calendar.DAY_OF_MONTH, eventDay)
-            if (targetCal.before(todayCal)) {
-                targetCal.add(Calendar.YEAR, 1)
-            }
-            TimeUnit.MILLISECONDS.toDays(targetCal.timeInMillis - todayCal.timeInMillis)
+            com.memoriabox.utils.AnnualDateUtils.daysUntil(dateMillis, now)
         }
         EventType.TODO -> 0
     }

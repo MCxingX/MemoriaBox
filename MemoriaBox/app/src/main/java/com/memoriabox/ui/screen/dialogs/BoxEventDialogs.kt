@@ -92,12 +92,13 @@ fun BoxDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                if (existingBox != null) {
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
                     Column(
                         modifier = Modifier.weight(1f),
                         horizontalAlignment = Alignment.CenterHorizontally
@@ -146,14 +147,14 @@ fun BoxDialog(
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
-                }
+                    }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                     OutlinedButton(
                         onClick = { showEmojiPicker = true },
                         modifier = Modifier.weight(1f)
@@ -177,6 +178,7 @@ fun BoxDialog(
                         Icon(Icons.Default.Palette, contentDescription = null)
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("选择颜色")
+                    }
                     }
                 }
             }
@@ -822,12 +824,12 @@ fun EventDialog(
         EventImageCropDialog(
             sourceUri = uri,
             onDismiss = { pendingCropUri = null },
-            onSave = { scale, offsetX, offsetY ->
-                backgroundUri = ImageImportUtils.cropImageToPrivateStorage(
+                onSave = { scale, offsetX, offsetY ->
+                    backgroundUri = ImageImportUtils.cropImageToPrivateStorage(
                     context = context,
                     sourceUri = uri,
                     folder = "event_images",
-                    cropAspectRatio = 16f / 9f,
+                    cropAspectRatio = cardCropAspectRatio(cardTemplate),
                     scale = scale,
                     offsetX = offsetX,
                     offsetY = offsetY
@@ -841,6 +843,7 @@ fun EventDialog(
 @Composable
 private fun EventImageCropDialog(
     sourceUri: Uri,
+    cropAspectRatio: Float,
     onDismiss: () -> Unit,
     onSave: (scale: Float, offsetX: Float, offsetY: Float) -> Unit
 ) {
@@ -853,35 +856,42 @@ private fun EventImageCropDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("拖动图片调整位置，双指缩放后保存。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(220.dp)
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .pointerInput(sourceUri) {
-                            detectTransformGestures { _, pan, zoom, _ ->
-                                scale = (scale * zoom).coerceIn(1f, 3.5f)
-                                offsetX = (offsetX + pan.x / 180f).coerceIn(-1f, 1f)
-                                offsetY = (offsetY + pan.y / 180f).coerceIn(-1f, 1f)
-                            }
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    AsyncImage(
-                        model = sourceUri,
-                        contentDescription = "裁剪预览",
-                        contentScale = ContentScale.Crop,
+                Text("卡片裁剪比例：${cardCropAspectLabel(cropAspectRatio)}", style = MaterialTheme.typography.labelLarge)
+                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                    val previewWidth = maxWidth
+                    val previewHeight = previewWidth / cropAspectRatio
+                    Text("保存区域约 ${previewWidth.value.toInt()}dp × ${previewHeight.value.toInt()}dp", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Box(
                         modifier = Modifier
-                            .matchParentSize()
-                            .graphicsLayer {
-                                scaleX = scale
-                                scaleY = scale
-                                translationX = offsetX * 120f
-                                translationY = offsetY * 120f
-                            }
-                    )
-                    Box(modifier = Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.08f)))
+                            .fillMaxWidth()
+                            .aspectRatio(cropAspectRatio)
+                            .heightIn(max = 240.dp)
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .pointerInput(sourceUri) {
+                                detectTransformGestures { _, pan, zoom, _ ->
+                                    scale = (scale * zoom).coerceIn(1f, 3.5f)
+                                    offsetX = (offsetX + pan.x / 180f).coerceIn(-1f, 1f)
+                                    offsetY = (offsetY + pan.y / 180f).coerceIn(-1f, 1f)
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AsyncImage(
+                            model = sourceUri,
+                            contentDescription = "裁剪预览",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .matchParentSize()
+                                .graphicsLayer {
+                                    scaleX = scale
+                                    scaleY = scale
+                                    translationX = offsetX * 120f
+                                    translationY = offsetY * 120f
+                                }
+                        )
+                        Box(modifier = Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.08f)))
+                    }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = {
@@ -901,6 +911,22 @@ private fun EventImageCropDialog(
             TextButton(onClick = onDismiss) { Text("取消") }
         }
     )
+}
+
+private fun cardCropAspectRatio(template: String): Float = when (template) {
+    "POSTER" -> 3f / 4f
+    "GLASS" -> 16f / 7f
+    "SPLIT" -> 4f / 3f
+    "MINIMAL" -> 5f / 3f
+    else -> 16f / 9f
+}
+
+private fun cardCropAspectLabel(aspectRatio: Float): String = when {
+    aspectRatio == 3f / 4f -> "3:4"
+    aspectRatio == 16f / 7f -> "16:7"
+    aspectRatio == 4f / 3f -> "4:3"
+    aspectRatio == 5f / 3f -> "5:3"
+    else -> "16:9"
 }
 
 @Composable

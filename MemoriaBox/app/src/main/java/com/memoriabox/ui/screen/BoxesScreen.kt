@@ -727,6 +727,9 @@ private fun nextOccurrenceMillis(event: Event, nowMillis: Long): Long {
         LunarDateUtils.nextOccurrenceMillis(event.lunar, nowMillis)?.let { return it }
     }
     if (event.repeatYearly || event.type == EventType.BIRTHDAY || event.type == EventType.ANNIVERSARY) {
+        if (event.lunar.isNullOrBlank()) {
+            return com.memoriabox.utils.AnnualDateUtils.nextOccurrenceMillis(event.date, nowMillis)
+        }
         val now = Calendar.getInstance().apply { timeInMillis = nowMillis }
         val target = Calendar.getInstance().apply { timeInMillis = event.date }
         val next = Calendar.getInstance().apply {

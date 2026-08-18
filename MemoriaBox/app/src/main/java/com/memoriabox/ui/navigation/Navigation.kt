@@ -19,7 +19,6 @@ sealed class Screen(val route: String) {
     object Export : Screen("export")
     object Timeline : Screen("timeline")
     object SyncStatus : Screen("sync_status")
-    object DayTools : Screen("day_tools")
     object CustomizationSettings : Screen("customization_settings")
     object Friends : Screen("friends")
     object EchoTime : Screen("echo_time")

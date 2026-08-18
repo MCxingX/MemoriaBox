@@ -356,9 +356,13 @@ private fun FriendDetailEditDialog(
     onSave: (String, Long?, List<String>) -> Unit
 ) {
     var name by remember(friend.id) { mutableStateOf(friend.name) }
-    var birthday by remember(friend.id) { mutableStateOf(friend.birthdayDate) }
+    val initialBirthday = remember(friend.id) {
+        friend.birthdayDate?.let { timestamp -> Calendar.getInstance().apply { timeInMillis = timestamp } }
+    }
+    var month by remember(friend.id) { mutableStateOf(initialBirthday?.get(Calendar.MONTH)?.plus(1)?.toString() ?: "") }
+    var day by remember(friend.id) { mutableStateOf(initialBirthday?.get(Calendar.DAY_OF_MONTH)?.toString() ?: "") }
+    var year by remember(friend.id) { mutableStateOf(initialBirthday?.get(Calendar.YEAR)?.toString() ?: "") }
     var relationInput by remember(friend.id) { mutableStateOf(relations.joinToString("，")) }
-    var showDatePicker by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -366,12 +370,12 @@ private fun FriendDetailEditDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("好友名称") }, singleLine = true)
-                OutlinedButton(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) {
-                    Text(birthday?.let { "生日：${SimpleDateFormat("yyyy年M月d日", Locale.getDefault()).format(Date(it))}" } ?: "选择生日（可选）")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(value = month, onValueChange = { month = it.filter(Char::isDigit).take(2) }, label = { Text("月份*") }, modifier = Modifier.weight(1f), singleLine = true)
+                    OutlinedTextField(value = day, onValueChange = { day = it.filter(Char::isDigit).take(2) }, label = { Text("日期*") }, modifier = Modifier.weight(1f), singleLine = true)
                 }
-                if (birthday != null) {
-                    TextButton(onClick = { birthday = null }) { Text("清除生日") }
-                }
+                OutlinedTextField(value = year, onValueChange = { year = it.filter(Char::isDigit).take(4) }, label = { Text("年份（可选）") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                TextButton(onClick = { month = ""; day = ""; year = "" }) { Text("清除生日") }
                 OutlinedTextField(
                     value = relationInput,
                     onValueChange = { relationInput = it },
@@ -385,9 +389,9 @@ private fun FriendDetailEditDialog(
             TextButton(
                 onClick = {
                     val newRelations = relationInput.split(",", "，").map { it.trim() }.filter { it.isNotBlank() }
-                    onSave(name, birthday, newRelations)
+                    onSave(name, birthdayTimestamp(year.toIntOrNull(), month.toIntOrNull(), day.toIntOrNull()), newRelations)
                 },
-                enabled = name.isNotBlank()
+                enabled = name.isNotBlank() && ((month.isBlank() && day.isBlank()) || birthdayTimestamp(year.toIntOrNull(), month.toIntOrNull(), day.toIntOrNull()) != null)
             ) { Text("保存") }
         },
         dismissButton = {
@@ -395,19 +399,6 @@ private fun FriendDetailEditDialog(
         }
     )
 
-    if (showDatePicker) {
-        val state = rememberDatePickerState(initialSelectedDateMillis = birthday ?: System.currentTimeMillis())
-        DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    birthday = state.selectedDateMillis
-                    showDatePicker = false
-                }) { Text("确定") }
-            },
-            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("取消") } }
-        ) { DatePicker(state = state) }
-    }
 }
 
 @Composable
