@@ -28,11 +28,8 @@ class UpdateFormatTest {
     }
 
     @Test
-    fun createsHttpsMirrorCandidates() {
+    fun usesTheReleaseAssetUrlDirectly() {
         val urls = UpdateFormat.mirrorUrls("https://github.com/org/repo/releases/download/v1/app.apk")
-        assertTrue(urls.isNotEmpty())
-        assertTrue(urls.all { it.startsWith("https://") })
-        assertTrue(urls.first().startsWith("https://api.gitproxy.dev/"))
-        assertTrue(urls.any { it.startsWith("https://cdn.jsdelivr.net/") })
+        assertEquals(listOf("https://github.com/org/repo/releases/download/v1/app.apk"), urls)
     }
 }

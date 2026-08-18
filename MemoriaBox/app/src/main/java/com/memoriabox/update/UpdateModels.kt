@@ -45,16 +45,7 @@ object UpdateFormat {
             ?.value
             ?.lowercase(Locale.US)
 
-    fun mirrorUrls(originalUrl: String): List<String> = listOf(
-        "https://api.gitproxy.dev/$originalUrl",
-        "https://cdn.jsdelivr.net/gh/MCxingX/MemoriaBox@${releaseTagFrom(originalUrl)}/${assetNameFrom(originalUrl)}",
-        originalUrl
-    ).distinct()
-
-    private fun releaseTagFrom(url: String): String =
-        url.substringAfter("/download/").substringBefore('/')
-
-    private fun assetNameFrom(url: String): String = url.substringAfterLast('/')
+    fun mirrorUrls(originalUrl: String): List<String> = listOf(originalUrl)
 
     private fun versionParts(value: String): List<Int> = normalizeVersion(value)
         .substringBefore('-')
