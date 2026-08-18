@@ -1613,8 +1613,7 @@ private fun CalendarDayDetailDialog(
 
 @Composable
 fun LogFilterBar(
-    onFilterChange: (String) -> Unit,
-    onDateRangeChange: (Pair<Long, Long>?) -> Unit
+    onFilterChange: (String) -> Unit
 ) {
     var selectedFilter by remember { mutableStateOf("全部") }
     Row(

@@ -208,8 +208,7 @@ fun DiaryDetailDialog(
         title = {
             Text(
                 text = java.text.SimpleDateFormat("yyyy年M月d日", java.util.Locale.getDefault())
-                    .format(java.util.Date(diary.dateStart)),
-                color = Color.White
+                    .format(java.util.Date(diary.dateStart))
             )
         },
         text = {
@@ -284,15 +283,17 @@ fun DiaryDetailDialog(
             }
         },
         confirmButton = {
+            TextButton(onClick = onEdit) {
+                Text("编辑")
+            }
+        },
+        dismissButton = {
             Row {
-                TextButton(onClick = onEdit) {
-                    Text("编辑", color = Color.White)
-                }
                 TextButton(onClick = { showDeleteConfirm = true }) {
-                    Text("删除", color = Color(0xFFFF6B6B))
+                    Text("删除", color = MaterialTheme.colorScheme.error)
                 }
                 TextButton(onClick = onDismiss) {
-                    Text("关闭", color = Color.White)
+                    Text("关闭")
                 }
             }
         }
@@ -307,7 +308,7 @@ fun DiaryDetailDialog(
                 TextButton(onClick = {
                     showDeleteConfirm = false
                     onDelete()
-                }) { Text("删除", color = Color(0xFFFF6B6B)) }
+                }) { Text("删除", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) { Text("取消") }
@@ -539,28 +540,30 @@ fun DiaryEditorDialog(
             }
         },
         confirmButton = {
-            Row {
+            Button(
+                onClick = {
+                    onSave(
+                        selectedDateStart,
+                        content,
+                        mediaItems.mapIndexed { index, media -> media.copy(sortOrder = index) },
+                        backgroundUri
+                    )
+                    onDismiss()
+                },
+                enabled = content.trim().isNotEmpty() || mediaItems.isNotEmpty() || backgroundUri != null
+            ) {
+                Text("保存")
+            }
+        },
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (existingDiary != null) {
                     TextButton(onClick = { showDeleteConfirm = true }) {
-                        Text("删除", color = Color(0xFFFF6B6B))
+                        Text("删除", color = MaterialTheme.colorScheme.error)
                     }
                 }
                 TextButton(onClick = onDismiss) {
                     Text("取消")
-                }
-                Button(
-                    onClick = {
-                        onSave(
-                            selectedDateStart,
-                            content,
-                            mediaItems.mapIndexed { index, media -> media.copy(sortOrder = index) },
-                            backgroundUri
-                        )
-                        onDismiss()
-                    },
-                    enabled = content.trim().isNotEmpty() || mediaItems.isNotEmpty() || backgroundUri != null
-                ) {
-                    Text("保存")
                 }
             }
         }
@@ -576,7 +579,7 @@ fun DiaryEditorDialog(
                     showDeleteConfirm = false
                     onDelete()
                     onDismiss()
-                }) { Text("删除", color = Color(0xFFFF6B6B)) }
+                }) { Text("删除", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) { Text("取消") }
@@ -679,7 +682,7 @@ private fun DiaryMediaEditorRow(
                     Text("比例：${media.aspectRatio}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 TextButton(onClick = onReplace) { Text("替换") }
-                TextButton(onClick = onDelete) { Text("删除", color = Color(0xFFFF6B6B)) }
+                TextButton(onClick = onDelete) { Text("删除", color = MaterialTheme.colorScheme.error) }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 listOf("1:1", "4:3", "16:9", "3:4", "9:16").forEach { ratio ->

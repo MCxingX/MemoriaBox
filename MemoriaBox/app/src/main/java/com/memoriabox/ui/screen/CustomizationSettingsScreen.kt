@@ -46,6 +46,9 @@ fun CustomizationSettingsScreen(onNavigateBack: () -> Unit) {
     var quoteDraft by remember { mutableStateOf("") }
     var editingQuoteIndex by remember { mutableStateOf<Int?>(null) }
     var showQuoteEditor by remember { mutableStateOf(false) }
+    var quoteToDelete by remember { mutableStateOf<Int?>(null) }
+    var showClearAllBgConfirm by remember { mutableStateOf(false) }
+    var showResetIconsConfirm by remember { mutableStateOf(false) }
 
     fun updateAllBgState() {
         allBg = if (!homeBg.isNullOrBlank() && homeBg == calendarBg && homeBg == todoBg && homeBg == settingsBg) {
@@ -97,7 +100,7 @@ fun CustomizationSettingsScreen(onNavigateBack: () -> Unit) {
             CustomizationBgCard(title = "日历页背景", uri = calendarBg, onClick = { chooseImage("CALENDAR_BG") }, onClear = { calendarBg = null; AppSettings.setCalendarBgUri(context, null); updateAllBgState() })
             CustomizationBgCard(title = "待办页背景", uri = todoBg, onClick = { chooseImage("TODO_BG") }, onClear = { todoBg = null; AppSettings.setTodoBgUri(context, null); updateAllBgState() })
             CustomizationBgCard(title = "我的页背景", uri = settingsBg, onClick = { chooseImage("SETTINGS_BG") }, onClear = { settingsBg = null; AppSettings.setSettingsBgUri(context, null); updateAllBgState() })
-            Button(onClick = { AppSettings.setHomeBgUri(context, null); AppSettings.setCalendarBgUri(context, null); AppSettings.setTodoBgUri(context, null); AppSettings.setSettingsBgUri(context, null); allBg = null; homeBg = null; calendarBg = null; todoBg = null; settingsBg = null }, modifier = Modifier.fillMaxWidth()) { Text("全部清除") }
+            Button(onClick = { showClearAllBgConfirm = true }, modifier = Modifier.fillMaxWidth()) { Text("全部清除") }
 
             Text("底部图标", style = MaterialTheme.typography.titleLarge)
             IconCustomizationGrid(
@@ -108,7 +111,7 @@ fun CustomizationSettingsScreen(onNavigateBack: () -> Unit) {
                     IconCustomizationItem("我的图标", settingsIcon, { chooseImage("SETTINGS_ICON") }, { settingsIcon = null; AppSettings.setSettingsIconUri(context, null) })
                 )
             )
-            Button(onClick = { AppSettings.setHomeIconUri(context, null); AppSettings.setCalendarIconUri(context, null); AppSettings.setTodoIconUri(context, null); AppSettings.setSettingsIconUri(context, null); homeIcon = null; calendarIcon = null; todoIcon = null; settingsIcon = null }, modifier = Modifier.fillMaxWidth()) { Text("恢复默认图标") }
+            Button(onClick = { showResetIconsConfirm = true }, modifier = Modifier.fillMaxWidth()) { Text("恢复默认图标") }
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text("每日一言", style = MaterialTheme.typography.titleLarge)
@@ -146,8 +149,7 @@ fun CustomizationSettingsScreen(onNavigateBack: () -> Unit) {
                             showQuoteEditor = true
                         },
                         onDelete = {
-                            customQuotes = customQuotes.toMutableList().also { it.removeAt(index) }
-                            AppSettings.setCustomDailyQuotes(context, customQuotes)
+                            quoteToDelete = index
                         }
                     )
                 }
@@ -198,6 +200,73 @@ fun CustomizationSettingsScreen(onNavigateBack: () -> Unit) {
             },
             dismissButton = {
                 TextButton(onClick = { showQuoteEditor = false }) { Text("取消") }
+            }
+        )
+    }
+
+    quoteToDelete?.let { index ->
+        AlertDialog(
+            onDismissRequest = { quoteToDelete = null },
+            title = { Text("删除语录") },
+            text = { Text("确定要删除这条语录吗？此操作不可恢复。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    customQuotes = customQuotes.toMutableList().also { it.removeAt(index) }
+                    AppSettings.setCustomDailyQuotes(context, customQuotes)
+                    quoteToDelete = null
+                }) { Text("删除", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { quoteToDelete = null }) { Text("取消") }
+            }
+        )
+    }
+
+    if (showClearAllBgConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearAllBgConfirm = false },
+            title = { Text("全部清除") },
+            text = { Text("确定要清除所有页面的背景设置吗？此操作不可恢复。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    AppSettings.setHomeBgUri(context, null)
+                    AppSettings.setCalendarBgUri(context, null)
+                    AppSettings.setTodoBgUri(context, null)
+                    AppSettings.setSettingsBgUri(context, null)
+                    allBg = null
+                    homeBg = null
+                    calendarBg = null
+                    todoBg = null
+                    settingsBg = null
+                    showClearAllBgConfirm = false
+                }) { Text("清除", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearAllBgConfirm = false }) { Text("取消") }
+            }
+        )
+    }
+
+    if (showResetIconsConfirm) {
+        AlertDialog(
+            onDismissRequest = { showResetIconsConfirm = false },
+            title = { Text("恢复默认图标") },
+            text = { Text("确定要恢复所有页面底部图标的默认设置吗？") },
+            confirmButton = {
+                TextButton(onClick = {
+                    AppSettings.setHomeIconUri(context, null)
+                    AppSettings.setCalendarIconUri(context, null)
+                    AppSettings.setTodoIconUri(context, null)
+                    AppSettings.setSettingsIconUri(context, null)
+                    homeIcon = null
+                    calendarIcon = null
+                    todoIcon = null
+                    settingsIcon = null
+                    showResetIconsConfirm = false
+                }) { Text("恢复", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetIconsConfirm = false }) { Text("取消") }
             }
         )
     }
@@ -271,7 +340,7 @@ private fun CustomizationBgCard(title: String, uri: String?, onClick: () -> Unit
         )
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            Row(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+            Row(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(title, style = MaterialTheme.typography.bodyLarge)
                 if (uri != null) Text("已设置", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall) else Text("未设置", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -293,7 +362,7 @@ private fun QuoteEditCard(quote: String, onEdit: () -> Unit, onDelete: () -> Uni
     ) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(quote, style = MaterialTheme.typography.bodyMedium)
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
                 TextButton(onClick = onEdit) {
                     Icon(Icons.Default.Edit, contentDescription = null)
                     Spacer(Modifier.width(4.dp))

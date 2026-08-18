@@ -15,6 +15,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.*
 import com.memoriabox.ui.navigation.Screen
@@ -241,7 +242,7 @@ private fun CompactToolEventRow(event: Event, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(event.name, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+                Text(event.name, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(eventTypeLabel(event.type), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Text(com.memoriabox.ui.screen.components.formatDate(event.date), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)

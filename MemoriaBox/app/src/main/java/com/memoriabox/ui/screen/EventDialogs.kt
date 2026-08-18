@@ -36,6 +36,8 @@ fun EventDetailDialog(
 ) {
     val context = LocalContext.current
     val days = com.memoriabox.ui.screen.components.calculateDays(event)
+    var showMenu by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(event.name) },
@@ -105,34 +107,79 @@ fun EventDetailDialog(
             }
         },
         confirmButton = {
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(onClick = {
-                    shareBitmap(context, generateEventCardBitmap(context, event, days.coerceAtLeast(0)))
-                }) { Text("图片") }
-                TextButton(onClick = {
-                    val shareText = "${event.name}\n${eventTypeLabel(event.type)}：${days} 天\n日期：${com.memoriabox.ui.screen.components.formatDate(event.date)}\n${event.note}"
-                    context.startActivity(
-                        Intent.createChooser(
-                            Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(Intent.EXTRA_TEXT, shareText)
-                            },
-                            "分享日子"
-                        )
+            Box {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = { showMenu = true }) { Text("更多") }
+                    TextButton(onClick = onEdit) { Text("编辑") }
+                }
+                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                    DropdownMenuItem(
+                        text = { Text("分享图片") },
+                        onClick = {
+                            showMenu = false
+                            shareBitmap(context, generateEventCardBitmap(context, event, days.coerceAtLeast(0)))
+                        }
                     )
-                }) { Text("文本") }
-                TextButton(onClick = onEdit) { Text("编辑") }
+                    DropdownMenuItem(
+                        text = { Text("分享文本") },
+                        onClick = {
+                            showMenu = false
+                            val shareText = "${event.name}\n${eventTypeLabel(event.type)}：${days} 天\n日期：${com.memoriabox.ui.screen.components.formatDate(event.date)}\n${event.note}"
+                            context.startActivity(
+                                Intent.createChooser(
+                                    Intent(Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(Intent.EXTRA_TEXT, shareText)
+                                    },
+                                    "分享日子"
+                                )
+                            )
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("分类") },
+                        onClick = {
+                            showMenu = false
+                            onOpenCategory()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(if (event.isPinned) "取消置顶" else "置顶") },
+                        onClick = {
+                            showMenu = false
+                            onTogglePin()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("删除", color = MaterialTheme.colorScheme.error) },
+                        onClick = {
+                            showMenu = false
+                            showDeleteConfirm = true
+                        }
+                    )
+                }
             }
         },
         dismissButton = {
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(onClick = onOpenCategory) { Text("分类") }
-                TextButton(onClick = onTogglePin) { Text(if (event.isPinned) "取消置顶" else "置顶") }
-                TextButton(onClick = onDelete) { Text("删除") }
-                TextButton(onClick = onDismiss) { Text("取消") }
-            }
+            TextButton(onClick = onDismiss) { Text("取消") }
         }
     )
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("删除事件") },
+            text = { Text("确定要删除「${event.name}」吗？此操作不可恢复。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteConfirm = false
+                    onDelete()
+                }) { Text("删除", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) { Text("取消") }
+            }
+        )
+    }
 }
 
 fun repeatModeLabel(event: Event): String = when {
@@ -178,6 +225,7 @@ fun EventActionDialog(
     onTogglePin: () -> Unit,
     onDelete: () -> Unit
 ) {
+    var showDeleteConfirm by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(event.name) },
@@ -188,7 +236,9 @@ fun EventActionDialog(
                 OutlinedButton(onClick = onTogglePin, modifier = Modifier.fillMaxWidth()) {
                     Text(if (event.isPinned) "取消置顶" else "置顶")
                 }
-                OutlinedButton(onClick = onDelete, modifier = Modifier.fillMaxWidth()) { Text("删除") }
+                OutlinedButton(onClick = { showDeleteConfirm = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text("删除", color = MaterialTheme.colorScheme.error)
+                }
             }
         },
         confirmButton = {},
@@ -196,5 +246,21 @@ fun EventActionDialog(
             TextButton(onClick = onDismiss) { Text("取消") }
         }
     )
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("删除事件") },
+            text = { Text("确定要删除「${event.name}」吗？此操作不可恢复。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteConfirm = false
+                    onDelete()
+                }) { Text("删除", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) { Text("取消") }
+            }
+        )
+    }
 }
 

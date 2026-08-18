@@ -70,7 +70,7 @@ fun SettingsItem(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     title: String,
     description: String,
-    onClick: () -> Unit = {}
+    onClick: (() -> Unit)? = null
 ) {
     val adaptiveUi = rememberAdaptiveUiSize()
     val gradient = Brush.linearGradient(
@@ -84,7 +84,7 @@ fun SettingsItem(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = adaptiveUi.screenPadding, vertical = adaptiveUi.sectionSpacing / 2f)
-            .clickable(onClick = onClick),
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
         shape = if (adaptiveUi.compact) MaterialTheme.shapes.medium else MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.84f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -107,7 +107,9 @@ fun SettingsItem(
                 Text(title, style = MaterialTheme.typography.titleMedium)
                 Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.outline)
+            if (onClick != null) {
+                Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.outline)
+            }
         }
     }
 }
@@ -513,6 +515,7 @@ private fun MonthlyMediaSettingsPanel(
 @Composable
 private fun MonthlyMediaStrip(title: String, items: List<String>, isVideo: Boolean, onRemove: (String) -> Unit, onClear: () -> Unit) {
     var selectedIndex by remember(items) { mutableIntStateOf(0) }
+    var showClearConfirm by remember { mutableStateOf(false) }
     val selectedItem = items.getOrNull(selectedIndex.coerceIn(0, (items.size - 1).coerceAtLeast(0)))
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
@@ -522,7 +525,7 @@ private fun MonthlyMediaStrip(title: String, items: List<String>, isVideo: Boole
         ) {
             Text(title, style = MaterialTheme.typography.labelLarge)
             if (items.isNotEmpty()) {
-                TextButton(onClick = onClear) { Text("清空") }
+                TextButton(onClick = { showClearConfirm = true }) { Text("清空") }
             }
         }
         if (items.isEmpty()) {
@@ -554,7 +557,7 @@ private fun MonthlyMediaStrip(title: String, items: List<String>, isVideo: Boole
                     }
                     IconButton(
                         onClick = { selectedItem?.let(onRemove) },
-                        modifier = Modifier.align(Alignment.TopEnd).size(36.dp)
+                        modifier = Modifier.align(Alignment.TopEnd).size(44.dp)
                     ) {
                         Icon(Icons.Default.Close, contentDescription = "移除当前素材", tint = if (isVideo) MaterialTheme.colorScheme.primary else Color.White)
                     }
@@ -574,13 +577,29 @@ private fun MonthlyMediaStrip(title: String, items: List<String>, isVideo: Boole
                         } else {
                             AsyncImage(model = uri, contentDescription = "照片", contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
                         }
-                        IconButton(onClick = { onRemove(uri) }, modifier = Modifier.align(Alignment.TopEnd).size(28.dp)) {
-                            Icon(Icons.Default.Close, contentDescription = "移除", tint = if (isVideo) MaterialTheme.colorScheme.primary else Color.White, modifier = Modifier.size(18.dp))
+                        IconButton(onClick = { onRemove(uri) }, modifier = Modifier.align(Alignment.TopEnd).size(40.dp)) {
+                            Icon(Icons.Default.Close, contentDescription = "移除", tint = if (isVideo) MaterialTheme.colorScheme.primary else Color.White, modifier = Modifier.size(20.dp))
                         }
                     }
                 }
             }
         }
+    }
+    if (showClearConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearConfirm = false },
+            title = { Text("清空$title") },
+            text = { Text("确定要清空这组素材吗？此操作不可恢复。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    onClear()
+                    showClearConfirm = false
+                }) { Text("清空", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearConfirm = false }) { Text("取消") }
+            }
+        )
     }
 }
 

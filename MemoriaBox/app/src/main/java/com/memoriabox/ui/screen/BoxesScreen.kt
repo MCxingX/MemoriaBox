@@ -16,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -58,6 +59,7 @@ fun BoxesScreen(
     val events by viewModel.allEvents.collectAsState(initial = emptyList())
     val logs by viewModel.recentLogs.collectAsState(initial = emptyList())
     var showCreateDialog by remember { mutableStateOf(false) }
+    var boxForDelete by remember { mutableStateOf<com.memoriabox.data.model.Box?>(null) }
     var selectedEvent by remember { mutableStateOf<Event?>(null) }
     var eventForActions by remember { mutableStateOf<Event?>(null) }
     var eventForEdit by remember { mutableStateOf<Event?>(null) }
@@ -112,14 +114,20 @@ fun BoxesScreen(
                     windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                     actions = {
-                        HomeBoxFilter(
-                            boxes = boxes,
-                            selectedBoxId = selectedBoxId,
-                            onBoxSelected = { selectedBoxId = it },
-                            onCreateBox = { showCreateDialog = true }
-                        )
-                        IconButton(onClick = { showCreateDialog = true }) {
-                            Icon(Icons.Default.CreateNewFolder, contentDescription = "添加分组")
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            HomeBoxFilter(
+                                boxes = boxes,
+                                selectedBoxId = selectedBoxId,
+                                onBoxSelected = { selectedBoxId = it },
+                                onCreateBox = { showCreateDialog = true },
+                                onDeleteBox = { boxForDelete = it }
+                            )
+                            IconButton(onClick = { showCreateDialog = true }) {
+                                Icon(Icons.Default.CreateNewFolder, contentDescription = "添加分组")
+                            }
                         }
                     }
                 )
@@ -156,6 +164,23 @@ fun BoxesScreen(
             onSave = { name, icon, bgType, bgValue ->
                 viewModel.createBox(name, icon, bgType, bgValue)
                 showCreateDialog = false
+            }
+        )
+    }
+
+    boxForDelete?.let { box ->
+        AlertDialog(
+            onDismissRequest = { boxForDelete = null },
+            title = { Text("删除分类") },
+            text = { Text("删除“${box.name}”后，该分类下的日子会移到默认分类，无法撤销。确认删除？") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deleteBox(box)
+                    boxForDelete = null
+                }) { Text("删除") }
+            },
+            dismissButton = {
+                TextButton(onClick = { boxForDelete = null }) { Text("取消") }
             }
         )
     }
@@ -469,13 +494,23 @@ fun HomeBoxFilter(
     boxes: List<com.memoriabox.data.model.Box>,
     selectedBoxId: String?,
     onBoxSelected: (String?) -> Unit,
-    onCreateBox: () -> Unit
+    onCreateBox: () -> Unit,
+    onDeleteBox: (com.memoriabox.data.model.Box) -> Unit = {}
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        OutlinedButton(onClick = { expanded = true }) {
-            Text(selectedBoxId?.let { id -> boxes.firstOrNull { it.id == id }?.name } ?: "全部分组", maxLines = 1)
-            Spacer(Modifier.width(8.dp))
+        OutlinedButton(
+            onClick = { expanded = true },
+            modifier = Modifier
+                .height(40.dp)
+                .widthIn(min = 96.dp, max = 150.dp)
+        ) {
+            Text(
+                selectedBoxId?.let { id -> boxes.firstOrNull { it.id == id }?.name } ?: "全部分组",
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.width(4.dp))
             Icon(Icons.Default.ArrowDropDown, contentDescription = null)
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -488,7 +523,33 @@ fun HomeBoxFilter(
             )
             boxes.forEach { box ->
                 DropdownMenuItem(
-                    text = { Text(box.name) },
+                    text = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(box.name, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            if (box.id != "default_1") {
+                                Box(
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .clip(MaterialTheme.shapes.small)
+                                        .clickable {
+                                            onDeleteBox(box)
+                                            expanded = false
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        Icons.Default.DeleteOutline,
+                                        contentDescription = "删除分类",
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+                    },
                     onClick = {
                         onBoxSelected(box.id)
                         expanded = false

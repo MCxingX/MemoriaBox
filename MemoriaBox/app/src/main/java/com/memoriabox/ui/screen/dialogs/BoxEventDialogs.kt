@@ -30,8 +30,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.memoriabox.data.model.BgType
 import com.memoriabox.data.model.Box
@@ -106,7 +109,8 @@ fun BoxDialog(
                                 .size(48.dp)
                                 .clip(CircleShape)
                                 .background(MaterialTheme.colorScheme.primary.copy(0.2f))
-                                .clickable { showEmojiPicker = true },
+                                .clickable { showEmojiPicker = true }
+                                .semantics { contentDescription = "选择图标" },
                             contentAlignment = Alignment.Center
                         ) {
                             if (selectedIcon.isImageUri()) {
@@ -135,6 +139,7 @@ fun BoxDialog(
                                 .clip(CircleShape)
                                 .background(ColorUtils.hexToColor(selectedBgValue))
                                 .clickable { showColorPicker = true }
+                                .semantics { contentDescription = "选择背景" }
                         )
                         Text(
                             text = if (selectedBgType == BgType.COLOR) "颜色" else "图片",
@@ -365,6 +370,7 @@ fun EventDialog(
                             selectedLunar ?: "选择农历",
                             maxLines = 1,
                             softWrap = false,
+                            overflow = TextOverflow.Ellipsis,
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
@@ -608,12 +614,15 @@ fun EventDialog(
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable { reminderEnabled = !reminderEnabled }
+                    ) {
                         Checkbox(
                             checked = reminderEnabled,
                             onCheckedChange = { reminderEnabled = it }
                         )
-                        Text("开启提醒", modifier = Modifier.clickable { reminderEnabled = !reminderEnabled })
+                        Text("开启提醒")
                     }
 
                     if (reminderEnabled) {
@@ -668,12 +677,15 @@ fun EventDialog(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.height(8.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.clickable { pushPlusEnabled = !pushPlusEnabled }
+                        ) {
                             Checkbox(
                                 checked = pushPlusEnabled,
                                 onCheckedChange = { pushPlusEnabled = it }
                             )
-                            Column(modifier = Modifier.clickable { pushPlusEnabled = !pushPlusEnabled }) {
+                            Column {
                                 Text("同步 PushPlus 推送")
                                 Text(
                                     "需要在我的页面填写 PushPlus Token",
@@ -682,12 +694,15 @@ fun EventDialog(
                                 )
                             }
                         }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.clickable { calendarSyncEnabled = !calendarSyncEnabled }
+                        ) {
                             Checkbox(
                                 checked = calendarSyncEnabled,
                                 onCheckedChange = { calendarSyncEnabled = it }
                             )
-                            Column(modifier = Modifier.clickable { calendarSyncEnabled = !calendarSyncEnabled }) {
+                            Column {
                                 Text("写入系统日历")
                                 Text(
                                     "开启后保存时尝试同步到系统日历，软件通知仍会兜底提醒",
@@ -1121,7 +1136,7 @@ fun DatePickerDialog(
                                     Box(
                                         modifier = Modifier
                                             .weight(1f)
-                                            .height(40.dp)
+                                            .height(44.dp)
                                             .padding(2.dp)
                                             .clip(RoundedCornerShape(12.dp))
                                             .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent)
@@ -1135,7 +1150,7 @@ fun DatePickerDialog(
                                         )
                                     }
                                 } else {
-                                    Spacer(modifier = Modifier.weight(1f).height(40.dp))
+                                    Spacer(modifier = Modifier.weight(1f).height(44.dp))
                                 }
                             }
                         }

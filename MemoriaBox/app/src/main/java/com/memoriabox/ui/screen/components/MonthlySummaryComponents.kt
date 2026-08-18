@@ -176,7 +176,7 @@ private fun MonthlySummaryControls(
     onTextEnabledChange: (Boolean) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.White.copy(alpha = 0.14f)).padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             IconButton(onClick = onPlayPause) { Icon(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = "播放暂停", tint = Color.White) }
             IconButton(onClick = onStop) { Icon(Icons.Default.Stop, contentDescription = "停止", tint = Color.White) }
             IconButton(onClick = onPrev, enabled = canMovePrev) { Icon(Icons.Default.SkipPrevious, contentDescription = "上一项", tint = Color.White) }

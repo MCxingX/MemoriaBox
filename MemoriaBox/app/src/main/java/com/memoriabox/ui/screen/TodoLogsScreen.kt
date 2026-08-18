@@ -98,8 +98,7 @@ fun LogsScreen(application: Application) {
             onFilterChange = {
                 filter = it
                 viewModel.setFilter(it)
-            },
-            onDateRangeChange = { }
+            }
         )
         LogsList(logs = logs)
     }

@@ -22,6 +22,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.memoriabox.data.model.Event
 import com.memoriabox.data.model.Label
@@ -259,7 +262,7 @@ private fun EventLabelRow(event: Event, labels: List<String>, onClick: () -> Uni
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Text(event.name, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                Text(event.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
                     SimpleDateFormat("yyyy年M月d日", Locale.getDefault()).format(Date(event.date)),
                     style = MaterialTheme.typography.bodySmall,
@@ -390,16 +393,17 @@ private fun LabelCreateDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     palette.forEach { hex ->
                         val selected = color == hex
                         Box(
                             modifier = Modifier
-                                .size(28.dp)
+                                .size(44.dp)
                                 .clip(CircleShape)
                                 .border(2.dp, if (selected) MaterialTheme.colorScheme.primary else Color.Transparent, CircleShape)
                                 .background(runCatching { ColorUtils.hexToColor(hex) }.getOrDefault(Color.Gray))
                                 .clickable { color = hex }
+                                .semantics { contentDescription = "选择颜色 $hex" }
                         )
                     }
                 }

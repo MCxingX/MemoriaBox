@@ -16,6 +16,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.memoriabox.data.model.Box
@@ -158,6 +160,7 @@ private fun TodoCard(
     var expanded by remember { mutableStateOf(false) }
     var showPriorityMenu by remember { mutableStateOf(false) }
     var newSubtask by remember { mutableStateOf("") }
+    var pendingSubtask by remember { mutableStateOf<TodoSubtask?>(null) }
     val completed = event.todoStatus == TodoStatus.COMPLETED
 
     Card(
@@ -170,8 +173,8 @@ private fun TodoCard(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Checkbox(checked = completed, onCheckedChange = { onToggleStatus() })
-                Spacer(Modifier.width(4.dp))
+                Checkbox(checked = completed, onCheckedChange = { onToggleStatus() }, modifier = Modifier.semantics { contentDescription = if (completed) "标记为未完成" else "标记为已完成" })
+                Spacer(Modifier.width(8.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = event.name,
@@ -221,6 +224,7 @@ private fun TodoCard(
                         }
                     }
                 }
+                Spacer(Modifier.width(4.dp))
                 IconButton(onClick = { expanded = !expanded }) {
                     Icon(
                         if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
@@ -244,8 +248,8 @@ private fun TodoCard(
                                 else MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.weight(1f)
                             )
-                            IconButton(onClick = { onDeleteSubtask(subtask) }, modifier = Modifier.size(28.dp)) {
-                                Icon(Icons.Default.Close, contentDescription = "删除子任务", tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(16.dp))
+                            IconButton(onClick = { pendingSubtask = subtask }) {
+                                Icon(Icons.Default.Close, contentDescription = "删除子任务", tint = MaterialTheme.colorScheme.outline)
                             }
                         }
                     }
@@ -273,6 +277,22 @@ private fun TodoCard(
                 }
             }
         }
+    }
+    pendingSubtask?.let { subtask ->
+        AlertDialog(
+            onDismissRequest = { pendingSubtask = null },
+            title = { Text("删除子任务") },
+            text = { Text("确定要删除「${subtask.title}」吗？此操作不可恢复。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    onDeleteSubtask(subtask)
+                    pendingSubtask = null
+                }) { Text("删除", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingSubtask = null }) { Text("取消") }
+            }
+        )
     }
 }
 

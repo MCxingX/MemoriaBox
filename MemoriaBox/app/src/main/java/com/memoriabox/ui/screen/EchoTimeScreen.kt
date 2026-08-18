@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.memoriabox.data.model.DiaryEntry
@@ -141,7 +142,7 @@ private fun DiaryEchoCard(diary: DiaryEntry, media: List<DiaryMedia>) {
                 color = MaterialTheme.colorScheme.primary
             )
             if (diary.content.isNotBlank()) {
-                Text(diary.content, style = MaterialTheme.typography.bodyMedium, maxLines = 4)
+                Text(diary.content, style = MaterialTheme.typography.bodyMedium, maxLines = 4, overflow = TextOverflow.Ellipsis)
             }
             if (media.isNotEmpty()) {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -246,7 +247,15 @@ private fun ImportantNodes(events: List<Event>) {
                             )
                         }
                         if (event.isBirthday) {
-                            AssistChip(onClick = {}, label = { Text("生日") })
+                            Text(
+                                "生日",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier
+                                    .clip(MaterialTheme.shapes.small)
+                                    .background(MaterialTheme.colorScheme.primaryContainer)
+                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                            )
                         }
                     }
                 }

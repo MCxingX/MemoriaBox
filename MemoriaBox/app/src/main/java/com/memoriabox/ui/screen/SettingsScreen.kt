@@ -154,8 +154,7 @@ fun SettingsScreen(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = adaptiveUi.screenPadding, vertical = adaptiveUi.sectionSpacing)
-                .background(Color.Transparent),
+                .padding(horizontal = adaptiveUi.screenPadding, vertical = adaptiveUi.sectionSpacing),
             shape = MaterialTheme.shapes.extraLarge,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -189,7 +188,7 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(Modifier.height(8.dp))
-                    Row {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf("wechat", "webhook", "mail", "sms").forEach { ch ->
                             FilterChip(
                                 selected = pushPlusChannel == ch,
@@ -197,7 +196,7 @@ fun SettingsScreen(
                                     pushPlusChannel = ch
                                     pushPlusHelper.setPushPlusChannel(ch)
                                 },
-                                label = { Text(ch.take(3)) }
+                                label = { Text(ch, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                             )
                         }
                     }
@@ -436,7 +435,7 @@ fun ThemeModeCard(currentThemeMode: AppThemeMode, onThemeModeChange: (AppThemeMo
                 val modes = AppThemeMode.entries.filter { it.group == group }
                 if (modes.isNotEmpty()) {
                     Text(group.label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         modes.forEach { mode ->
                             ThemePreviewCard(
                                 mode = mode,

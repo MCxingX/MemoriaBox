@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.memoriabox.data.model.Event
 import com.memoriabox.ui.screen.components.formatDate
@@ -132,8 +133,7 @@ fun TimelineSection(
         events.sortedByDescending { it.date }.forEachIndexed { index, event ->
             TimelineEventItem(
                 event = event,
-                isLast = index == events.size - 1,
-                onClick = { /* Navigate to event */ }
+                isLast = index == events.size - 1
             )
         }
     }
@@ -142,8 +142,7 @@ fun TimelineSection(
 @Composable
 fun TimelineEventItem(
     event: Event,
-    isLast: Boolean,
-    onClick: () -> Unit
+    isLast: Boolean
 ) {
     val lineColor = MaterialTheme.colorScheme.outlineVariant
     
@@ -178,7 +177,6 @@ fun TimelineEventItem(
         Card(
             modifier = Modifier
                 .weight(1f)
-                .clickable(onClick = onClick)
                 .padding(bottom = if (isLast) 0.dp else 16.dp),
             colors = CardDefaults.cardColors(
                 containerColor = when (event.type) {
@@ -198,8 +196,12 @@ fun TimelineEventItem(
                     Text(
                         event.name,
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
+                    Spacer(Modifier.width(8.dp))
                     Text(
                         com.memoriabox.ui.screen.components.formatDate(event.date),
                         style = MaterialTheme.typography.bodySmall,
@@ -234,7 +236,8 @@ fun TimelineEventItem(
                             event.note,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }

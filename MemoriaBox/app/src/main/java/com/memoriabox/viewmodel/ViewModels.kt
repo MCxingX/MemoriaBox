@@ -77,7 +77,14 @@ class MainViewModel(
 
     fun deleteBox(box: Box) = viewModelScope.launch {
         try {
-            boxRepository.deleteBox(box)
+            val defaultBoxId = "default_1"
+            if (box.id != defaultBoxId) {
+                val eventsInBox = eventRepository.getAllEventsOnce().filter { it.boxId == box.id }
+                if (eventsInBox.isNotEmpty()) {
+                    eventRepository.moveEventsToBox(eventsInBox.map { it.id }, defaultBoxId)
+                }
+                boxRepository.deleteBox(box)
+            }
             logRepository.logBoxOperation("DELETE", box.id, box.name)
             backupManager.onDataChanged()
         } catch (e: Exception) {
@@ -242,6 +249,34 @@ class BoxDetailViewModel(
             backupManager.onDataChanged()
         } catch (e: Exception) {
             Log.e("BoxDetailVM", "Batch move failed", e)
+        }
+    }
+
+    fun updateBox(box: Box) = viewModelScope.launch {
+        try {
+            boxRepository.updateBox(box)
+            _box.value = box
+            logRepository.logBoxOperation("UPDATE", box.id, box.name)
+            backupManager.onDataChanged()
+        } catch (e: Exception) {
+            logRepository.logBoxOperation("UPDATE", box.id, box.name, "failed: ${e.message}")
+        }
+    }
+
+    fun deleteBox(box: Box) = viewModelScope.launch {
+        try {
+            val defaultBoxId = "default_1"
+            if (box.id != defaultBoxId) {
+                val eventsInBox = eventRepository.getAllEventsOnce().filter { it.boxId == box.id }
+                if (eventsInBox.isNotEmpty()) {
+                    eventRepository.moveEventsToBox(eventsInBox.map { it.id }, defaultBoxId)
+                }
+                boxRepository.deleteBox(box)
+            }
+            logRepository.logBoxOperation("DELETE", box.id, box.name)
+            backupManager.onDataChanged()
+        } catch (e: Exception) {
+            logRepository.logBoxOperation("DELETE", box.id, box.name, "failed: ${e.message}")
         }
     }
 }

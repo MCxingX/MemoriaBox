@@ -38,6 +38,8 @@ fun BoxDetailScreen(
     var showEditEvent by remember { mutableStateOf<Event?>(null) }
     var showBatchDialog by remember { mutableStateOf(false) }
     var showMoveDialog by remember { mutableStateOf(false) }
+    var showEditBox by remember { mutableStateOf(false) }
+    var showDeleteBoxConfirm by remember { mutableStateOf(false) }
     var selectedEvents by remember { mutableStateOf<Set<String>>(emptySet()) }
     val adaptiveUi = rememberAdaptiveUiSize()
 
@@ -59,6 +61,30 @@ fun BoxDetailScreen(
                 actions = {
                     IconButton(onClick = { showBatchDialog = true }) {
                         Icon(Icons.Default.Checklist, contentDescription = "批量操作")
+                    }
+                    var boxMenuExpanded by remember { mutableStateOf(false) }
+                    Box {
+                        IconButton(onClick = { boxMenuExpanded = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "分类操作")
+                        }
+                        DropdownMenu(expanded = boxMenuExpanded, onDismissRequest = { boxMenuExpanded = false }) {
+                            DropdownMenuItem(
+                                text = { Text("编辑分类") },
+                                leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
+                                onClick = {
+                                    boxMenuExpanded = false
+                                    showEditBox = true
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("删除分类") },
+                                leadingIcon = { Icon(Icons.Default.DeleteOutline, contentDescription = null) },
+                                onClick = {
+                                    boxMenuExpanded = false
+                                    showDeleteBoxConfirm = true
+                                }
+                            )
+                        }
                     }
                 }
             )
@@ -134,6 +160,39 @@ fun BoxDetailScreen(
             onBatchEdit = {
                 showEditEvent = events.firstOrNull { selectedEvents.contains(it.id) }
                 showBatchDialog = false
+            }
+        )
+    }
+
+    if (showEditBox) {
+        val currentBox = box
+        if (currentBox != null) {
+            BoxDialog(
+                existingBox = currentBox,
+                onDismiss = { showEditBox = false },
+                onSave = { name, icon, bgType, bgValue ->
+                    viewModel.updateBox(currentBox.copy(name = name, icon = icon, bgType = bgType, bgValue = bgValue))
+                    showEditBox = false
+                }
+            )
+        }
+    }
+
+    if (showDeleteBoxConfirm) {
+        val currentBox = box
+        AlertDialog(
+            onDismissRequest = { showDeleteBoxConfirm = false },
+            title = { Text("删除分类") },
+            text = { Text("删除“${currentBox?.name ?: "此分类"}”后，该分类下的日子会移到默认分类，无法撤销。确认删除？") },
+            confirmButton = {
+                TextButton(onClick = {
+                    currentBox?.let { viewModel.deleteBox(it) }
+                    showDeleteBoxConfirm = false
+                    onNavigateBack()
+                }) { Text("删除") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteBoxConfirm = false }) { Text("取消") }
             }
         )
     }

@@ -261,6 +261,7 @@ private fun MoodEditDialog(
     var level by remember(existing?.id) { mutableStateOf(existing?.level ?: 3) }
     var activity by remember(existing?.id) { mutableStateOf(existing?.activity ?: "") }
     var note by remember(existing?.id) { mutableStateOf(existing?.note ?: "") }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
     val dateText = SimpleDateFormat("yyyy年M月d日", Locale.getDefault()).format(Date(date))
 
     AlertDialog(
@@ -275,7 +276,13 @@ private fun MoodEditDialog(
                 ) {
                     moodEmojis.forEachIndexed { index, emoji ->
                         val selected = level == index + 1
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { level = index + 1 }
+                                .padding(horizontal = 6.dp, vertical = 8.dp)
+                        ) {
                             Text(emoji, style = MaterialTheme.typography.headlineMedium)
                             Box(
                                 modifier = Modifier
@@ -286,7 +293,6 @@ private fun MoodEditDialog(
                                         color = if (selected) moodColors[index] else MaterialTheme.colorScheme.outline,
                                         shape = CircleShape
                                     )
-                                    .clickable { level = index + 1 }
                                     .background(if (selected) moodColors[index].copy(alpha = 0.3f) else Color.Transparent)
                             )
                         }
@@ -312,9 +318,12 @@ private fun MoodEditDialog(
             TextButton(onClick = onDismiss) { Text("取消") }
         },
         confirmButton = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 if (existing != null) {
-                    IconButton(onClick = onDelete) {
+                    IconButton(onClick = { showDeleteConfirm = true }) {
                         Icon(Icons.Default.Delete, contentDescription = "删除", tint = MaterialTheme.colorScheme.error)
                     }
                 }
@@ -322,6 +331,22 @@ private fun MoodEditDialog(
             }
         }
     )
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("删除心情") },
+            text = { Text("确定要删除今天的打卡记录吗？此操作不可恢复。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteConfirm = false
+                    onDelete()
+                }) { Text("删除", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) { Text("取消") }
+            }
+        )
+    }
 }
 
 private fun moodsForCurrentMonth(moods: List<MoodEntry>): List<MoodEntry> {

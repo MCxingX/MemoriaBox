@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
@@ -53,7 +54,7 @@ fun PhotoWallScreen(application: Application) {
 
     // Filter events with images
     val eventsWithImages = remember(events) {
-        events.filter { it.avatarUri != null || it.cardStyleJson?.contains("image") == true }
+        events.filter { it.avatarUri != null }
     }
 
     var selectedEvent by remember { mutableStateOf<Event?>(null) }
@@ -134,7 +135,8 @@ fun PhotoWallScreen(application: Application) {
                                     event.name,
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = ComposeColor.White,
-                                    maxLines = 1
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
@@ -533,9 +535,17 @@ fun ExportScreen(
                     ) {
                         Text(result, color = MaterialTheme.colorScheme.onPrimaryContainer)
                         IconButton(onClick = {
-                            // Share the result
+                            context.startActivity(
+                                Intent.createChooser(
+                                    Intent(Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(Intent.EXTRA_TEXT, result)
+                                    },
+                                    "分享结果"
+                                )
+                            )
                         }) {
-                            Icon(Icons.Default.Share, null)
+                            Icon(Icons.Default.Share, contentDescription = "分享结果")
                         }
                     }
                 }

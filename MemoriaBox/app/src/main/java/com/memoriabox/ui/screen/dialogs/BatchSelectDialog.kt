@@ -29,6 +29,7 @@ fun BatchSelectDialog(
 ) {
     val allEventIds = remember(events) { events.map { it.id }.toSet() }
     val allSelected = events.isNotEmpty() && selectedEvents.containsAll(allEventIds)
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -51,7 +52,7 @@ fun BatchSelectDialog(
                     ActionChip(
                         icon = Icons.Default.Delete,
                         label = "删除",
-                        onClick = onBatchDelete,
+                        onClick = { showDeleteConfirm = true },
                         enabled = selectedEvents.isNotEmpty()
                     )
                     ActionChip(
@@ -99,6 +100,22 @@ fun BatchSelectDialog(
         }
     )
 
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("批量删除") },
+            text = { Text("确定要删除选中的 ${selectedEvents.size} 个事件吗？此操作不可恢复。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteConfirm = false
+                    onBatchDelete()
+                }) { Text("删除", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) { Text("取消") }
+            }
+        )
+    }
 }
 
 @Composable

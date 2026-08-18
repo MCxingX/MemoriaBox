@@ -62,7 +62,7 @@ fun SearchScreen(application: Application) {
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
                         IconButton(onClick = { searchQuery = "" }) {
-                            Icon(Icons.Default.Clear, null)
+                            Icon(Icons.Default.Clear, contentDescription = "清除搜索")
                         }
                     }
                 },
@@ -164,7 +164,7 @@ fun SearchScreen(application: Application) {
                                 title = box.name,
                                 subtitle = "分类 · ${if (box.icon.isImageUri()) "自定义图标" else box.icon}",
                                 icon = Icons.Default.Folder,
-                                onClick = { /* Navigate to box */ }
+                                onClick = null
                             )
                         }
                     }
@@ -175,7 +175,7 @@ fun SearchScreen(application: Application) {
                                 title = event.name,
                                 subtitle = buildEventSubtitle(event),
                                 icon = getEventIcon(event),
-                                onClick = { /* Navigate to event */ }
+                                onClick = null
                             )
                         }
                     }
@@ -212,12 +212,12 @@ fun SearchResultCard(
     title: String,
     subtitle: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
-    onClick: () -> Unit
+    onClick: (() -> Unit)? = null
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
     ) {
         Row(
             modifier = Modifier
@@ -248,7 +248,9 @@ fun SearchResultCard(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.outline)
+            if (onClick != null) {
+                Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.outline)
+            }
         }
     }
 }
