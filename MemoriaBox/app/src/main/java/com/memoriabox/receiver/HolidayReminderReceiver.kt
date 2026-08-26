@@ -1,6 +1,8 @@
 package com.memoriabox.receiver
 
 import android.app.AlarmManager
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -23,7 +25,20 @@ class HolidayReminderReceiver : BroadcastReceiver() {
         private const val DEFAULT_HOUR = 8
         private const val DEFAULT_MINUTE = 0
 
+        private fun ensureChannel(context: Context) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+            val manager = context.getSystemService(NotificationManager::class.java) ?: return
+            if (manager.getNotificationChannel(CHANNEL_ID) == null) {
+                manager.createNotificationChannel(
+                    NotificationChannel(CHANNEL_ID, "节日提醒", NotificationManager.IMPORTANCE_HIGH).apply {
+                        description = "用于节日当天提醒"
+                    }
+                )
+            }
+        }
+
         fun schedule(context: Context) {
+            ensureChannel(context)
             val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
             val intent = Intent(context, HolidayReminderReceiver::class.java).apply {
                 action = ACTION_CHECK
@@ -102,6 +117,7 @@ class HolidayReminderReceiver : BroadcastReceiver() {
         ) {
             return
         }
+        ensureChannel(context)
         try {
             val notificationIntent = Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP

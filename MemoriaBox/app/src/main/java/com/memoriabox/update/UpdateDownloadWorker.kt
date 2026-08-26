@@ -16,7 +16,12 @@ class UpdateDownloadWorker(
     override suspend fun doWork(): Result {
         val info = inputData.getString(EXTRA_INFO)?.let(UpdateInfoJson::fromJson) ?: return Result.failure()
         UpdateManager.executeDownload(applicationContext, info)
-        return if (UpdateManager.state.value is UpdateState.Error) Result.retry() else Result.success()
+        // 最多重试 3 次，避免校验失败/存储满等永久错误无限重下
+        return when {
+            UpdateManager.state.value is UpdateState.Error && runAttemptCount < 3 -> Result.retry()
+            UpdateManager.state.value is UpdateState.Error -> Result.failure()
+            else -> Result.success()
+        }
     }
 
     companion object {

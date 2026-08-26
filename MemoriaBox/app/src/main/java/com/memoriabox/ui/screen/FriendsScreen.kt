@@ -226,7 +226,7 @@ private fun FriendEditorDialog(friend: Friend?, onDismiss: () -> Unit, onSave: (
     }
     var month by remember(friend?.id) { mutableStateOf(initialBirthday?.get(Calendar.MONTH)?.plus(1)?.toString() ?: "") }
     var day by remember(friend?.id) { mutableStateOf(initialBirthday?.get(Calendar.DAY_OF_MONTH)?.toString() ?: "") }
-    var year by remember(friend?.id) { mutableStateOf(initialBirthday?.get(Calendar.YEAR)?.toString() ?: "") }
+    var year by remember(friend?.id) { mutableStateOf(initialBirthday?.get(Calendar.YEAR)?.takeIf { it != BIRTHDAY_UNKNOWN_YEAR }?.toString() ?: "") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -250,12 +250,15 @@ private fun FriendEditorDialog(friend: Friend?, onDismiss: () -> Unit, onSave: (
 
 }
 
+/** 空年份的生日使用固定闰年 2096 作为哨兵，使 2/29 合法，并保留"每年重复"语义 */
+const val BIRTHDAY_UNKNOWN_YEAR = 2096
+
 fun birthdayTimestamp(year: Int?, month: Int?, day: Int?): Long? {
     if (month == null || day == null || month !in 1..12 || day !in 1..31) return null
     return runCatching {
         Calendar.getInstance().apply {
             setLenient(false)
-            set(Calendar.YEAR, year ?: Calendar.getInstance().get(Calendar.YEAR))
+            set(Calendar.YEAR, year ?: BIRTHDAY_UNKNOWN_YEAR)
             set(Calendar.MONTH, month - 1)
             set(Calendar.DAY_OF_MONTH, day)
             set(Calendar.HOUR_OF_DAY, 0)
@@ -264,6 +267,15 @@ fun birthdayTimestamp(year: Int?, month: Int?, day: Int?): Long? {
             set(Calendar.MILLISECOND, 0)
         }.timeInMillis
     }.getOrNull()
+}
+
+/** 生日是否带明确年份（空年份存储在哨兵年） */
+fun birthdayHasYear(timestamp: Long): Boolean =
+    Calendar.getInstance().apply { timeInMillis = timestamp }.get(Calendar.YEAR) != BIRTHDAY_UNKNOWN_YEAR
+
+fun formatBirthdayWithYear(timestamp: Long, locale: java.util.Locale = Locale.getDefault()): String {
+    val pattern = if (birthdayHasYear(timestamp)) "yyyy年M月d日" else "M月d日"
+    return SimpleDateFormat(pattern, locale).format(Date(timestamp))
 }
 
 private fun friendBirthdayLabel(friend: Friend): String {

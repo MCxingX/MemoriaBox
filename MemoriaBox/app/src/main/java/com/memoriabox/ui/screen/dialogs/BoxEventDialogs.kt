@@ -823,6 +823,7 @@ fun EventDialog(
     pendingCropUri?.let { uri ->
         EventImageCropDialog(
             sourceUri = uri,
+            cropAspectRatio = cardCropAspectRatio(cardTemplate),
             onDismiss = { pendingCropUri = null },
                 onSave = { scale, offsetX, offsetY ->
                     backgroundUri = ImageImportUtils.cropImageToPrivateStorage(
@@ -850,47 +851,62 @@ private fun EventImageCropDialog(
     var scale by remember(sourceUri) { mutableFloatStateOf(1f) }
     var offsetX by remember(sourceUri) { mutableFloatStateOf(0f) }
     var offsetY by remember(sourceUri) { mutableFloatStateOf(0f) }
+    var showCropRange by remember(sourceUri, cropAspectRatio) { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("调整卡片背景") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("拖动图片调整位置，双指缩放后保存。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("卡片裁剪比例：${cardCropAspectLabel(cropAspectRatio)}", style = MaterialTheme.typography.labelLarge)
+                Text(
+                    text = "卡片裁剪比例：${cardCropAspectLabel(cropAspectRatio)}",
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.clickable { showCropRange = !showCropRange }
+                )
+                if (showCropRange) {
+                    Text(
+                        "裁剪范围固定为 ${cardCropAspectLabel(cropAspectRatio)}，拖动图片可调整保存区域内的取景位置。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
                     val previewWidth = maxWidth
                     val previewHeight = previewWidth / cropAspectRatio
-                    Text("保存区域约 ${previewWidth.value.toInt()}dp × ${previewHeight.value.toInt()}dp", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(cropAspectRatio)
-                            .heightIn(max = 240.dp)
-                            .clip(RoundedCornerShape(18.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .pointerInput(sourceUri) {
-                                detectTransformGestures { _, pan, zoom, _ ->
-                                    scale = (scale * zoom).coerceIn(1f, 3.5f)
-                                    offsetX = (offsetX + pan.x / 180f).coerceIn(-1f, 1f)
-                                    offsetY = (offsetY + pan.y / 180f).coerceIn(-1f, 1f)
-                                }
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        AsyncImage(
-                            model = sourceUri,
-                            contentDescription = "裁剪预览",
-                            contentScale = ContentScale.Crop,
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("保存区域约 ${previewWidth.value.toInt()}dp × ${previewHeight.value.toInt()}dp", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("位置：水平 ${(offsetX * 100).toInt()}%，垂直 ${(offsetY * 100).toInt()}%", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Box(
                             modifier = Modifier
-                                .matchParentSize()
-                                .graphicsLayer {
-                                    scaleX = scale
-                                    scaleY = scale
-                                    translationX = offsetX * 120f
-                                    translationY = offsetY * 120f
-                                }
-                        )
-                        Box(modifier = Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.08f)))
+                                .fillMaxWidth()
+                                .aspectRatio(cropAspectRatio)
+                                .heightIn(max = 240.dp)
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .pointerInput(sourceUri) {
+                                    detectTransformGestures { _, pan, zoom, _ ->
+                                        scale = (scale * zoom).coerceIn(1f, 3.5f)
+                                        offsetX = (offsetX + pan.x / 180f).coerceIn(-1f, 1f)
+                                        offsetY = (offsetY + pan.y / 180f).coerceIn(-1f, 1f)
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            AsyncImage(
+                                model = sourceUri,
+                                contentDescription = "裁剪预览",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .matchParentSize()
+                                    .graphicsLayer {
+                                        scaleX = scale
+                                        scaleY = scale
+                                        translationX = offsetX * 120f
+                                        translationY = offsetY * 120f
+                                    }
+                            )
+                            Box(modifier = Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.08f)))
+                        }
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

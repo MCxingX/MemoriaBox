@@ -11,6 +11,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.memoriabox.MainActivity
 import com.memoriabox.R
+import kotlinx.coroutines.launch
 
 class PackageReplacedReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -20,6 +21,20 @@ class PackageReplacedReceiver : BroadcastReceiver() {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         }
         runCatching { context.startActivity(launchIntent) }
+
+        // 重新注册所有事件提醒（应用更新会清除 AlarmManager 状态）
+        val appContext = context.applicationContext
+        val pendingReschedule = goAsync()
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            try {
+                val db = com.memoriabox.database.AppDatabase.getDatabase(appContext)
+                val events = db.eventDao().getAllEventsOnce().filter { it.reminderEnabled }
+                val helper = com.memoriabox.utils.NotificationHelper(appContext)
+                events.forEach { event -> helper.scheduleReminder(event) }
+            } finally {
+                pendingReschedule.finish()
+            }
+        }
 
         val manager = context.getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

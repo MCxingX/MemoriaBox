@@ -2,6 +2,8 @@ package com.memoriabox.utils
 
 import android.content.Context
 import android.net.Uri
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
 import android.util.Log
 import androidx.documentfile.provider.DocumentFile
 import androidx.room.Room
@@ -18,6 +20,7 @@ import com.memoriabox.database.MIGRATION_7_8
 import com.memoriabox.data.model.BackupConfig
 import kotlinx.coroutines.*
 import java.io.*
+import java.security.KeyStore
 import java.text.SimpleDateFormat
 import java.util.*
 import javax.crypto.Cipher
@@ -78,6 +81,8 @@ class BackupManager(
         private const val MEDIA_PREFIX = "media/"
         private const val SETTINGS_PREFIX = "settings/"
         private const val URI_MAP_ENTRY = "uris.txt"
+        private const val BACKUP_PASSWORD_KEY = "backup_password_encrypted"
+        private const val BACKUP_PASSWORD_KEY_ALIAS = "memoriabox-backup-password"
         private val SETTINGS_FILES = listOf("app_settings", "ui_settings", "pushplus_config")
     }
 
@@ -95,12 +100,16 @@ class BackupManager(
 
     private fun loadPreferences() {
         val prefs = context.getSharedPreferences("backup_config", Context.MODE_PRIVATE)
+        val encryptedPassword = prefs.getString(BACKUP_PASSWORD_KEY, null)
+        val legacyPassword = prefs.getString("backup_password", "").orEmpty()
+        val backupPassword = decryptStoredPassword(encryptedPassword) ?: legacyPassword
         config = BackupConfig(
             autoBackupDelay = prefs.getLong("auto_backup_delay", 20000L),
             maxAutoBackups = prefs.getInt("max_auto_backups", 5),
             maxLogEntries = prefs.getInt("max_log_entries", 2000),
-            backupPassword = prefs.getString("backup_password", "") ?: ""
+            backupPassword = backupPassword
         )
+        if (legacyPassword.isNotEmpty()) savePreferences()
         val uriString = prefs.getString("backup_dir_uri", "")
         if (!uriString.isNullOrEmpty()) {
             backupDirUri = Uri.parse(uriString)
@@ -113,7 +122,8 @@ class BackupManager(
             .putLong("auto_backup_delay", config.autoBackupDelay)
             .putInt("max_auto_backups", config.maxAutoBackups)
             .putString("backup_dir_uri", backupDirUri?.toString() ?: "")
-            .putString("backup_password", config.backupPassword)
+            .putString(BACKUP_PASSWORD_KEY, encryptStoredPassword(config.backupPassword))
+            .putString("backup_password", "")
             .apply()
     }
 
@@ -364,7 +374,8 @@ class BackupManager(
             val newFile = File(restoreRoot, relative)
             newFile.parentFile?.mkdirs()
             file.copyTo(newFile, overwrite = true)
-            val originalUri = zipToOriginal[MEDIA_PREFIX + relative] ?: Uri.fromFile(file).toString()
+            val originalUri = zipToOriginal[MEDIA_PREFIX + relative]
+                ?: Uri.fromFile(File(context.filesDir, relative)).toString()
             uriMap[originalUri] = Uri.fromFile(newFile).toString()
             count++
         }
@@ -666,6 +677,46 @@ class BackupManager(
         val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
         val spec = PBEKeySpec(password.toCharArray(), salt, 100000, 256)
         return factory.generateSecret(spec).encoded
+    }
+
+    private fun encryptStoredPassword(password: String): String {
+        if (password.isEmpty()) return ""
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, getOrCreateBackupPasswordKey())
+        val encrypted = cipher.iv + cipher.doFinal(password.toByteArray(Charsets.UTF_8))
+        return android.util.Base64.encodeToString(encrypted, android.util.Base64.NO_WRAP)
+    }
+
+    private fun decryptStoredPassword(value: String?): String? {
+        if (value.isNullOrEmpty()) return ""
+        return runCatching {
+            val encrypted = android.util.Base64.decode(value, android.util.Base64.NO_WRAP)
+            require(encrypted.size > 12) { "备份密码密文无效" }
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            cipher.init(
+                Cipher.DECRYPT_MODE,
+                getOrCreateBackupPasswordKey(),
+                GCMParameterSpec(128, encrypted.copyOfRange(0, 12))
+            )
+            String(cipher.doFinal(encrypted.copyOfRange(12, encrypted.size)), Charsets.UTF_8)
+        }.getOrNull()
+    }
+
+    private fun getOrCreateBackupPasswordKey(): javax.crypto.SecretKey {
+        val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        val existingKey = (keyStore.getEntry(BACKUP_PASSWORD_KEY_ALIAS, null) as? KeyStore.SecretKeyEntry)?.secretKey
+        if (existingKey != null) return existingKey
+        return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").apply {
+            init(
+                KeyGenParameterSpec.Builder(
+                    BACKUP_PASSWORD_KEY_ALIAS,
+                    KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
+                )
+                    .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                    .build()
+            )
+        }.generateKey()
     }
 
     private fun getDeviceKey(): ByteArray {

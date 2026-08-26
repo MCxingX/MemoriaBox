@@ -159,13 +159,13 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
         database.execSQL("ALTER TABLE events ADD COLUMN todo_status TEXT NOT NULL DEFAULT 'PENDING'")
         database.execSQL("ALTER TABLE events ADD COLUMN due_date INTEGER")
         
-        database.execSQL("CREATE TABLE IF NOT EXISTS friends (id TEXT NOT NULL PRIMARY KEY, name TEXT NOT NULL, avatar_uri TEXT, birthday_date INTEGER, created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000))")
+        database.execSQL("CREATE TABLE IF NOT EXISTS friends (id TEXT NOT NULL PRIMARY KEY, name TEXT NOT NULL, avatar_uri TEXT, birthday_date INTEGER, created_at INTEGER NOT NULL)")
         
-        database.execSQL("CREATE TABLE IF NOT EXISTS labels (name TEXT NOT NULL PRIMARY KEY, color TEXT NOT NULL DEFAULT '#7C4DFF', created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000))")
+        database.execSQL("CREATE TABLE IF NOT EXISTS labels (name TEXT NOT NULL PRIMARY KEY, color TEXT NOT NULL, created_at INTEGER NOT NULL)")
         
-        database.execSQL("CREATE TABLE IF NOT EXISTS friend_relations (friend_id TEXT NOT NULL, label TEXT NOT NULL, PRIMARY KEY (friend_id, label), FOREIGN KEY (friend_id) REFERENCES friends(id) ON DELETE CASCADE)")
+        database.execSQL("CREATE TABLE IF NOT EXISTS friend_relations (friend_id TEXT NOT NULL, label TEXT NOT NULL, PRIMARY KEY (friend_id, label))")
         
-        database.execSQL("CREATE TABLE IF NOT EXISTS event_labels (event_id TEXT NOT NULL, label TEXT NOT NULL, PRIMARY KEY (event_id, label), FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE)")
+        database.execSQL("CREATE TABLE IF NOT EXISTS event_labels (event_id TEXT NOT NULL, label TEXT NOT NULL, PRIMARY KEY (event_id, label))")
     }
 }
 
@@ -204,10 +204,6 @@ val MIGRATION_6_7 = object : Migration(6, 7) {
 val MIGRATION_7_8 = object : Migration(7, 8) {
     override fun migrate(database: SupportSQLiteDatabase) {
         ensureColumnExists(database, "events", "todo_priority", "TEXT NOT NULL DEFAULT 'MEDIUM'")
-        database.execSQL("DROP TABLE IF EXISTS mood_entries")
-        database.execSQL("DROP TABLE IF EXISTS todo_subtasks")
-        database.execSQL("DROP TABLE IF EXISTS friend_gifts")
-        database.execSQL("DROP TABLE IF EXISTS friend_birthday_records")
         ensureNextFeaturesTables(database)
     }
 }

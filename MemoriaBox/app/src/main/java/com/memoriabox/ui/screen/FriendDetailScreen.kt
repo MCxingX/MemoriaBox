@@ -361,7 +361,7 @@ private fun FriendDetailEditDialog(
     }
     var month by remember(friend.id) { mutableStateOf(initialBirthday?.get(Calendar.MONTH)?.plus(1)?.toString() ?: "") }
     var day by remember(friend.id) { mutableStateOf(initialBirthday?.get(Calendar.DAY_OF_MONTH)?.toString() ?: "") }
-    var year by remember(friend.id) { mutableStateOf(initialBirthday?.get(Calendar.YEAR)?.toString() ?: "") }
+    var year by remember(friend.id) { mutableStateOf(initialBirthday?.get(Calendar.YEAR)?.takeIf { it != BIRTHDAY_UNKNOWN_YEAR }?.toString() ?: "") }
     var relationInput by remember(friend.id) { mutableStateOf(relations.joinToString("，")) }
 
     AlertDialog(
@@ -481,8 +481,7 @@ private fun AddBirthdayRecordDialog(
 
 private fun friendBirthdayLabel(friend: Friend): String {
     val birthday = friend.birthdayDate ?: return "未设置"
-    val sdf = SimpleDateFormat("yyyy年M月d日", Locale.getDefault())
-    return sdf.format(Date(birthday))
+    return formatBirthdayWithYear(birthday)
 }
 
 private fun giftStatusColor(status: GiftStatus): androidx.compose.ui.graphics.Color = when (status) {

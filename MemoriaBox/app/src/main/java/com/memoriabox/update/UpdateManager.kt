@@ -116,7 +116,7 @@ object UpdateManager {
             val asset = assets.getJSONObject(index)
             val name = asset.getString("name")
             when {
-                name.endsWith(".apk", ignoreCase = true) && apkUrl.isEmpty() -> {
+                name.equals(RELEASE_APK_NAME, ignoreCase = true) && apkUrl.isEmpty() -> {
                     apkName = name
                     apkUrl = asset.getString("browser_download_url")
                     apkSize = asset.optLong("size")
@@ -126,7 +126,7 @@ object UpdateManager {
                 }
             }
         }
-        require(apkUrl.isNotEmpty()) { "GitHub Release 缺少 APK 资产" }
+        require(apkUrl.isNotEmpty()) { "GitHub 正式 Release 缺少 $RELEASE_APK_NAME 资产" }
         val releaseBody = release.optString("body", "")
         val sha256 = UpdateFormat.parseSha256(releaseBody)
             ?: if (checksumUrl.isNotEmpty()) {
@@ -153,15 +153,22 @@ object UpdateManager {
         val updateDir = File(context.filesDir, "updates").apply { mkdirs() }
         val destination = File(updateDir, "MemoriaBox-${info.versionName}.apk")
         if (destination.isFile && UpdateVerifier.verify(context, destination, info).isSuccess) {
-            mutableState.value = UpdateState.Ready(info, existingOrSaveToDownloads(context, destination).toString())
+            mutableState.value = readyOrError(context, info, destination)
             return
         }
         val temporary = File(destination.parentFile, "${destination.name}.part")
-        if (temporary.isFile && temporary.length() > 0 && UpdateVerifier.verify(context, temporary, info).isSuccess) {
-            destination.delete()
-            if (temporary.renameTo(destination)) {
-                mutableState.value = UpdateState.Ready(info, existingOrSaveToDownloads(context, destination).toString())
-                return
+        if (temporary.isFile && temporary.length() > 0) {
+            // 完整大小但校验失败的 .part 直接删除，避免 resume 触发 416 死循环
+            if (info.apkSize > 0 && temporary.length() >= info.apkSize &&
+                UpdateVerifier.verify(context, temporary, info).isFailure
+            ) {
+                temporary.delete()
+            } else if (UpdateVerifier.verify(context, temporary, info).isSuccess) {
+                destination.delete()
+                if (temporary.renameTo(destination)) {
+                    mutableState.value = readyOrError(context, info, destination)
+                    return
+                }
             }
         }
         mutableState.value = UpdateState.Downloading(info, progressFromPart(temporary, info.apkSize))
@@ -174,6 +181,8 @@ object UpdateManager {
                 if (downloadCancelled) {
                     mutableState.value = UpdateState.Available(info)
                 } else {
+                    // 满大小但损坏的 .part 会导致 resume 死循环（HTTP 416），此处清理
+                    if (info.apkSize > 0 && temporary.length() >= info.apkSize) temporary.delete()
                     mutableState.value = UpdateState.Error(error.message ?: "镜像下载失败", info)
                 }
                 return
@@ -184,7 +193,7 @@ object UpdateManager {
         }
         UpdateVerifier.verify(context, destination, info)
             .onSuccess {
-                mutableState.value = UpdateState.Ready(info, existingOrSaveToDownloads(context, destination).toString())
+                mutableState.value = readyOrError(context, info, destination)
             }
             .onFailure { error ->
                 temporary.delete()
@@ -245,6 +254,14 @@ object UpdateManager {
 
     private fun progressFromPart(temporary: File, total: Long): Int =
         if (total > 0 && temporary.isFile) ((temporary.length() * 100) / total).toInt().coerceIn(0, 99) else 0
+
+    /** 保存到系统下载目录，失败时返回 Error 而不是让异常漏出后状态永久卡在 Downloading */
+    private fun readyOrError(context: Context, info: UpdateInfo, destination: File): UpdateState {
+        return runCatching { existingOrSaveToDownloads(context, destination) }
+            .fold({ UpdateState.Ready(info, it.toString()) }) { e ->
+                UpdateState.Error(e.message ?: "保存更新包失败，请检查存储空间", info)
+            }
+    }
 
     private fun saveToDownloads(context: Context, source: File): Uri {
         val resolver = context.contentResolver
@@ -343,4 +360,5 @@ object UpdateManager {
     }
 
     private const val DOWNLOAD_URI_KEY = "download_apk_uri"
+    private const val RELEASE_APK_NAME = "MemoriaBox.apk"
 }

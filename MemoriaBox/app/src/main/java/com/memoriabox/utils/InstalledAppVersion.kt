@@ -17,7 +17,13 @@ fun Context.installedAppVersion(): InstalledAppVersion = runCatching {
         @Suppress("DEPRECATION")
         info.versionCode.toLong()
     }
-    InstalledAppVersion(info.versionName.orEmpty(), code)
+    InstalledAppVersion(
+        info.versionName.orEmpty().trim().removePrefix("v").removePrefix("V"),
+        code
+    )
 }.getOrElse {
-    InstalledAppVersion(BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE.toLong())
+    InstalledAppVersion(
+        BuildConfig.VERSION_NAME.trim().removePrefix("v").removePrefix("V"),
+        BuildConfig.VERSION_CODE.toLong()
+    )
 }

@@ -27,6 +27,7 @@ class UpdateDownloadService : Service() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var runningInfo: UpdateInfo? = null
+    private var sawDownloading = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -61,6 +62,7 @@ class UpdateDownloadService : Service() {
             UpdateManager.state.collectLatest { state ->
                 when (state) {
                     is UpdateState.Downloading -> {
+                        sawDownloading = true
                         if (canPostNotifications()) {
                             val manager = getSystemService(NotificationManager::class.java)
                             manager.notify(NOTIFICATION_ID, buildNotification(state.info, state.progress, downloading = true))
@@ -73,6 +75,10 @@ class UpdateDownloadService : Service() {
                     is UpdateState.Error -> {
                         showFinishedNotification(state.info ?: info, success = false)
                         finish()
+                    }
+                    is UpdateState.Available -> {
+                        // 仅在下载进行中用户取消时结束服务（避免启动竞态误杀）
+                        if (sawDownloading && state.info.versionName == info.versionName) finish()
                     }
                     else -> Unit
                 }

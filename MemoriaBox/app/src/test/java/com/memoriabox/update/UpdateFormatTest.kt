@@ -28,8 +28,13 @@ class UpdateFormatTest {
     }
 
     @Test
-    fun usesTheReleaseAssetUrlDirectly() {
-        val urls = UpdateFormat.mirrorUrls("https://github.com/org/repo/releases/download/v1/app.apk")
-        assertEquals(listOf("https://github.com/org/repo/releases/download/v1/app.apk"), urls)
+    fun buildsMirrorsWithTheOriginalUrlFirst() {
+        val originalUrl = "https://github.com/org/repo/releases/download/v1/app.apk"
+        val urls = UpdateFormat.mirrorUrls(originalUrl)
+
+        assertEquals(originalUrl, urls.first())
+        assertTrue(urls.size > 1)
+        assertTrue(urls.all { it.endsWith("/org/repo/releases/download/v1/app.apk") })
+        assertEquals(urls.size, urls.distinct().size)
     }
 }

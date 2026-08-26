@@ -862,13 +862,13 @@ class FriendDetailViewModel(
         val existing = eventRepository.getAllEventsOnce()
             .firstOrNull { it.type == EventType.BIRTHDAY && it.avatarUri == "friend:${friend.id}" }
         val defaultBoxId = "default_1"
+        // 使用月/日对齐，2/29 在非闰年自动落到 2/28
+        val currentYearBirthday = com.memoriabox.utils.AnnualDateUtils.nextOccurrenceMillis(birthday)
         if (existing == null) {
-            val calendar = java.util.Calendar.getInstance().apply { timeInMillis = birthday }
-            calendar.set(java.util.Calendar.YEAR, java.util.Calendar.getInstance().get(java.util.Calendar.YEAR))
             val event = Event(
                 boxId = defaultBoxId,
                 name = "${friend.name}的生日",
-                date = calendar.timeInMillis,
+                date = currentYearBirthday,
                 type = EventType.BIRTHDAY,
                 isBirthday = true,
                 repeatYearly = true,
@@ -877,8 +877,12 @@ class FriendDetailViewModel(
             eventRepository.insertEvent(event)
             _birthdayEvent.value = event
             logRepository.logEventOperation("AUTO_CREATE", event.id, event.name)
-        } else if (existing.name != "${friend.name}的生日") {
-            val updated = existing.copy(name = "${friend.name}的生日")
+        } else if (existing.name != "${friend.name}的生日" || existing.date != currentYearBirthday) {
+            // 同步名称与生日日期（好友改生日后事件日期必须更新）
+            val updated = existing.copy(
+                name = "${friend.name}的生日",
+                date = currentYearBirthday
+            )
             eventRepository.updateEvent(updated)
             _birthdayEvent.value = updated
         }

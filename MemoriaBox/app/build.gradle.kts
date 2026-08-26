@@ -1,5 +1,14 @@
 import java.util.Properties
 import java.security.MessageDigest
+import java.time.LocalDateTime
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+
+val baseVersion = providers.gradleProperty("baseVersion").orElse("3.7.9").get()
+val buildNumber = LocalDateTime.now(ZoneOffset.UTC)
+    .format(DateTimeFormatter.ofPattern("yyDDDHHmm"))
+    .toInt()
+val generatedVersionName = "$baseVersion.$buildNumber"
 
 plugins {
     alias(libs.plugins.android.application)
@@ -24,8 +33,8 @@ android {
         applicationId = "com.memoriabox"
         minSdk = 24
         targetSdk = 35
-        versionCode = 50
-        versionName = "3.7.8"
+        versionCode = buildNumber
+        versionName = generatedVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
@@ -119,26 +128,44 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
 
+tasks.configureEach {
+    if (name == "assembleRelease") {
+        doLast {
+            val releaseDirectory = layout.buildDirectory.dir("outputs/apk/release").get().asFile
+            val source = releaseDirectory.resolve("app-release.apk")
+            require(source.isFile) { "No release APK found in ${releaseDirectory.absolutePath}" }
+            source.copyTo(releaseDirectory.resolve("MemoriaBox.apk"), overwrite = true)
+        }
+    }
+}
+
 tasks.register("generateReleaseApkSha256") {
     group = "build"
     description = "Generate SHA-256 files for release APKs"
     dependsOn("assembleRelease")
     doLast {
         val releaseDirectory = layout.buildDirectory.dir("outputs/apk/release").get().asFile
-        val apkFiles = releaseDirectory.listFiles { file -> file.isFile && file.extension == "apk" }.orEmpty()
-        require(apkFiles.isNotEmpty()) { "No release APK found in ${releaseDirectory.absolutePath}" }
-        apkFiles.forEach { apkFile ->
-            val digest = MessageDigest.getInstance("SHA-256")
-            apkFile.inputStream().buffered().use { input ->
-                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                while (true) {
-                    val count = input.read(buffer)
-                    if (count < 0) break
-                    if (count > 0) digest.update(buffer, 0, count)
-                }
+        val apkFile = releaseDirectory.resolve("MemoriaBox.apk")
+        require(apkFile.isFile) { "No MemoriaBox.apk found in ${releaseDirectory.absolutePath}" }
+        val digest = MessageDigest.getInstance("SHA-256")
+        apkFile.inputStream().buffered().use { input ->
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                if (count > 0) digest.update(buffer, 0, count)
             }
-            val hash = digest.digest().joinToString("") { "%02x".format(it) }
-            apkFile.resolveSibling("${apkFile.name}.sha256").writeText("$hash  ${apkFile.name}\n")
         }
+        val hash = digest.digest().joinToString("") { "%02x".format(it) }
+        apkFile.resolveSibling("${apkFile.name}.sha256").writeText("$hash  ${apkFile.name}\n")
+    }
+}
+
+tasks.register("printAppVersion") {
+    group = "build"
+    description = "Print the version assigned to this build"
+    doLast {
+        println("versionName=$generatedVersionName")
+        println("versionCode=$buildNumber")
     }
 }

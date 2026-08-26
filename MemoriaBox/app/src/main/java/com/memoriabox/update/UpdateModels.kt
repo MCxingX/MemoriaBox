@@ -45,7 +45,25 @@ object UpdateFormat {
             ?.value
             ?.lowercase(Locale.US)
 
-    fun mirrorUrls(originalUrl: String): List<String> = listOf(originalUrl)
+    /** 基于 GitHub Release 资产直链构造可参与测速的国内常用代理地址。 */
+    fun mirrorUrls(originalUrl: String): List<String> {
+        val mirrors = mutableListOf(originalUrl)
+        val match = Regex("""https?://github\.com/([^/]+)/([^/]+)/releases/download/([^/]+)/(.+)""").matchEntire(originalUrl)
+        if (match != null) {
+            val canonicalUrl = "https://github.com/${match.groupValues[1]}/${match.groupValues[2]}/releases/download/${match.groupValues[3]}/${match.groupValues[4]}"
+            val proxyPrefixes = listOf(
+                "https://gh-proxy.com/",
+                "https://mirror.ghproxy.com/",
+                "https://ghproxy.net/",
+                "https://ghfast.top/",
+                "https://ghproxy.cc/",
+                "https://github.moeyy.xyz/",
+                "https://gh-proxy.llyke.com/"
+            )
+            mirrors += proxyPrefixes.map { prefix -> prefix + canonicalUrl }
+        }
+        return mirrors.distinct()
+    }
 
     private fun versionParts(value: String): List<Int> = normalizeVersion(value)
         .substringBefore('-')
