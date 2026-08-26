@@ -4,7 +4,7 @@ import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
-val baseVersion = providers.gradleProperty("baseVersion").orElse("3.7.9").get()
+val baseVersion = providers.gradleProperty("baseVersion").orElse("3.8.0").get()
 val buildNumber = LocalDateTime.now(ZoneOffset.UTC)
     .format(DateTimeFormatter.ofPattern("yyDDDHHmm"))
     .toInt()
