@@ -1,6 +1,7 @@
 package com.memoriabox.ui.screen.dialogs
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -71,9 +72,10 @@ fun BoxDialog(
     var selectedBgValue by remember { mutableStateOf(existingBox?.bgValue ?: "#7C4DFF") }
     var showEmojiPicker by remember { mutableStateOf(false) }
     var showColorPicker by remember { mutableStateOf(false) }
+    var pendingIconCropUri by remember { mutableStateOf<Uri?>(null) }
     val iconImagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         uri ?: return@rememberLauncherForActivityResult
-        selectedIcon = ImageImportUtils.copyImageToPrivateStorage(context, uri, "box_icons") ?: uri.toString()
+        pendingIconCropUri = uri
     }
 
     AlertDialog(
@@ -216,6 +218,21 @@ fun BoxDialog(
                 selectedBgValue = color
                 selectedBgType = BgType.COLOR
                 showColorPicker = false
+            }
+        )
+    }
+
+    pendingIconCropUri?.let { uri ->
+        EventImageCropDialog(
+            sourceUri = uri,
+            cropAspectRatio = 1f,
+            displayLabel = "分类图标",
+            onDismiss = { pendingIconCropUri = null },
+            onSave = { scale, offsetX, offsetY ->
+                selectedIcon = ImageImportUtils.cropImageToPrivateStorage(
+                    context, uri, "box_icons", 1f, scale, -offsetX, -offsetY
+                ) ?: ImageImportUtils.copyImageToPrivateStorage(context, uri, "box_icons") ?: selectedIcon
+                pendingIconCropUri = null
             }
         )
     }
@@ -832,8 +849,9 @@ fun EventDialog(
                     folder = "event_images",
                     cropAspectRatio = cardCropAspectRatio(cardTemplate),
                     scale = scale,
-                    offsetX = offsetX,
-                    offsetY = offsetY
+                    // 图片向右或向下拖动时，保存区域应向原图的左上方移动。
+                    offsetX = -offsetX,
+                    offsetY = -offsetY
                 ) ?: ImageImportUtils.copyImageToPrivateStorage(context, uri, "event_images") ?: backgroundUri
                 pendingCropUri = null
             }
@@ -842,46 +860,35 @@ fun EventDialog(
 }
 
 @Composable
-private fun EventImageCropDialog(
+fun EventImageCropDialog(
     sourceUri: Uri,
     cropAspectRatio: Float,
+    displayLabel: String = "卡片",
     onDismiss: () -> Unit,
     onSave: (scale: Float, offsetX: Float, offsetY: Float) -> Unit
 ) {
     var scale by remember(sourceUri) { mutableFloatStateOf(1f) }
     var offsetX by remember(sourceUri) { mutableFloatStateOf(0f) }
     var offsetY by remember(sourceUri) { mutableFloatStateOf(0f) }
-    var showCropRange by remember(sourceUri, cropAspectRatio) { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("调整卡片背景") },
+        title = { Text("调整${displayLabel}画面") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("拖动图片调整位置，双指缩放后保存。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(
-                    text = "卡片裁剪比例：${cardCropAspectLabel(cropAspectRatio)}",
-                    style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.clickable { showCropRange = !showCropRange }
-                )
-                if (showCropRange) {
-                    Text(
-                        "裁剪范围固定为 ${cardCropAspectLabel(cropAspectRatio)}，拖动图片可调整保存区域内的取景位置。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                Text("白色边框内的画面会保存到$displayLabel。拖动图片调整位置，双指缩放调整取景。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
                     val previewWidth = maxWidth
                     val previewHeight = previewWidth / cropAspectRatio
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("保存区域约 ${previewWidth.value.toInt()}dp × ${previewHeight.value.toInt()}dp", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("位置：水平 ${(offsetX * 100).toInt()}%，垂直 ${(offsetY * 100).toInt()}%", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("卡片展示比例：${cardCropAspectLabel(cropAspectRatio)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .aspectRatio(cropAspectRatio)
                                 .heightIn(max = 240.dp)
                                 .clip(RoundedCornerShape(18.dp))
+                                .border(2.dp, Color.White.copy(alpha = 0.92f), RoundedCornerShape(18.dp))
                                 .background(MaterialTheme.colorScheme.surfaceVariant)
                                 .pointerInput(sourceUri) {
                                     detectTransformGestures { _, pan, zoom, _ ->
@@ -905,7 +912,7 @@ private fun EventImageCropDialog(
                                         translationY = offsetY * 120f
                                     }
                             )
-                            Box(modifier = Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.08f)))
+                            Box(modifier = Modifier.matchParentSize().border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.7f), RoundedCornerShape(18.dp)))
                         }
                     }
                 }
@@ -930,19 +937,19 @@ private fun EventImageCropDialog(
 }
 
 private fun cardCropAspectRatio(template: String): Float = when (template) {
-    "POSTER" -> 3f / 4f
-    "GLASS" -> 16f / 7f
-    "SPLIT" -> 4f / 3f
-    "MINIMAL" -> 5f / 3f
-    else -> 16f / 9f
+    "POSTER" -> 0.78f
+    "GLASS" -> 1.27f
+    "SPLIT" -> 0.95f
+    "NEON" -> 0.98f
+    "MINIMAL" -> 1.16f
+    else -> 1.02f
 }
 
 private fun cardCropAspectLabel(aspectRatio: Float): String = when {
-    aspectRatio == 3f / 4f -> "3:4"
-    aspectRatio == 16f / 7f -> "16:7"
-    aspectRatio == 4f / 3f -> "4:3"
-    aspectRatio == 5f / 3f -> "5:3"
-    else -> "16:9"
+    aspectRatio < 0.85f -> "竖版"
+    aspectRatio < 1.05f -> "方形"
+    aspectRatio < 1.22f -> "横版"
+    else -> "宽横版"
 }
 
 @Composable

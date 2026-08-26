@@ -1,5 +1,6 @@
 package com.memoriabox.ui.screen
 
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -21,6 +22,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.memoriabox.ui.utils.rememberAdaptiveUiSize
+import com.memoriabox.ui.screen.dialogs.EventImageCropDialog
 import com.memoriabox.utils.AppSettings
 import com.memoriabox.utils.ImageImportUtils
 
@@ -41,6 +43,7 @@ fun CustomizationSettingsScreen(onNavigateBack: () -> Unit) {
     var settingsIcon by remember { mutableStateOf(AppSettings.getSettingsIconUri(context)) }
 
     var targetForPick by remember { mutableStateOf<String?>(null) }
+    var pendingCropUri by remember { mutableStateOf<Uri?>(null) }
     var customQuotes by remember { mutableStateOf(AppSettings.getCustomDailyQuotes(context)) }
     var useCustomQuote by remember { mutableStateOf(AppSettings.getUseCustomQuote(context)) }
     var quoteDraft by remember { mutableStateOf("") }
@@ -58,11 +61,7 @@ fun CustomizationSettingsScreen(onNavigateBack: () -> Unit) {
         }
     }
 
-    val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        val target = targetForPick
-        targetForPick = null
-        uri ?: return@rememberLauncherForActivityResult
-        val value = ImageImportUtils.copyImageToPrivateStorage(context, uri, "customization_images") ?: uri.toString()
+    fun applyPickedImage(value: String, target: String?) {
         when (target) {
             "ALL_BG" -> {
                 allBg = value
@@ -85,6 +84,14 @@ fun CustomizationSettingsScreen(onNavigateBack: () -> Unit) {
             "SETTINGS_ICON" -> { settingsIcon = value; AppSettings.setSettingsIconUri(context, value) }
         }
         if (target?.endsWith("_BG") == true) updateAllBgState()
+    }
+
+    val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri == null || targetForPick == null) {
+            targetForPick = null
+        } else {
+            pendingCropUri = uri
+        }
     }
 
     fun chooseImage(target: String) {
@@ -269,6 +276,31 @@ fun CustomizationSettingsScreen(onNavigateBack: () -> Unit) {
                 TextButton(onClick = { showResetIconsConfirm = false }) { Text("取消") }
             }
         )
+    }
+
+    pendingCropUri?.let { uri ->
+        val target = targetForPick
+        if (target != null) {
+            val isIcon = target.endsWith("_ICON")
+            val cropRatio = if (isIcon) 1f else 9f / 16f
+            EventImageCropDialog(
+                sourceUri = uri,
+                cropAspectRatio = cropRatio,
+                displayLabel = if (isIcon) "底部图标" else "页面背景",
+                onDismiss = {
+                    pendingCropUri = null
+                    targetForPick = null
+                },
+                onSave = { scale, offsetX, offsetY ->
+                    val value = ImageImportUtils.cropImageToPrivateStorage(
+                        context, uri, "customization_images", cropRatio, scale, -offsetX, -offsetY
+                    ) ?: ImageImportUtils.copyImageToPrivateStorage(context, uri, "customization_images") ?: uri.toString()
+                    applyPickedImage(value, target)
+                    pendingCropUri = null
+                    targetForPick = null
+                }
+            )
+        }
     }
 }
 

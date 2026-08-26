@@ -37,4 +37,15 @@ class UpdateFormatTest {
         assertTrue(urls.all { it.endsWith("/org/repo/releases/download/v1/app.apk") })
         assertEquals(urls.size, urls.distinct().size)
     }
+
+    @Test
+    fun buildsApiFallbackUrlsWithTheOriginalUrlFirst() {
+        val originalUrl = "https://api.github.com/repos/org/repo/releases/latest"
+        val urls = UpdateFormat.githubUrls(originalUrl)
+
+        assertEquals(originalUrl, urls.first())
+        assertTrue(urls.size > 1)
+        assertTrue(urls.drop(1).all { it.endsWith(originalUrl) })
+        assertEquals(urls.size, urls.distinct().size)
+    }
 }

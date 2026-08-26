@@ -31,6 +31,13 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
 
 ## 条目
 
+[用户执行约束摘要]
+- Date: 2026-08-26
+- Context: 用户反馈日历、卡片裁剪和其他 Bug
+- Instructions:
+  - 需求存在歧义时，先逐项反问并确认操作方式，确认理解完整后再修改代码。
+  - 用户明确要求前，先不创建测试和 Debug APK；修复阶段执行代码级验证即可。
+
 MemoriaBox Android 构建环境
 - Date: 2026-08-04
 - Context: Agent 在构建 Release APK 验证备份格式改动时更新

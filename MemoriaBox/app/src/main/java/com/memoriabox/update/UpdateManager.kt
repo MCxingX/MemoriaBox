@@ -41,6 +41,11 @@ object UpdateManager {
         .readTimeout(8, TimeUnit.SECONDS)
         .callTimeout(10, TimeUnit.SECONDS)
         .build()
+    private val releaseClient = client.newBuilder()
+        .connectTimeout(5, TimeUnit.SECONDS)
+        .readTimeout(8, TimeUnit.SECONDS)
+        .callTimeout(12, TimeUnit.SECONDS)
+        .build()
 
     @Volatile
     private var activeCall: okhttp3.Call? = null
@@ -97,13 +102,7 @@ object UpdateManager {
     }
 
     private suspend fun fetchLatestRelease(): UpdateInfo {
-        val request = Request.Builder()
-            .url(RELEASE_API)
-            .header("Accept", "application/vnd.github+json")
-            .header("X-GitHub-Api-Version", "2022-11-28")
-            .header("User-Agent", "MemoriaBox/${BuildConfig.VERSION_NAME}")
-            .build()
-        val releaseJson = executeText(request)
+        val releaseJson = fetchTextWithFallback(RELEASE_API, "更新服务器连接失败")
         val release = JSONObject(releaseJson)
         require(!release.optBoolean("draft") && !release.optBoolean("prerelease")) { "最新版本尚未正式发布" }
         val versionName = UpdateFormat.normalizeVersion(release.getString("tag_name"))
@@ -130,11 +129,7 @@ object UpdateManager {
         val releaseBody = release.optString("body", "")
         val sha256 = UpdateFormat.parseSha256(releaseBody)
             ?: if (checksumUrl.isNotEmpty()) {
-                val checksumRequest = Request.Builder()
-                    .url(checksumUrl)
-                    .header("User-Agent", "MemoriaBox/${BuildConfig.VERSION_NAME}")
-                    .build()
-                UpdateFormat.parseSha256(executeText(checksumRequest))
+                UpdateFormat.parseSha256(fetchTextWithFallback(checksumUrl, "更新校验信息获取失败"))
             } else null
         return UpdateInfo(
             versionName = versionName,
@@ -331,8 +326,24 @@ object UpdateManager {
         url to TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started)
     }.getOrNull()
 
-    private fun executeText(request: Request): String = client.newCall(request).execute().use { response ->
-        require(response.isSuccessful) { "GitHub 请求失败：HTTP ${response.code}" }
+    private fun fetchTextWithFallback(url: String, unavailableMessage: String): String {
+        for (candidate in UpdateFormat.githubUrls(url)) {
+            val response = runCatching {
+                val request = Request.Builder()
+                    .url(candidate)
+                    .header("Accept", "application/vnd.github+json")
+                    .header("X-GitHub-Api-Version", "2022-11-28")
+                    .header("User-Agent", "MemoriaBox/${BuildConfig.VERSION_NAME}")
+                    .build()
+                executeText(request)
+            }
+            response.getOrNull()?.let { return it }
+        }
+        error("$unavailableMessage，请检查网络后重试")
+    }
+
+    private fun executeText(request: Request): String = releaseClient.newCall(request).execute().use { response ->
+        require(response.isSuccessful) { "更新请求失败：HTTP ${response.code}" }
         response.body?.string() ?: error("GitHub 返回空内容")
     }
 

@@ -626,12 +626,41 @@ fun CalendarViewScreen(
     var selectedDiaryForView by remember { mutableStateOf<DiaryEntry?>(null) }
     var editingDiary by remember { mutableStateOf<DiaryEntry?>(null) }
     var editingDiaryDate by remember { mutableStateOf<Long?>(null) }
+    var monthSwipeOffset by remember { mutableFloatStateOf(0f) }
+    val animatedMonthSwipeOffset by animateFloatAsState(monthSwipeOffset, label = "calendarMonthSwipe")
 
     val diaryMap = remember(diaries) {
         diaries.groupBy { startOfDayMillis(it.dateStart) }
     }
 
-    Column(modifier = modifier.fillMaxSize()) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .graphicsLayer { translationX = animatedMonthSwipeOffset }
+            .pointerInput(currentMonthYear) {
+                var dragDistance = 0f
+                detectHorizontalDragGestures(
+                    onHorizontalDrag = { change, amount ->
+                        dragDistance += amount
+                        monthSwipeOffset = dragDistance.coerceIn(-120f, 120f)
+                        if (abs(dragDistance) > 12f) change.consume()
+                    },
+                    onDragEnd = {
+                        if (abs(dragDistance) >= 36f) {
+                            val updated = cal.clone() as Calendar
+                            updated.add(Calendar.MONTH, if (dragDistance < 0f) 1 else -1)
+                            currentMonthYear = "${updated.get(Calendar.YEAR)}-${updated.get(Calendar.MONTH) + 1}"
+                        }
+                        dragDistance = 0f
+                        monthSwipeOffset = 0f
+                    },
+                    onDragCancel = {
+                        dragDistance = 0f
+                        monthSwipeOffset = 0f
+                    }
+                )
+            }
+    ) {
         TopAppBar(
             modifier = Modifier.height(adaptiveUi.topBarHeight),
             title = { Text("日历视图") },
@@ -667,24 +696,6 @@ fun CalendarViewScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .pointerInput(currentMonthYear) {
-                        var dragDistance = 0f
-                        detectHorizontalDragGestures(
-                            onHorizontalDrag = { change, amount ->
-                                change.consume()
-                                dragDistance += amount
-                            },
-                            onDragEnd = {
-                                if (abs(dragDistance) >= 36f) {
-                                    val updated = cal.clone() as Calendar
-                                    updated.add(Calendar.MONTH, if (dragDistance < 0f) 1 else -1)
-                                    currentMonthYear = "${updated.get(Calendar.YEAR)}-${updated.get(Calendar.MONTH) + 1}"
-                                }
-                                dragDistance = 0f
-                            },
-                            onDragCancel = { dragDistance = 0f }
-                        )
-                    }
                     .background(Brush.linearGradient(listOf(themeTokens.calendarSelected, themeTokens.calendarToday, themeTokens.anniversaryMarker)))
                     .padding(horizontal = 16.dp, vertical = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,

@@ -25,6 +25,16 @@ sealed interface UpdateState {
 }
 
 object UpdateFormat {
+    private val githubProxyPrefixes = listOf(
+        "https://gh-proxy.com/",
+        "https://mirror.ghproxy.com/",
+        "https://ghproxy.net/",
+        "https://ghfast.top/",
+        "https://ghproxy.cc/",
+        "https://github.moeyy.xyz/",
+        "https://gh-proxy.llyke.com/"
+    )
+
     fun normalizeVersion(value: String): String = value.trim().removePrefix("v").removePrefix("V")
 
     fun isNewer(candidate: String, current: String): Boolean {
@@ -45,24 +55,25 @@ object UpdateFormat {
             ?.value
             ?.lowercase(Locale.US)
 
+    /** 为 GitHub API 和 Release 资产构造可回退的代理地址。 */
+    fun githubUrls(originalUrl: String): List<String> {
+        val isGitHubUrl = originalUrl.startsWith("https://github.com/") ||
+            originalUrl.startsWith("https://api.github.com/")
+        return if (isGitHubUrl) {
+            (listOf(originalUrl) + githubProxyPrefixes.map { it + originalUrl }).distinct()
+        } else {
+            listOf(originalUrl)
+        }
+    }
+
     /** 基于 GitHub Release 资产直链构造可参与测速的国内常用代理地址。 */
     fun mirrorUrls(originalUrl: String): List<String> {
-        val mirrors = mutableListOf(originalUrl)
         val match = Regex("""https?://github\.com/([^/]+)/([^/]+)/releases/download/([^/]+)/(.+)""").matchEntire(originalUrl)
         if (match != null) {
             val canonicalUrl = "https://github.com/${match.groupValues[1]}/${match.groupValues[2]}/releases/download/${match.groupValues[3]}/${match.groupValues[4]}"
-            val proxyPrefixes = listOf(
-                "https://gh-proxy.com/",
-                "https://mirror.ghproxy.com/",
-                "https://ghproxy.net/",
-                "https://ghfast.top/",
-                "https://ghproxy.cc/",
-                "https://github.moeyy.xyz/",
-                "https://gh-proxy.llyke.com/"
-            )
-            mirrors += proxyPrefixes.map { prefix -> prefix + canonicalUrl }
+            return githubUrls(canonicalUrl)
         }
-        return mirrors.distinct()
+        return listOf(originalUrl)
     }
 
     private fun versionParts(value: String): List<Int> = normalizeVersion(value)
