@@ -252,13 +252,13 @@ object UpdateManager {
 
     /** 保存到系统下载目录，失败时返回 Error 而不是让异常漏出后状态永久卡在 Downloading */
     private fun readyOrError(context: Context, info: UpdateInfo, destination: File): UpdateState {
-        return runCatching { existingOrSaveToDownloads(context, destination) }
+        return runCatching { existingOrSaveToDownloads(context, info.versionName, destination) }
             .fold({ UpdateState.Ready(info, it.toString()) }) { e ->
                 UpdateState.Error(e.message ?: "保存更新包失败，请检查存储空间", info)
             }
     }
 
-    private fun saveToDownloads(context: Context, source: File): Uri {
+    private fun saveToDownloads(context: Context, versionName: String, source: File): Uri {
         val resolver = context.contentResolver
         val values = ContentValues().apply {
             put(MediaStore.Downloads.DISPLAY_NAME, "MemoriaBox-${System.currentTimeMillis()}.apk")
@@ -280,20 +280,24 @@ object UpdateManager {
             resolver.delete(uri, null, null)
             throw error
         }
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().putString(DOWNLOAD_URI_KEY, uri.toString()).apply()
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
+            .putString(DOWNLOAD_URI_KEY, uri.toString())
+            .putString(DOWNLOAD_VERSION_KEY, versionName)
+            .apply()
         return uri
     }
 
-    private fun existingOrSaveToDownloads(context: Context, source: File): Uri {
+    private fun existingOrSaveToDownloads(context: Context, versionName: String, source: File): Uri {
         val preferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val savedUri = preferences.getString(DOWNLOAD_URI_KEY, null)?.let(Uri::parse)
-        if (savedUri != null && runCatching {
+        val savedVersion = preferences.getString(DOWNLOAD_VERSION_KEY, null)
+        if (savedUri != null && savedVersion == versionName && runCatching {
                 context.contentResolver.openInputStream(savedUri)?.close() ?: error("更新包已清理")
             }.isSuccess
         ) {
             return savedUri
         }
-        return saveToDownloads(context, source)
+        return saveToDownloads(context, versionName, source)
     }
 
     private suspend fun fastestMirror(originalUrl: String): String? =
@@ -364,12 +368,16 @@ object UpdateManager {
             .getString(DOWNLOAD_URI_KEY, null)
             ?.let(Uri::parse)
             ?.let { uri -> runCatching { context.contentResolver.delete(uri, null, null) } }
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().remove(DOWNLOAD_URI_KEY).apply()
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
+            .remove(DOWNLOAD_URI_KEY)
+            .remove(DOWNLOAD_VERSION_KEY)
+            .apply()
         File(context.filesDir, "updates").listFiles()
             ?.filter { it.extension.equals("apk", ignoreCase = true) }
             ?.forEach(File::delete)
     }
 
     private const val DOWNLOAD_URI_KEY = "download_apk_uri"
+    private const val DOWNLOAD_VERSION_KEY = "download_apk_version"
     private const val RELEASE_APK_NAME = "MemoriaBox.apk"
 }
