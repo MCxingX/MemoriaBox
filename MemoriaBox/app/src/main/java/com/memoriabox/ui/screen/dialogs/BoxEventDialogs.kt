@@ -1,6 +1,7 @@
 package com.memoriabox.ui.screen.dialogs
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -45,6 +46,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -60,6 +62,7 @@ import com.memoriabox.utils.ColorUtils
 import com.memoriabox.utils.ImageImportUtils
 import com.memoriabox.utils.LunarDateUtils
 import coil.compose.AsyncImage
+import coil.compose.AsyncImagePainter
 import coil.compose.rememberAsyncImagePainter
 import java.text.SimpleDateFormat
 import java.util.*
@@ -302,7 +305,7 @@ fun EmojiPickerDialog(
                             .clip(RoundedCornerShape(8.dp))
                             .clickable { onSelected(emoji) }
                             .padding(8.dp),
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        textAlign = TextAlign.Center
                     )
                 }
             }
@@ -522,12 +525,42 @@ fun EventDialog(
                 Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(128.dp)
+                            .height(120.dp)
+                            .clip(RoundedCornerShape(20.dp))
                             .clickable {
                                 if (!backgroundUri.isNullOrBlank()) {
-                                    val editState = ImageImportUtils.getEditState(context, backgroundUri!!)
-                                    pendingCropUri = Uri.parse(editState.sourceUri)
-                                    pendingCropEditState = editState
+                                    val displayUri = backgroundUri.orEmpty()
+                                    val editState = runCatching {
+                                        ImageImportUtils.getEditState(context, displayUri)
+                                    }.getOrElse {
+                                        ImageImportUtils.EditState(displayUri)
+                                    }
+                                    val sourceStr = editState.sourceUri.trim().ifBlank { displayUri }
+                                    val sourceExists = runCatching {
+                                        val u = Uri.parse(sourceStr)
+                                        when (u.scheme) {
+                                            "file" -> java.io.File(u.path.orEmpty()).exists()
+                                            else -> context.contentResolver.openInputStream(u)?.use { true } ?: false
+                                        }
+                                    }.getOrDefault(false)
+                                    if (sourceExists) {
+                                        pendingCropUri = Uri.parse(sourceStr)
+                                        pendingCropEditState = editState.copy(sourceUri = sourceStr)
+                                    } else {
+                                        val displayExists = runCatching {
+                                            val u = Uri.parse(displayUri)
+                                            when (u.scheme) {
+                                                "file" -> java.io.File(u.path.orEmpty()).exists()
+                                                else -> context.contentResolver.openInputStream(u)?.use { true } ?: false
+                                            }
+                                        }.getOrDefault(false)
+                                        if (displayExists) {
+                                            pendingCropUri = Uri.parse(displayUri)
+                                            pendingCropEditState = ImageImportUtils.EditState(displayUri)
+                                        } else {
+                                            imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                        }
+                                    }
                                 } else {
                                     imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                                 }
@@ -542,6 +575,20 @@ fun EventDialog(
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize()
                             )
+                            Surface(
+                                modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp),
+                                color = Color.Black.copy(alpha = 0.5f),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(Icons.Default.Edit, contentDescription = null, tint = Color.White, modifier = Modifier.size(13.dp))
+                                    Text("点击编辑", color = Color.White, style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
                         } else {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Icon(Icons.Default.Image, contentDescription = null)
@@ -549,6 +596,90 @@ fun EventDialog(
                                 Text("选择背景图", style = MaterialTheme.typography.bodyMedium)
                             }
                         }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("文字排版", style = MaterialTheme.typography.titleSmall)
+                                Text(
+                                    when (cardTemplate) {
+                                        "POSTER" -> "海报"
+                                        "GLASS" -> "紧凑"
+                                        "SPLIT" -> "分栏"
+                                        "NEON" -> "光轨"
+                                        "MINIMAL" -> "徽章"
+                                        else -> "封面"
+                                    },
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            Text("6 种布局", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        CardTemplatePreview(
+                            template = cardTemplate,
+                            name = name.ifBlank { "纪念日预览" },
+                            dateText = selectedDate?.let { formatDate(it) } ?: "选择日期",
+                            backgroundUri = backgroundUri,
+                            gradientStart = gradientStart,
+                            gradientEnd = gradientEnd,
+                            textColor = textColor
+                        )
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            listOf(
+                                "HERO" to "封面",
+                                "POSTER" to "海报",
+                                "GLASS" to "紧凑",
+                                "SPLIT" to "分栏",
+                                "NEON" to "光轨",
+                                "MINIMAL" to "徽章"
+                            ).forEach { (template, label) ->
+                                FilterChip(
+                                    selected = cardTemplate == template,
+                                    onClick = { cardTemplate = template },
+                                    label = { Text(label) }
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    ColorSelectButton("起色", gradientStart, { showColorPickerFor = "start" }, Modifier.weight(1f))
+                    ColorSelectButton("止色", gradientEnd, { showColorPickerFor = "end" }, Modifier.weight(1f))
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                ColorSelectButton("字体颜色", textColor, { showColorPickerFor = "text" }, Modifier.fillMaxWidth())
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("展示字段", style = MaterialTheme.typography.labelMedium)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("date" to "日期", "note" to "备注", "lunar" to "农历", "reminder" to "提醒").forEach { (key, label) ->
+                        FilterChip(
+                            selected = displayFieldSet[key] == true,
+                            onClick = { displayFieldSet[key] = displayFieldSet[key] != true },
+                            label = { Text(label) }
+                        )
                     }
                 }
 
@@ -618,63 +749,6 @@ fun EventDialog(
                                 Text(repeatEndDate?.let { formatDate(it) } ?: "结束日期")
                             }
                         }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Text("卡片样式", style = MaterialTheme.typography.labelLarge)
-                CardTemplatePreview(
-                    template = cardTemplate,
-                    name = name.ifBlank { "纪念日预览" },
-                    dateText = selectedDate?.let { formatDate(it) } ?: "选择日期",
-                    backgroundUri = backgroundUri,
-                    gradientStart = gradientStart,
-                    gradientEnd = gradientEnd,
-                    textColor = textColor
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    listOf("HERO" to "大图", "POSTER" to "海报", "GLASS" to "玻璃", "SPLIT" to "分栏", "NEON" to "光轨", "MINIMAL" to "徽章").forEach { (template, label) ->
-                        ElevatedFilterChip(
-                            selected = cardTemplate == template,
-                            onClick = { cardTemplate = template },
-                            label = { Text(label) },
-                            leadingIcon = {
-                                Box(
-                                    modifier = Modifier
-                                        .size(18.dp)
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(
-                                            Brush.linearGradient(
-                                                listOf(safeDialogColor(gradientStart), safeDialogColor(gradientEnd))
-                                            )
-                                        )
-                                )
-                            }
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    ColorSelectButton("起色", gradientStart, { showColorPickerFor = "start" }, Modifier.weight(1f))
-                    ColorSelectButton("止色", gradientEnd, { showColorPickerFor = "end" }, Modifier.weight(1f))
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-                ColorSelectButton("字体颜色", textColor, { showColorPickerFor = "text" }, Modifier.fillMaxWidth())
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("展示字段", style = MaterialTheme.typography.labelMedium)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("date" to "日期", "note" to "备注", "lunar" to "农历", "reminder" to "提醒").forEach { (key, label) ->
-                        FilterChip(
-                            selected = displayFieldSet[key] == true,
-                            onClick = { displayFieldSet[key] = displayFieldSet[key] != true },
-                            label = { Text(label) }
-                        )
                     }
                 }
 
@@ -933,6 +1007,8 @@ fun EventImageCropDialog(
     val intrinsic = painter.intrinsicSize
     val imageWidth = if (intrinsic.width.isFinite() && intrinsic.width > 0f) intrinsic.width else 1f
     val imageHeight = if (intrinsic.height.isFinite() && intrinsic.height > 0f) intrinsic.height else 1f
+    val imageLoaded = painter.state is AsyncImagePainter.State.Success
+    val imageFailed = painter.state is AsyncImagePainter.State.Error
 
     var areaSize by remember { mutableStateOf(IntSize.Zero) }
     var zoom by remember(sourceUri) { mutableFloatStateOf(1f) }
@@ -941,7 +1017,9 @@ fun EventImageCropDialog(
     var frame by remember(sourceUri) { mutableStateOf(Rect(0f, 0f, 0f, 0f)) }
     var isInitialized by remember(sourceUri) { mutableStateOf(false) }
 
-    val fitScale = if (areaSize.width > 0) {
+    val safeAspectRatio = cropAspectRatio.takeIf { it.isFinite() && it > 0f } ?: 1f
+    val imageReady = areaSize != IntSize.Zero && imageLoaded && imageWidth > 1f && imageHeight > 1f
+    val fitScale = if (imageReady) {
         min(areaSize.width.toFloat() / imageWidth, areaSize.height.toFloat() / imageHeight)
     } else 1f
 
@@ -973,8 +1051,8 @@ fun EventImageCropDialog(
         val margin = with(density) { 12.dp.toPx() }
         val maxW = (aw - margin * 2f).coerceAtLeast(1f)
         val maxH = (ah - margin * 2f).coerceAtLeast(1f)
-        val fw = if (cropAspectRatio >= 1f) min(maxW, maxH * cropAspectRatio) else min(maxW / cropAspectRatio, maxH) * cropAspectRatio
-        val fh = fw / cropAspectRatio
+        val fw = if (safeAspectRatio >= 1f) min(maxW, maxH * safeAspectRatio) else min(maxW / safeAspectRatio, maxH) * safeAspectRatio
+        val fh = fw / safeAspectRatio
         return Rect((aw - fw) / 2f, (ah - fh) / 2f, (aw + fw) / 2f, (ah + fh) / 2f)
     }
 
@@ -1025,13 +1103,13 @@ fun EventImageCropDialog(
         val signY = if (my >= anchorY) 1f else -1f
         val maxW = if (signX > 0f) aw - anchorX else anchorX
         val maxH = if (signY > 0f) ah - anchorY else anchorY
-        val wMaxFit = max(min(maxW, maxH * cropAspectRatio), minSide)
+        val wMaxFit = max(min(maxW, maxH * safeAspectRatio), minSide)
         var w = abs(mx - anchorX).coerceIn(minSide, wMaxFit)
-        var h = w / cropAspectRatio
+        var h = w / safeAspectRatio
         if (h < minSide) {
             h = minSide.coerceAtMost(maxH)
-            w = (h * cropAspectRatio).coerceAtMost(wMaxFit)
-            h = w / cropAspectRatio
+            w = (h * safeAspectRatio).coerceAtMost(wMaxFit)
+            h = w / safeAspectRatio
         }
         mx = anchorX + signX * w
         my = anchorY + signY * h
@@ -1043,7 +1121,7 @@ fun EventImageCropDialog(
     }
 
     LaunchedEffect(areaSize, imageWidth, imageHeight, sourceUri) {
-        if (areaSize == IntSize.Zero || !intrinsic.width.isFinite() || intrinsic.width <= 0f || isInitialized) return@LaunchedEffect
+        if (!imageReady || !intrinsic.width.isFinite() || intrinsic.height <= 0f || isInitialized) return@LaunchedEffect
         isInitialized = true
         val initialFrame = centeredMaxFrame()
         frame = initialFrame
@@ -1058,7 +1136,7 @@ fun EventImageCropDialog(
             val needZoom = max(
                 initialFrame.width / (fitScale * srcW),
                 initialFrame.height / (fitScale * srcH)
-            )
+            ).takeIf { it.isFinite() && it > 0f } ?: 1f
             val z = max(needZoom, minZoomForFrame(initialFrame)).coerceIn(0.1f, 4f)
             zoom = z
             val dispW = imageWidth * fitScale * z
@@ -1121,22 +1199,36 @@ fun EventImageCropDialog(
                             }
                         }
                 ) {
-                    val dispW = imageWidth * fitScale * zoom
-                    val dispH = imageHeight * fitScale * zoom
-                    val imageLeft = (areaSize.width - dispW) / 2f + panX
-                    val imageTop = (areaSize.height - dispH) / 2f + panY
-                    val imageWidthDp = with(density) { dispW.toDp() }
-                    val imageHeightDp = with(density) { dispH.toDp() }
-                    Image(
-                        painter = painter,
-                        contentDescription = "裁剪预览",
-                        contentScale = ContentScale.FillBounds,
-                        modifier = Modifier
-                            .offset { IntOffset(imageLeft.roundToInt(), imageTop.roundToInt()) }
-                            .size(imageWidthDp, imageHeightDp)
-                    )
+                    if (imageFailed) {
+                        Column(
+                            modifier = Modifier.align(Alignment.Center).padding(20.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(Icons.Default.BrokenImage, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("图片无法读取，请返回后重新选择", style = MaterialTheme.typography.bodyMedium, color = Color.White, textAlign = TextAlign.Center)
+                        }
+                    } else if (!imageReady) {
+                        CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                    } else {
+                        val dispW = imageWidth * fitScale * zoom
+                        val dispH = imageHeight * fitScale * zoom
+                        val imageLeft = (areaSize.width - dispW) / 2f + panX
+                        val imageTop = (areaSize.height - dispH) / 2f + panY
+                        val imageWidthDp = with(density) { dispW.toDp() }
+                        val imageHeightDp = with(density) { dispH.toDp() }
+                        if (dispW.isFinite() && dispH.isFinite() && dispW > 0f && dispH > 0f) {
+                            Image(
+                                painter = painter,
+                                contentDescription = "裁剪预览",
+                                contentScale = ContentScale.FillBounds,
+                                modifier = Modifier
+                                    .offset { IntOffset(imageLeft.roundToInt(), imageTop.roundToInt()) }
+                                    .size(imageWidthDp, imageHeightDp)
+                            )
+                        }
 
-                    Canvas(modifier = Modifier.matchParentSize()) {
+                        Canvas(modifier = Modifier.matchParentSize()) {
                         val f = frame
                         val dark = Color.Black.copy(alpha = 0.5f)
                         drawRect(dark, topLeft = Offset(0f, 0f), size = Size(f.left, size.height))
@@ -1153,44 +1245,45 @@ fun EventImageCropDialog(
                         }
                     }
 
-                    val stripSizePx = with(density) { 28.dp.toPx() }
-                    val cornerSizePx = with(density) { 44.dp.toPx() }
-                    CropEdgeStrip(
+                        val stripSizePx = with(density) { 28.dp.toPx() }
+                        val cornerSizePx = with(density) { 44.dp.toPx() }
+                        CropEdgeStrip(
                         offset = { IntOffset(frame.left.roundToInt(), (frame.top - stripSizePx / 2f).roundToInt()) },
                         size = { IntSize((frame.width + stripSizePx).roundToInt(), stripSizePx.roundToInt()) },
                         onDrag = ::moveFrame
                     )
-                    CropEdgeStrip(
+                        CropEdgeStrip(
                         offset = { IntOffset(frame.left.roundToInt(), (frame.bottom - stripSizePx / 2f).roundToInt()) },
                         size = { IntSize((frame.width + stripSizePx).roundToInt(), stripSizePx.roundToInt()) },
                         onDrag = ::moveFrame
                     )
-                    CropEdgeStrip(
+                        CropEdgeStrip(
                         offset = { IntOffset((frame.left - stripSizePx / 2f).roundToInt(), frame.top.roundToInt()) },
                         size = { IntSize(stripSizePx.roundToInt(), (frame.height + stripSizePx).roundToInt()) },
                         onDrag = ::moveFrame
                     )
-                    CropEdgeStrip(
+                        CropEdgeStrip(
                         offset = { IntOffset((frame.right - stripSizePx / 2f).roundToInt(), frame.top.roundToInt()) },
                         size = { IntSize(stripSizePx.roundToInt(), (frame.height + stripSizePx).roundToInt()) },
                         onDrag = ::moveFrame
                     )
-                    CropCornerHandle(
+                        CropCornerHandle(
                         offset = { IntOffset((frame.left - cornerSizePx / 2f).roundToInt(), (frame.top - cornerSizePx / 2f).roundToInt()) },
                         onDrag = { dx, dy -> resizeFromCorner(0, dx, dy) }
                     )
-                    CropCornerHandle(
+                        CropCornerHandle(
                         offset = { IntOffset((frame.right - cornerSizePx / 2f).roundToInt(), (frame.top - cornerSizePx / 2f).roundToInt()) },
                         onDrag = { dx, dy -> resizeFromCorner(1, dx, dy) }
                     )
-                    CropCornerHandle(
+                        CropCornerHandle(
                         offset = { IntOffset((frame.left - cornerSizePx / 2f).roundToInt(), (frame.bottom - cornerSizePx / 2f).roundToInt()) },
                         onDrag = { dx, dy -> resizeFromCorner(2, dx, dy) }
                     )
-                    CropCornerHandle(
+                        CropCornerHandle(
                         offset = { IntOffset((frame.right - cornerSizePx / 2f).roundToInt(), (frame.bottom - cornerSizePx / 2f).roundToInt()) },
                         onDrag = { dx, dy -> resizeFromCorner(3, dx, dy) }
-                    )
+                        )
+                    }
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1225,20 +1318,25 @@ fun EventImageCropDialog(
                         TextButton(onClick = onDismiss, modifier = Modifier.height(48.dp)) { Text("取消") }
                         Button(
                             onClick = {
-                                val aw = areaSize.width.toFloat()
-                                val ah = areaSize.height.toFloat()
-                                val dispW = imageWidth * fitScale * zoom
-                                val dispH = imageHeight * fitScale * zoom
-                                val imageLeft = (aw - dispW) / 2f + panX
-                                val imageTop = (ah - dispH) / 2f + panY
-                                val scalePx = fitScale * zoom
-                                val left = ((frame.left - imageLeft) / scalePx / imageWidth).coerceIn(0f, 1f)
-                                val top = ((frame.top - imageTop) / scalePx / imageHeight).coerceIn(0f, 1f)
-                                val right = ((frame.right - imageLeft) / scalePx / imageWidth).coerceIn(0f, 1f)
-                                val bottom = ((frame.bottom - imageTop) / scalePx / imageHeight).coerceIn(0f, 1f)
-                                onSave(left, top, right - left, bottom - top)
+                                if (imageReady) {
+                                    val aw = areaSize.width.toFloat()
+                                    val ah = areaSize.height.toFloat()
+                                    val dispW = imageWidth * fitScale * zoom
+                                    val dispH = imageHeight * fitScale * zoom
+                                    val imageLeft = (aw - dispW) / 2f + panX
+                                    val imageTop = (ah - dispH) / 2f + panY
+                                    val scalePx = fitScale * zoom
+                                    if (scalePx.isFinite() && scalePx > 0f) {
+                                        val left = ((frame.left - imageLeft) / scalePx / imageWidth).coerceIn(0f, 1f)
+                                        val top = ((frame.top - imageTop) / scalePx / imageHeight).coerceIn(0f, 1f)
+                                        val right = ((frame.right - imageLeft) / scalePx / imageWidth).coerceIn(0f, 1f)
+                                        val bottom = ((frame.bottom - imageTop) / scalePx / imageHeight).coerceIn(0f, 1f)
+                                        onSave(left, top, right - left, bottom - top)
+                                    }
+                                }
                             },
-                            modifier = Modifier.height(48.dp)
+                             enabled = imageReady,
+                             modifier = Modifier.height(48.dp)
                         ) { Text("保存") }
                     }
                 }
@@ -1293,6 +1391,7 @@ private fun CropCornerHandle(
 }
 
 private fun cardCropAspectRatio(template: String): Float = when (template) {
+    "SOFT_GLASS" -> 1.02f
     "POSTER" -> 0.78f
     "GLASS" -> 1.27f
     "SPLIT" -> 0.95f
@@ -1332,18 +1431,21 @@ private fun CardTemplatePreview(
     gradientEnd: String,
     textColor: String
 ) {
-    val shape = RoundedCornerShape(18.dp)
     val foreground = safeDialogColor(textColor)
+    val glassPanel = Color.White.copy(alpha = 0.18f)
+    val glassShape = RoundedCornerShape(14.dp)
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(112.dp),
-        shape = shape
+            .height(156.dp),
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(0.8.dp, Color.White.copy(alpha = 0.30f))
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Brush.linearGradient(listOf(safeDialogColor(gradientStart), safeDialogColor(gradientEnd))))
+                .clip(RoundedCornerShape(20.dp))
         ) {
             if (!backgroundUri.isNullOrBlank()) {
                 AsyncImage(
@@ -1352,35 +1454,76 @@ private fun CardTemplatePreview(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.matchParentSize()
                 )
-                Box(modifier = Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.32f)))
+                Box(modifier = Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.28f)))
+            } else {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .background(Brush.linearGradient(listOf(safeDialogColor(gradientStart), safeDialogColor(gradientEnd))))
+                )
             }
             when (template) {
-                "SPLIT" -> Row(modifier = Modifier.fillMaxSize().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Surface(shape = RoundedCornerShape(16.dp), color = Color.White.copy(alpha = 0.24f), modifier = Modifier.size(58.dp)) {
-                        Box(contentAlignment = Alignment.Center) { Text("99", color = foreground, style = MaterialTheme.typography.titleLarge) }
+                "SPLIT" -> Row(
+                    modifier = Modifier.fillMaxSize().padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Surface(shape = RoundedCornerShape(14.dp), color = glassPanel, modifier = Modifier.size(52.dp)) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text("99", color = foreground, style = MaterialTheme.typography.titleLarge)
+                        }
                     }
-                    Spacer(Modifier.width(12.dp))
-                    Column { Text(name, color = foreground, style = MaterialTheme.typography.titleMedium, maxLines = 1); Text(dateText, color = foreground.copy(alpha = 0.82f), style = MaterialTheme.typography.bodySmall) }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(name, color = foreground, style = MaterialTheme.typography.titleSmall, maxLines = 1)
+                        Text(dateText, color = foreground.copy(alpha = 0.80f), style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                    }
                 }
                 "NEON" -> {
-                    Box(modifier = Modifier.align(Alignment.CenterStart).fillMaxHeight().width(8.dp).background(Brush.verticalGradient(listOf(safeDialogColor(gradientStart), safeDialogColor(gradientEnd)))))
-                    Column(modifier = Modifier.align(Alignment.BottomStart).padding(start = 24.dp, bottom = 16.dp, end = 16.dp)) {
-                        Text("光轨 · 99 天", color = foreground, style = MaterialTheme.typography.headlineSmall)
-                        Text(name, color = foreground, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .fillMaxHeight()
+                            .width(6.dp)
+                            .background(Brush.verticalGradient(listOf(safeDialogColor(gradientStart), safeDialogColor(gradientEnd))))
+                    )
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(start = 18.dp, bottom = 12.dp, end = 12.dp)
+                    ) {
+                        Text("99 天", color = foreground, style = MaterialTheme.typography.titleLarge)
+                        Text(name, color = foreground, style = MaterialTheme.typography.labelLarge, maxLines = 1)
                     }
                 }
-                "MINIMAL" -> Column(modifier = Modifier.align(Alignment.CenterStart).padding(18.dp)) {
-                    Surface(color = Color.White.copy(alpha = 0.20f), shape = RoundedCornerShape(999.dp)) {
-                        Text("99 天", color = foreground, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp))
+                "MINIMAL" -> Column(
+                    modifier = Modifier.align(Alignment.CenterStart).padding(14.dp)
+                ) {
+                    Surface(color = glassPanel, shape = RoundedCornerShape(999.dp)) {
+                        Text("99 天", color = foreground, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
                     }
-                    Spacer(Modifier.height(8.dp))
-                    Text(name, color = foreground, style = MaterialTheme.typography.titleMedium, maxLines = 2)
-                    Text(dateText, color = foreground.copy(alpha = 0.82f), style = MaterialTheme.typography.bodySmall)
+                    Spacer(Modifier.height(6.dp))
+                    Text(name, color = foreground, style = MaterialTheme.typography.titleSmall, maxLines = 2)
                 }
-                else -> Column(modifier = Modifier.align(Alignment.BottomStart).padding(16.dp)) {
-                    Text("99", color = foreground, style = MaterialTheme.typography.headlineMedium)
-                    Text(name, color = foreground, style = MaterialTheme.typography.titleMedium, maxLines = 1)
-                    Text(dateText, color = foreground.copy(alpha = 0.82f), style = MaterialTheme.typography.bodySmall)
+                "POSTER" -> Column(
+                    modifier = Modifier.fillMaxSize().padding(12.dp),
+                    verticalArrangement = Arrangement.SpaceBetween,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(dateText, color = foreground.copy(alpha = 0.80f), style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                    Text("99", color = foreground, style = MaterialTheme.typography.displaySmall)
+                    Text(name, color = foreground, style = MaterialTheme.typography.titleSmall, maxLines = 1)
+                }
+                else -> Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(10.dp)
+                        .fillMaxWidth(0.84f)
+                        .background(glassPanel, glassShape)
+                        .padding(10.dp)
+                ) {
+                    Text("99 天", color = foreground, style = MaterialTheme.typography.titleMedium)
+                    Text(name, color = foreground, style = MaterialTheme.typography.labelMedium, maxLines = 1)
+                    Text(dateText, color = foreground.copy(alpha = 0.80f), style = MaterialTheme.typography.labelSmall, maxLines = 1)
                 }
             }
         }

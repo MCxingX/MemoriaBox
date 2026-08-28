@@ -44,6 +44,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.NianJi"
         android:enableOnBackInvokedCallback="true"
+        android:requestLegacyExternalStorage="true"
         tools:targetApi="34">
         <uses-library
             android:name="org.apache.http.legacy"

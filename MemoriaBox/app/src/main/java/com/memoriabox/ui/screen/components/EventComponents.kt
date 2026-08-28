@@ -49,6 +49,7 @@ import com.memoriabox.ui.theme.LocalMemoriaThemeTokens
 import com.memoriabox.ui.utils.rememberAdaptiveUiSize
 import com.memoriabox.utils.AppSettings
 import com.memoriabox.utils.ColorUtils
+import com.memoriabox.utils.ImageImportUtils
 import com.memoriabox.utils.LunarDateUtils
 import com.memoriabox.utils.HolidayUtils
 import com.memoriabox.utils.MonthlySummaryUiState
@@ -116,115 +117,97 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
             CardVisualStyle.MinimalBadge
         )
     }
-    val initialStyle = when (event.cardTemplate) {
+    val style = when (event.cardTemplate) {
         "POSTER" -> CardVisualStyle.PosterTall
-        "GLASS" -> CardVisualStyle.GlassCompact
+        "GLASS", "SOFT_GLASS" -> CardVisualStyle.GlassCompact
         "SPLIT" -> CardVisualStyle.SplitPanel
         "NEON" -> CardVisualStyle.NeonRail
         "MINIMAL" -> CardVisualStyle.MinimalBadge
         else -> CardVisualStyle.HeroWide
     }
-    var styleIndex by remember(event.id, event.cardTemplate) { mutableIntStateOf(styleOptions.indexOf(initialStyle).coerceAtLeast(0)) }
-    var isDragging by remember { mutableStateOf(false) }
-    var dragOffset by remember { mutableFloatStateOf(0f) }
-    var verticalDragOffset by remember { mutableFloatStateOf(0f) }
-    var horizontalDragLocked by remember { mutableStateOf(false) }
-    var verticalDragLocked by remember { mutableStateOf(false) }
-    val style = styleOptions[styleIndex]
-    val dragProgress = (dragOffset / 180f).coerceIn(-1f, 1f)
-    val animatedScale by animateFloatAsState(targetValue = if (isDragging) 1.04f else 1f, label = "eventCardScale")
-    val animatedElevation by animateDpAsState(targetValue = if (isDragging) 16.dp else 4.dp, label = "eventCardElevation")
+    var styleIndex by remember(event.id, event.cardTemplate) {
+        mutableIntStateOf(styleOptions.indexOf(style).coerceAtLeast(0))
+    }
+    var horizontalDrag by remember { mutableFloatStateOf(0f) }
+    var horizontalDragActive by remember { mutableStateOf(false) }
     val hasImage = event.avatarUri != null
     val displayFields = event.displayFields.split(",").map { it.trim() }.toSet()
     val eventTextColor = ColorUtils.hexToColor(event.textColor)
-    val fontScale = LocalDensity.current.fontScale
-    val cardHeight = when (style) {
-        CardVisualStyle.HeroWide -> if (fontScale > 1.2f) 184.dp else 164.dp
-        CardVisualStyle.PosterTall -> if (fontScale > 1.2f) 236.dp else 216.dp
-        CardVisualStyle.GlassCompact -> if (fontScale > 1.2f) 152.dp else 132.dp
-        CardVisualStyle.SplitPanel -> if (fontScale > 1.2f) 196.dp else 176.dp
-        CardVisualStyle.NeonRail -> if (fontScale > 1.2f) 192.dp else 172.dp
-        CardVisualStyle.MinimalBadge -> if (fontScale > 1.2f) 164.dp else 144.dp
+    val context = LocalContext.current
+
+    var imageRatio by remember(event.avatarUri) { mutableStateOf<Float?>(null) }
+    LaunchedEffect(event.avatarUri) {
+        if (event.avatarUri == null) return@LaunchedEffect
+        imageRatio = runCatching {
+            com.memoriabox.utils.ImageImportUtils.getImageAspectRatio(context, event.avatarUri)
+        }.getOrNull()
     }
 
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(cardHeight)
-            .graphicsLayer {
-                scaleX = animatedScale
-                scaleY = animatedScale
-                rotationZ = dragProgress * 4f
-                translationX = dragOffset * 0.22f
+    val cardModifier = Modifier
+        .fillMaxWidth()
+        .then(
+            if (imageRatio != null) {
+                val adaptiveAspect = imageRatio!!.coerceIn(0.62f, 1.56f)
+                Modifier.heightIn(min = 156.dp, max = 360.dp)
+                    .aspectRatio(adaptiveAspect, matchHeightConstraintsFirst = false)
+            } else {
+                Modifier.height(156.dp)
             }
-            .shadow(elevation = animatedElevation, shape = RoundedCornerShape(24.dp))
-            .pointerInput(event.id) {
-                detectDragGestures(
-                    onDragStart = {
-                        dragOffset = 0f
-                        verticalDragOffset = 0f
-                        horizontalDragLocked = false
-                        verticalDragLocked = false
-                    },
-                    onDragCancel = {
-                        isDragging = false
-                        dragOffset = 0f
-                        verticalDragOffset = 0f
-                        horizontalDragLocked = false
-                        verticalDragLocked = false
-                    },
-                    onDragEnd = {
-                        isDragging = false
-                        if (horizontalDragLocked && abs(dragOffset) > 72f) {
-                            val newIndex = if (dragOffset > 0f) {
-                                (styleIndex + 1) % styleOptions.size
-                            } else {
-                                (styleIndex - 1 + styleOptions.size) % styleOptions.size
-                            }
-                            styleIndex = newIndex
-                            val newTemplate = when (styleOptions[newIndex]) {
+        )
+        .shadow(elevation = 3.dp, shape = RoundedCornerShape(20.dp))
+        .pointerInput(event.id) {
+            detectDragGestures(
+                onDragStart = {
+                    horizontalDrag = 0f
+                    horizontalDragActive = false
+                },
+                onDragCancel = {
+                    horizontalDrag = 0f
+                    horizontalDragActive = false
+                },
+                onDragEnd = {
+                    if (horizontalDragActive && abs(horizontalDrag) >= 72f) {
+                        val nextIndex = if (horizontalDrag < 0f) {
+                            (styleIndex + 1) % styleOptions.size
+                        } else {
+                            (styleIndex - 1 + styleOptions.size) % styleOptions.size
+                        }
+                        styleIndex = nextIndex
+                        onStyleChange(
+                            when (styleOptions[nextIndex]) {
                                 CardVisualStyle.PosterTall -> "POSTER"
                                 CardVisualStyle.GlassCompact -> "GLASS"
                                 CardVisualStyle.SplitPanel -> "SPLIT"
                                 CardVisualStyle.NeonRail -> "NEON"
                                 CardVisualStyle.MinimalBadge -> "MINIMAL"
-                                else -> "HERO"
+                                CardVisualStyle.HeroWide -> "HERO"
                             }
-                            onStyleChange(newTemplate)
-                        }
-                        dragOffset = 0f
-                        verticalDragOffset = 0f
-                        horizontalDragLocked = false
-                        verticalDragLocked = false
-                    },
-                    onDrag = { change, dragAmount ->
-                        if (!horizontalDragLocked && !verticalDragLocked) {
-                            dragOffset += dragAmount.x
-                            verticalDragOffset += dragAmount.y
-                            val horizontalDistance = abs(dragOffset)
-                            val verticalDistance = abs(verticalDragOffset)
-                            horizontalDragLocked = horizontalDistance > 36f && horizontalDistance > verticalDistance * 1.6f
-                            verticalDragLocked = verticalDistance > 18f && verticalDistance >= horizontalDistance
-                            isDragging = horizontalDragLocked
-                        } else if (horizontalDragLocked) {
-                            dragOffset += dragAmount.x
-                        }
-
-                        if (horizontalDragLocked) {
-                            change.consume()
-                        }
+                        )
                     }
-                )
-            }
-            .combinedClickable(onClick = onClick, onLongClick = onLongPress),
-        shape = RoundedCornerShape(24.dp),
+                    horizontalDrag = 0f
+                    horizontalDragActive = false
+                },
+                onDrag = { change, dragAmount ->
+                    if (abs(dragAmount.x) > abs(dragAmount.y) * 1.2f || horizontalDragActive) {
+                        horizontalDragActive = true
+                        horizontalDrag += dragAmount.x
+                        change.consume()
+                    }
+                }
+            )
+        }
+        .combinedClickable(onClick = onClick, onLongClick = onLongPress)
+
+    Card(
+        modifier = cardModifier,
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = if (isDragging) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.72f)) else null
+        border = BorderStroke(0.8.dp, Color.White.copy(alpha = 0.30f))
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .clip(RoundedCornerShape(24.dp))
+                .clip(RoundedCornerShape(20.dp))
         ) {
             if (hasImage) {
                 if (style == CardVisualStyle.HeroWide) {
@@ -234,7 +217,7 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .matchParentSize()
-                            .blur(18.dp)
+                            .blur(22.dp)
                     )
                 }
                 AsyncImage(
@@ -265,38 +248,6 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
                     .background(cardOverlayBrush(style))
             )
 
-            if (style == CardVisualStyle.NeonRail) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.CenterStart)
-                        .fillMaxHeight()
-                        .width(8.dp)
-                        .background(Brush.verticalGradient(listOf(ColorUtils.hexToColor(event.gradientStart), ColorUtils.hexToColor(event.gradientEnd))))
-                )
-            }
-
-            if (isDragging) {
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
-                )
-                Surface(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(10.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    shape = RoundedCornerShape(999.dp)
-                ) {
-                    Text(
-                        if (dragOffset < -44f) "松手切上一款" else if (dragOffset > 44f) "松手切下一款" else "左右拖动换排版",
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        style = MaterialTheme.typography.labelSmall
-                    )
-                }
-            }
-
             when (style) {
                 CardVisualStyle.SplitPanel -> EventCardSplitContent(event, daysRemaining, displayFields, eventTextColor)
                 CardVisualStyle.GlassCompact -> EventCardGlassContent(event, daysRemaining, displayFields, eventTextColor)
@@ -309,7 +260,7 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(10.dp),
-                color = Color.White.copy(alpha = if (isDragging) 0.30f else 0.16f),
+                    color = Color.White.copy(alpha = 0.22f),
                 shape = RoundedCornerShape(999.dp)
             ) {
                 Text(
@@ -546,20 +497,20 @@ private fun EventMetaLines(event: Event, displayFields: Set<String>, color: Colo
 private enum class CardVisualStyle { HeroWide, PosterTall, GlassCompact, SplitPanel, NeonRail, MinimalBadge }
 
 private fun cardStyleLabel(style: CardVisualStyle): String = when (style) {
-    CardVisualStyle.HeroWide -> "封面"
-    CardVisualStyle.PosterTall -> "海报"
-    CardVisualStyle.GlassCompact -> "玻璃"
-    CardVisualStyle.SplitPanel -> "分栏"
-    CardVisualStyle.NeonRail -> "光轨"
-    CardVisualStyle.MinimalBadge -> "徽章"
+    CardVisualStyle.HeroWide -> "柔和玻璃 · 封面"
+    CardVisualStyle.PosterTall -> "柔和玻璃 · 海报"
+    CardVisualStyle.GlassCompact -> "柔和玻璃 · 紧凑"
+    CardVisualStyle.SplitPanel -> "柔和玻璃 · 分栏"
+    CardVisualStyle.NeonRail -> "柔和玻璃 · 光轨"
+    CardVisualStyle.MinimalBadge -> "柔和玻璃 · 徽章"
 }
 
 private fun cardOverlayBrush(style: CardVisualStyle): Brush = when (style) {
-    CardVisualStyle.GlassCompact -> Brush.linearGradient(listOf(Color.White.copy(alpha = 0.18f), Color.Black.copy(alpha = 0.50f)))
-    CardVisualStyle.SplitPanel -> Brush.horizontalGradient(listOf(Color.Black.copy(alpha = 0.70f), Color.Black.copy(alpha = 0.18f)))
-    CardVisualStyle.NeonRail -> Brush.linearGradient(listOf(Color.Black.copy(alpha = 0.68f), Color.Black.copy(alpha = 0.18f), Color.Black.copy(alpha = 0.60f)))
-    CardVisualStyle.MinimalBadge -> Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.18f), Color.Black.copy(alpha = 0.46f)))
-    else -> Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.06f), Color.Black.copy(alpha = 0.58f)))
+    CardVisualStyle.GlassCompact -> Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.05f), Color.Black.copy(alpha = 0.46f)))
+    CardVisualStyle.SplitPanel -> Brush.horizontalGradient(listOf(Color.Black.copy(alpha = 0.54f), Color.Black.copy(alpha = 0.12f)))
+    CardVisualStyle.NeonRail -> Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.16f), Color.Black.copy(alpha = 0.54f)))
+    CardVisualStyle.MinimalBadge -> Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.10f), Color.Black.copy(alpha = 0.42f)))
+    else -> Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.06f), Color.Black.copy(alpha = 0.52f)))
 }
 
 private fun eventTypeText(type: EventType): String = when (type) {
