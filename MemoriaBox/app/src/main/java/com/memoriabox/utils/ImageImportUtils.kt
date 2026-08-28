@@ -7,10 +7,54 @@ import android.graphics.Matrix
 import android.net.Uri
 import android.webkit.MimeTypeMap
 import java.io.File
+import org.json.JSONObject
 
 object ImageImportUtils {
+    data class EditState(
+        val sourceUri: String,
+        val scale: Float = 1f,
+        val offsetX: Float = 0f,
+        val offsetY: Float = 0f
+    )
+
+    private const val EDIT_STATE_PREFS = "image_edit_states"
+
     fun copyImageToPrivateStorage(context: Context, uri: Uri, folder: String = "picked_images"): String? {
         return copyMediaToPrivateStorage(context, uri, folder, "jpg")
+    }
+
+    fun saveOriginalImage(context: Context, uri: Uri): String? =
+        copyImageToPrivateStorage(context, uri, "original_images")
+
+    fun getEditState(context: Context, displayUri: String, fallbackSourceUri: String = displayUri): EditState {
+        val stored = context.getSharedPreferences(EDIT_STATE_PREFS, Context.MODE_PRIVATE)
+            .getString(displayUri, null)
+        return runCatching {
+            val json = JSONObject(stored ?: return@runCatching EditState(fallbackSourceUri))
+            EditState(
+                sourceUri = json.optString("sourceUri", fallbackSourceUri),
+                scale = json.optDouble("scale", 1.0).toFloat().coerceIn(1f, 3.5f),
+                offsetX = json.optDouble("offsetX", 0.0).toFloat().coerceIn(-1f, 1f),
+                offsetY = json.optDouble("offsetY", 0.0).toFloat().coerceIn(-1f, 1f)
+            )
+        }.getOrDefault(EditState(fallbackSourceUri))
+    }
+
+    fun saveEditState(context: Context, displayUri: String, state: EditState) {
+        val json = JSONObject()
+            .put("sourceUri", state.sourceUri)
+            .put("scale", state.scale)
+            .put("offsetX", state.offsetX)
+            .put("offsetY", state.offsetY)
+        context.getSharedPreferences(EDIT_STATE_PREFS, Context.MODE_PRIVATE)
+            .edit().putString(displayUri, json.toString()).apply()
+    }
+
+    fun removeEditState(context: Context, displayUri: String?) {
+        if (!displayUri.isNullOrBlank()) {
+            context.getSharedPreferences(EDIT_STATE_PREFS, Context.MODE_PRIVATE)
+                .edit().remove(displayUri).apply()
+        }
     }
 
     fun copyMediaToPrivateStorage(context: Context, uri: Uri, folder: String = "picked_media", fallbackExtension: String = "bin"): String? {

@@ -73,9 +73,12 @@ fun BoxDialog(
     var showEmojiPicker by remember { mutableStateOf(false) }
     var showColorPicker by remember { mutableStateOf(false) }
     var pendingIconCropUri by remember { mutableStateOf<Uri?>(null) }
+    var pendingIconEditState by remember { mutableStateOf<ImageImportUtils.EditState?>(null) }
     val iconImagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         uri ?: return@rememberLauncherForActivityResult
-        pendingIconCropUri = uri
+        val sourceUri = ImageImportUtils.saveOriginalImage(context, uri)?.let(Uri::parse) ?: uri
+        pendingIconCropUri = sourceUri
+        pendingIconEditState = ImageImportUtils.EditState(sourceUri.toString())
     }
 
     AlertDialog(
@@ -166,7 +169,15 @@ fun BoxDialog(
                         Text("选择图标")
                     }
                     OutlinedButton(
-                        onClick = { iconImagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                        onClick = {
+                            if (selectedIcon.isImageUri()) {
+                                val editState = ImageImportUtils.getEditState(context, selectedIcon)
+                                pendingIconCropUri = Uri.parse(editState.sourceUri)
+                                pendingIconEditState = editState
+                            } else {
+                                iconImagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                            }
+                        },
                         modifier = Modifier.weight(1f)
                     ) {
                         Icon(Icons.Default.AddPhotoAlternate, contentDescription = null)
@@ -227,12 +238,21 @@ fun BoxDialog(
             sourceUri = uri,
             cropAspectRatio = 1f,
             displayLabel = "分类图标",
-            onDismiss = { pendingIconCropUri = null },
+            initialScale = pendingIconEditState?.scale ?: 1f,
+            initialOffsetX = pendingIconEditState?.offsetX ?: 0f,
+            initialOffsetY = pendingIconEditState?.offsetY ?: 0f,
+            onDismiss = {
+                pendingIconCropUri = null
+                pendingIconEditState = null
+            },
             onSave = { scale, offsetX, offsetY ->
                 selectedIcon = ImageImportUtils.cropImageToPrivateStorage(
                     context, uri, "box_icons", 1f, scale, -offsetX, -offsetY
-                ) ?: ImageImportUtils.copyImageToPrivateStorage(context, uri, "box_icons") ?: selectedIcon
+                )?.also { result ->
+                    ImageImportUtils.saveEditState(context, result, ImageImportUtils.EditState(uri.toString(), scale, offsetX, offsetY))
+                } ?: ImageImportUtils.copyImageToPrivateStorage(context, uri, "box_icons") ?: selectedIcon
                 pendingIconCropUri = null
+                pendingIconEditState = null
             }
         )
     }
@@ -331,6 +351,7 @@ fun EventDialog(
     var showLunarCalendar by remember { mutableStateOf(false) }
     var selectedLunar by remember { mutableStateOf(existingEvent?.lunar) }
     var pendingCropUri by remember { mutableStateOf<Uri?>(null) }
+    var pendingCropEditState by remember { mutableStateOf<ImageImportUtils.EditState?>(null) }
     var selectedBoxId by remember { mutableStateOf(existingEvent?.boxId ?: defaultBoxId ?: (availableBoxes.firstOrNull()?.id ?: "")) }
     var showColorPickerFor by remember { mutableStateOf<String?>(null) }
     var reminderOffsetsText by remember { mutableStateOf(existingEvent?.reminderOffsets ?: (existingEvent?.reminderDays ?: 1).toString()) }
@@ -339,7 +360,11 @@ fun EventDialog(
     var showRepeatEndPicker by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        pendingCropUri = uri
+        if (uri != null) {
+            val sourceUri = ImageImportUtils.saveOriginalImage(context, uri)?.let(Uri::parse) ?: uri
+            pendingCropUri = sourceUri
+            pendingCropEditState = ImageImportUtils.EditState(sourceUri.toString())
+        }
     }
 
     AlertDialog(
@@ -478,10 +503,18 @@ fun EventDialog(
 
                 Text("卡片背景", style = MaterialTheme.typography.labelLarge)
                 Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(128.dp)
-                        .clickable { imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(128.dp)
+                            .clickable {
+                                if (!backgroundUri.isNullOrBlank()) {
+                                    val editState = ImageImportUtils.getEditState(context, backgroundUri!!)
+                                    pendingCropUri = Uri.parse(editState.sourceUri)
+                                    pendingCropEditState = editState
+                                } else {
+                                    imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                }
+                            },
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -841,7 +874,13 @@ fun EventDialog(
         EventImageCropDialog(
             sourceUri = uri,
             cropAspectRatio = cardCropAspectRatio(cardTemplate),
-            onDismiss = { pendingCropUri = null },
+            initialScale = pendingCropEditState?.scale ?: 1f,
+            initialOffsetX = pendingCropEditState?.offsetX ?: 0f,
+            initialOffsetY = pendingCropEditState?.offsetY ?: 0f,
+            onDismiss = {
+                pendingCropUri = null
+                pendingCropEditState = null
+            },
                 onSave = { scale, offsetX, offsetY ->
                     backgroundUri = ImageImportUtils.cropImageToPrivateStorage(
                     context = context,
@@ -852,8 +891,11 @@ fun EventDialog(
                     // 图片向右或向下拖动时，保存区域应向原图的左上方移动。
                     offsetX = -offsetX,
                     offsetY = -offsetY
-                ) ?: ImageImportUtils.copyImageToPrivateStorage(context, uri, "event_images") ?: backgroundUri
+                )?.also { result ->
+                    ImageImportUtils.saveEditState(context, result, ImageImportUtils.EditState(uri.toString(), scale, offsetX, offsetY))
+                } ?: ImageImportUtils.copyImageToPrivateStorage(context, uri, "event_images") ?: backgroundUri
                 pendingCropUri = null
+                pendingCropEditState = null
             }
         )
     }
@@ -864,12 +906,15 @@ fun EventImageCropDialog(
     sourceUri: Uri,
     cropAspectRatio: Float,
     displayLabel: String = "卡片",
+    initialScale: Float = 1f,
+    initialOffsetX: Float = 0f,
+    initialOffsetY: Float = 0f,
     onDismiss: () -> Unit,
     onSave: (scale: Float, offsetX: Float, offsetY: Float) -> Unit
 ) {
-    var scale by remember(sourceUri) { mutableFloatStateOf(1f) }
-    var offsetX by remember(sourceUri) { mutableFloatStateOf(0f) }
-    var offsetY by remember(sourceUri) { mutableFloatStateOf(0f) }
+    var scale by remember(sourceUri, initialScale) { mutableFloatStateOf(initialScale) }
+    var offsetX by remember(sourceUri, initialOffsetX) { mutableFloatStateOf(initialOffsetX) }
+    var offsetY by remember(sourceUri, initialOffsetY) { mutableFloatStateOf(initialOffsetY) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("调整${displayLabel}画面") },

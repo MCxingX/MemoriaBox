@@ -44,6 +44,7 @@ fun CustomizationSettingsScreen(onNavigateBack: () -> Unit) {
 
     var targetForPick by remember { mutableStateOf<String?>(null) }
     var pendingCropUri by remember { mutableStateOf<Uri?>(null) }
+    var pendingEditState by remember { mutableStateOf<ImageImportUtils.EditState?>(null) }
     var customQuotes by remember { mutableStateOf(AppSettings.getCustomDailyQuotes(context)) }
     var useCustomQuote by remember { mutableStateOf(AppSettings.getUseCustomQuote(context)) }
     var quoteDraft by remember { mutableStateOf("") }
@@ -90,32 +91,52 @@ fun CustomizationSettingsScreen(onNavigateBack: () -> Unit) {
         if (uri == null || targetForPick == null) {
             targetForPick = null
         } else {
-            pendingCropUri = uri
+            val sourceUri = ImageImportUtils.saveOriginalImage(context, uri)?.let(Uri::parse) ?: uri
+            pendingCropUri = sourceUri
+            pendingEditState = ImageImportUtils.EditState(sourceUri.toString())
         }
     }
 
     fun chooseImage(target: String) {
         targetForPick = target
-        pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+        val current = when (target) {
+            "ALL_BG" -> allBg
+            "HOME_BG" -> homeBg
+            "CALENDAR_BG" -> calendarBg
+            "TODO_BG" -> todoBg
+            "SETTINGS_BG" -> settingsBg
+            "HOME_ICON" -> homeIcon
+            "CALENDAR_ICON" -> calendarIcon
+            "TODO_ICON" -> todoIcon
+            "SETTINGS_ICON" -> settingsIcon
+            else -> null
+        }
+        if (!current.isNullOrBlank()) {
+            val editState = ImageImportUtils.getEditState(context, current)
+            pendingEditState = editState
+            pendingCropUri = Uri.parse(editState.sourceUri)
+        } else {
+            pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+        }
     }
 
     Scaffold(topBar = { TopAppBar(modifier = Modifier.height(adaptiveUi.topBarHeight), windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp), title = { Text("个性化设置") }, navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } }) }) { paddingValues ->
         Column(modifier = Modifier.padding(paddingValues).fillMaxSize().verticalScroll(rememberScrollState()).padding(adaptiveUi.screenPadding), verticalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing + 4.dp)) {
             Text("页面背景", style = MaterialTheme.typography.titleLarge)
-            CustomizationBgCard(title = "全部页面背景", uri = allBg, onClick = { chooseImage("ALL_BG") }, onClear = { allBg = null; homeBg = null; calendarBg = null; todoBg = null; settingsBg = null; AppSettings.setHomeBgUri(context, null); AppSettings.setCalendarBgUri(context, null); AppSettings.setTodoBgUri(context, null); AppSettings.setSettingsBgUri(context, null) })
-            CustomizationBgCard(title = "日子首页背景", uri = homeBg, onClick = { chooseImage("HOME_BG") }, onClear = { homeBg = null; AppSettings.setHomeBgUri(context, null); updateAllBgState() })
-            CustomizationBgCard(title = "日历页背景", uri = calendarBg, onClick = { chooseImage("CALENDAR_BG") }, onClear = { calendarBg = null; AppSettings.setCalendarBgUri(context, null); updateAllBgState() })
-            CustomizationBgCard(title = "待办页背景", uri = todoBg, onClick = { chooseImage("TODO_BG") }, onClear = { todoBg = null; AppSettings.setTodoBgUri(context, null); updateAllBgState() })
-            CustomizationBgCard(title = "我的页背景", uri = settingsBg, onClick = { chooseImage("SETTINGS_BG") }, onClear = { settingsBg = null; AppSettings.setSettingsBgUri(context, null); updateAllBgState() })
+            CustomizationBgCard(title = "全部页面背景", uri = allBg, onClick = { chooseImage("ALL_BG") }, onClear = { allBg?.let { ImageImportUtils.removeEditState(context, it) }; allBg = null; homeBg = null; calendarBg = null; todoBg = null; settingsBg = null; AppSettings.setHomeBgUri(context, null); AppSettings.setCalendarBgUri(context, null); AppSettings.setTodoBgUri(context, null); AppSettings.setSettingsBgUri(context, null) })
+            CustomizationBgCard(title = "日子首页背景", uri = homeBg, onClick = { chooseImage("HOME_BG") }, onClear = { ImageImportUtils.removeEditState(context, homeBg); homeBg = null; AppSettings.setHomeBgUri(context, null); updateAllBgState() })
+            CustomizationBgCard(title = "日历页背景", uri = calendarBg, onClick = { chooseImage("CALENDAR_BG") }, onClear = { ImageImportUtils.removeEditState(context, calendarBg); calendarBg = null; AppSettings.setCalendarBgUri(context, null); updateAllBgState() })
+            CustomizationBgCard(title = "待办页背景", uri = todoBg, onClick = { chooseImage("TODO_BG") }, onClear = { ImageImportUtils.removeEditState(context, todoBg); todoBg = null; AppSettings.setTodoBgUri(context, null); updateAllBgState() })
+            CustomizationBgCard(title = "我的页背景", uri = settingsBg, onClick = { chooseImage("SETTINGS_BG") }, onClear = { ImageImportUtils.removeEditState(context, settingsBg); settingsBg = null; AppSettings.setSettingsBgUri(context, null); updateAllBgState() })
             Button(onClick = { showClearAllBgConfirm = true }, modifier = Modifier.fillMaxWidth()) { Text("全部清除") }
 
             Text("底部图标", style = MaterialTheme.typography.titleLarge)
             IconCustomizationGrid(
                 items = listOf(
-                    IconCustomizationItem("日子图标", homeIcon, { chooseImage("HOME_ICON") }, { homeIcon = null; AppSettings.setHomeIconUri(context, null) }),
-                    IconCustomizationItem("日历图标", calendarIcon, { chooseImage("CALENDAR_ICON") }, { calendarIcon = null; AppSettings.setCalendarIconUri(context, null) }),
-                    IconCustomizationItem("待办图标", todoIcon, { chooseImage("TODO_ICON") }, { todoIcon = null; AppSettings.setTodoIconUri(context, null) }),
-                    IconCustomizationItem("我的图标", settingsIcon, { chooseImage("SETTINGS_ICON") }, { settingsIcon = null; AppSettings.setSettingsIconUri(context, null) })
+                    IconCustomizationItem("日子图标", homeIcon, { chooseImage("HOME_ICON") }, { ImageImportUtils.removeEditState(context, homeIcon); homeIcon = null; AppSettings.setHomeIconUri(context, null) }),
+                    IconCustomizationItem("日历图标", calendarIcon, { chooseImage("CALENDAR_ICON") }, { ImageImportUtils.removeEditState(context, calendarIcon); calendarIcon = null; AppSettings.setCalendarIconUri(context, null) }),
+                    IconCustomizationItem("待办图标", todoIcon, { chooseImage("TODO_ICON") }, { ImageImportUtils.removeEditState(context, todoIcon); todoIcon = null; AppSettings.setTodoIconUri(context, null) }),
+                    IconCustomizationItem("我的图标", settingsIcon, { chooseImage("SETTINGS_ICON") }, { ImageImportUtils.removeEditState(context, settingsIcon); settingsIcon = null; AppSettings.setSettingsIconUri(context, null) })
                 )
             )
             Button(onClick = { showResetIconsConfirm = true }, modifier = Modifier.fillMaxWidth()) { Text("恢复默认图标") }
@@ -236,6 +257,10 @@ fun CustomizationSettingsScreen(onNavigateBack: () -> Unit) {
             text = { Text("确定要清除所有页面的背景设置吗？此操作不可恢复。") },
             confirmButton = {
                 TextButton(onClick = {
+                    ImageImportUtils.removeEditState(context, homeBg)
+                    ImageImportUtils.removeEditState(context, calendarBg)
+                    ImageImportUtils.removeEditState(context, todoBg)
+                    ImageImportUtils.removeEditState(context, settingsBg)
                     AppSettings.setHomeBgUri(context, null)
                     AppSettings.setCalendarBgUri(context, null)
                     AppSettings.setTodoBgUri(context, null)
@@ -289,6 +314,7 @@ fun CustomizationSettingsScreen(onNavigateBack: () -> Unit) {
                 displayLabel = if (isIcon) "底部图标" else "页面背景",
                 onDismiss = {
                     pendingCropUri = null
+                    pendingEditState = null
                     targetForPick = null
                 },
                 onSave = { scale, offsetX, offsetY ->
@@ -296,7 +322,9 @@ fun CustomizationSettingsScreen(onNavigateBack: () -> Unit) {
                         context, uri, "customization_images", cropRatio, scale, -offsetX, -offsetY
                     ) ?: ImageImportUtils.copyImageToPrivateStorage(context, uri, "customization_images") ?: uri.toString()
                     applyPickedImage(value, target)
+                    ImageImportUtils.saveEditState(context, value, ImageImportUtils.EditState(uri.toString(), scale, offsetX, offsetY))
                     pendingCropUri = null
+                    pendingEditState = null
                     targetForPick = null
                 }
             )
