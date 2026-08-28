@@ -1,8 +1,11 @@
 package com.memoriabox.ui.screen.dialogs
 
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -28,15 +31,26 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.memoriabox.data.model.BgType
 import com.memoriabox.data.model.Box
 import com.memoriabox.data.model.Event
@@ -46,8 +60,13 @@ import com.memoriabox.utils.ColorUtils
 import com.memoriabox.utils.ImageImportUtils
 import com.memoriabox.utils.LunarDateUtils
 import coil.compose.AsyncImage
+import coil.compose.rememberAsyncImagePainter
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.roundToInt
 
 val COMMON_EMOJIS = listOf(
     "\uD83C\uDFB2", "\uD83C\uDF89", "\uD83D\uDC96", "\uD83C\uDF82", "\uD83C\uDF81", "\uD83C\uDF1F",
@@ -238,18 +257,16 @@ fun BoxDialog(
             sourceUri = uri,
             cropAspectRatio = 1f,
             displayLabel = "分类图标",
-            initialScale = pendingIconEditState?.scale ?: 1f,
-            initialOffsetX = pendingIconEditState?.offsetX ?: 0f,
-            initialOffsetY = pendingIconEditState?.offsetY ?: 0f,
+            initialState = pendingIconEditState,
             onDismiss = {
                 pendingIconCropUri = null
                 pendingIconEditState = null
             },
-            onSave = { scale, offsetX, offsetY ->
+            onSave = { left, top, width, height ->
                 selectedIcon = ImageImportUtils.cropImageToPrivateStorage(
-                    context, uri, "box_icons", 1f, scale, -offsetX, -offsetY
+                    context, uri, "box_icons", left, top, width, height
                 )?.also { result ->
-                    ImageImportUtils.saveEditState(context, result, ImageImportUtils.EditState(uri.toString(), scale, offsetX, offsetY))
+                    ImageImportUtils.saveEditState(context, result, ImageImportUtils.EditState(uri.toString(), left, top, width, height))
                 } ?: ImageImportUtils.copyImageToPrivateStorage(context, uri, "box_icons") ?: selectedIcon
                 pendingIconCropUri = null
                 pendingIconEditState = null
@@ -874,25 +891,25 @@ fun EventDialog(
         EventImageCropDialog(
             sourceUri = uri,
             cropAspectRatio = cardCropAspectRatio(cardTemplate),
-            initialScale = pendingCropEditState?.scale ?: 1f,
-            initialOffsetX = pendingCropEditState?.offsetX ?: 0f,
-            initialOffsetY = pendingCropEditState?.offsetY ?: 0f,
+            initialState = pendingCropEditState,
             onDismiss = {
                 pendingCropUri = null
                 pendingCropEditState = null
             },
-                onSave = { scale, offsetX, offsetY ->
-                    backgroundUri = ImageImportUtils.cropImageToPrivateStorage(
+            onSave = { left, top, width, height ->
+                backgroundUri = ImageImportUtils.cropImageToPrivateStorage(
                     context = context,
                     sourceUri = uri,
                     folder = "event_images",
-                    cropAspectRatio = cardCropAspectRatio(cardTemplate),
-                    scale = scale,
-                    // 图片向右或向下拖动时，保存区域应向原图的左上方移动。
-                    offsetX = -offsetX,
-                    offsetY = -offsetY
+                    sourceLeft = left,
+                    sourceTop = top,
+                    sourceWidth = width,
+                    sourceHeight = height
                 )?.also { result ->
-                    ImageImportUtils.saveEditState(context, result, ImageImportUtils.EditState(uri.toString(), scale, offsetX, offsetY))
+                    ImageImportUtils.saveEditState(
+                        context, result,
+                        ImageImportUtils.EditState(uri.toString(), left, top, width, height)
+                    )
                 } ?: ImageImportUtils.copyImageToPrivateStorage(context, uri, "event_images") ?: backgroundUri
                 pendingCropUri = null
                 pendingCropEditState = null
@@ -906,79 +923,373 @@ fun EventImageCropDialog(
     sourceUri: Uri,
     cropAspectRatio: Float,
     displayLabel: String = "卡片",
-    initialScale: Float = 1f,
-    initialOffsetX: Float = 0f,
-    initialOffsetY: Float = 0f,
+    initialState: ImageImportUtils.EditState? = null,
     onDismiss: () -> Unit,
-    onSave: (scale: Float, offsetX: Float, offsetY: Float) -> Unit
+    onSave: (sourceLeft: Float, sourceTop: Float, sourceWidth: Float, sourceHeight: Float) -> Unit
 ) {
-    var scale by remember(sourceUri, initialScale) { mutableFloatStateOf(initialScale) }
-    var offsetX by remember(sourceUri, initialOffsetX) { mutableFloatStateOf(initialOffsetX) }
-    var offsetY by remember(sourceUri, initialOffsetY) { mutableFloatStateOf(initialOffsetY) }
-    AlertDialog(
+    val context = LocalContext.current
+    val density = LocalDensity.current
+    val painter = rememberAsyncImagePainter(model = sourceUri)
+    val intrinsic = painter.intrinsicSize
+    val imageWidth = if (intrinsic.width.isFinite() && intrinsic.width > 0f) intrinsic.width else 1f
+    val imageHeight = if (intrinsic.height.isFinite() && intrinsic.height > 0f) intrinsic.height else 1f
+
+    var areaSize by remember { mutableStateOf(IntSize.Zero) }
+    var zoom by remember(sourceUri) { mutableFloatStateOf(1f) }
+    var panX by remember(sourceUri) { mutableFloatStateOf(0f) }
+    var panY by remember(sourceUri) { mutableFloatStateOf(0f) }
+    var frame by remember(sourceUri) { mutableStateOf(Rect(0f, 0f, 0f, 0f)) }
+    var isInitialized by remember(sourceUri) { mutableStateOf(false) }
+
+    val fitScale = if (areaSize.width > 0) {
+        min(areaSize.width.toFloat() / imageWidth, areaSize.height.toFloat() / imageHeight)
+    } else 1f
+
+    fun minZoomForFrame(target: Rect): Float {
+        val aw = areaSize.width.toFloat()
+        val ah = areaSize.height.toFloat()
+        if (aw <= 0f || ah <= 0f) return 1f
+        return max(max(target.width / (fitScale * imageWidth), target.height / (fitScale * imageHeight)), 1f)
+    }
+
+    fun clampedPan(newZoom: Float, px: Float, py: Float, target: Rect): Pair<Float, Float> {
+        val aw = areaSize.width.toFloat()
+        val ah = areaSize.height.toFloat()
+        if (aw <= 0f || ah <= 0f) return px to py
+        val dispW = imageWidth * fitScale * newZoom
+        val dispH = imageHeight * fitScale * newZoom
+        val minX = target.right - dispW - (aw - dispW) / 2f
+        val maxX = target.left - (aw - dispW) / 2f
+        val minY = target.bottom - dispH - (ah - dispH) / 2f
+        val maxY = target.top - (ah - dispH) / 2f
+        val cx = if (minX <= maxX) px.coerceIn(minX, maxX) else (minX + maxX) / 2f
+        val cy = if (minY <= maxY) py.coerceIn(minY, maxY) else (minY + maxY) / 2f
+        return cx to cy
+    }
+
+    fun centeredMaxFrame(): Rect {
+        val aw = areaSize.width.toFloat()
+        val ah = areaSize.height.toFloat()
+        val margin = with(density) { 12.dp.toPx() }
+        val maxW = (aw - margin * 2f).coerceAtLeast(1f)
+        val maxH = (ah - margin * 2f).coerceAtLeast(1f)
+        val fw = if (cropAspectRatio >= 1f) min(maxW, maxH * cropAspectRatio) else min(maxW / cropAspectRatio, maxH) * cropAspectRatio
+        val fh = fw / cropAspectRatio
+        return Rect((aw - fw) / 2f, (ah - fh) / 2f, (aw + fw) / 2f, (ah + fh) / 2f)
+    }
+
+    fun resetView() {
+        val newFrame = centeredMaxFrame()
+        frame = newFrame
+        val z = minZoomForFrame(newFrame)
+        zoom = z
+        val (cx, cy) = clampedPan(z, 0f, 0f, newFrame)
+        panX = cx
+        panY = cy
+    }
+
+    fun changeZoomBy(delta: Float) {
+        val newZoom = (zoom + delta).coerceIn(minZoomForFrame(frame), 4f)
+        zoom = newZoom
+        val (cx, cy) = clampedPan(newZoom, panX, panY, frame)
+        panX = cx
+        panY = cy
+    }
+
+    fun moveFrame(dx: Float, dy: Float) {
+        val aw = areaSize.width.toFloat()
+        val ah = areaSize.height.toFloat()
+        if (aw <= 0f || ah <= 0f) return
+        val newLeft = (frame.left + dx).coerceIn(0f, aw - frame.width)
+        val newTop = (frame.top + dy).coerceIn(0f, ah - frame.height)
+        val newFrame = Rect(newLeft, newTop, newLeft + frame.width, newTop + frame.height)
+        frame = newFrame
+        val (cx, cy) = clampedPan(zoom, panX, panY, newFrame)
+        panX = cx
+        panY = cy
+    }
+
+    fun resizeFromCorner(corner: Int, dx: Float, dy: Float) {
+        val aw = areaSize.width.toFloat()
+        val ah = areaSize.height.toFloat()
+        if (aw <= 0f || ah <= 0f) return
+        val minSide = with(density) { 48.dp.toPx() }
+        val f = frame
+        val anchorX = if (corner == 0 || corner == 2) f.right else f.left
+        val anchorY = if (corner == 0 || corner == 1) f.bottom else f.top
+        val startX = if (corner == 0 || corner == 2) f.left else f.right
+        val startY = if (corner == 0 || corner == 1) f.top else f.bottom
+        var mx = (startX + dx).coerceIn(0f, aw)
+        var my = (startY + dy).coerceIn(0f, ah)
+        val signX = if (mx >= anchorX) 1f else -1f
+        val signY = if (my >= anchorY) 1f else -1f
+        val maxW = if (signX > 0f) aw - anchorX else anchorX
+        val maxH = if (signY > 0f) ah - anchorY else anchorY
+        val wMaxFit = max(min(maxW, maxH * cropAspectRatio), minSide)
+        var w = abs(mx - anchorX).coerceIn(minSide, wMaxFit)
+        var h = w / cropAspectRatio
+        if (h < minSide) {
+            h = minSide.coerceAtMost(maxH)
+            w = (h * cropAspectRatio).coerceAtMost(wMaxFit)
+            h = w / cropAspectRatio
+        }
+        mx = anchorX + signX * w
+        my = anchorY + signY * h
+        val newFrame = Rect(min(anchorX, mx), min(anchorY, my), max(anchorX, mx), max(anchorY, my))
+        frame = newFrame
+        val (cx, cy) = clampedPan(zoom, panX, panY, newFrame)
+        panX = cx
+        panY = cy
+    }
+
+    LaunchedEffect(areaSize, imageWidth, imageHeight, sourceUri) {
+        if (areaSize == IntSize.Zero || !intrinsic.width.isFinite() || intrinsic.width <= 0f || isInitialized) return@LaunchedEffect
+        isInitialized = true
+        val initialFrame = centeredMaxFrame()
+        frame = initialFrame
+        val state = initialState
+        if (state != null) {
+            val srcW = (state.cropWidth * imageWidth).coerceIn(1f, imageWidth)
+            val srcH = (state.cropHeight * imageHeight).coerceIn(1f, imageHeight)
+            val srcCX = state.cropLeft * imageWidth + srcW / 2f
+            val srcCY = state.cropTop * imageHeight + srcH / 2f
+            val aw = areaSize.width.toFloat()
+            val ah = areaSize.height.toFloat()
+            val needZoom = max(
+                initialFrame.width / (fitScale * srcW),
+                initialFrame.height / (fitScale * srcH)
+            )
+            val z = max(needZoom, minZoomForFrame(initialFrame)).coerceIn(0.1f, 4f)
+            zoom = z
+            val dispW = imageWidth * fitScale * z
+            val dispH = imageHeight * fitScale * z
+            val px = initialFrame.center.x - srcCX * fitScale * z - (aw - dispW) / 2f
+            val py = initialFrame.center.y - srcCY * fitScale * z - (ah - dispH) / 2f
+            val (cx, cy) = clampedPan(z, px, py, initialFrame)
+            panX = cx
+            panY = cy
+        } else {
+            val z = minZoomForFrame(initialFrame)
+            zoom = z
+            val (cx, cy) = clampedPan(z, 0f, 0f, initialFrame)
+            panX = cx
+            panY = cy
+        }
+    }
+
+    Dialog(
         onDismissRequest = onDismiss,
-        title = { Text("调整${displayLabel}画面") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("拖动图片调整位置，双指缩放后保存。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("白色边框内的画面会保存到$displayLabel。拖动图片调整位置，双指缩放调整取景。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                    val previewWidth = maxWidth
-                    val previewHeight = previewWidth / cropAspectRatio
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("卡片展示比例：${cardCropAspectLabel(cropAspectRatio)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .aspectRatio(cropAspectRatio)
-                                .heightIn(max = 240.dp)
-                                .clip(RoundedCornerShape(18.dp))
-                                .border(2.dp, Color.White.copy(alpha = 0.92f), RoundedCornerShape(18.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .pointerInput(sourceUri) {
-                                    detectTransformGestures { _, pan, zoom, _ ->
-                                        scale = (scale * zoom).coerceIn(1f, 3.5f)
-                                        offsetX = (offsetX + pan.x / 180f).coerceIn(-1f, 1f)
-                                        offsetY = (offsetY + pan.y / 180f).coerceIn(-1f, 1f)
-                                    }
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            AsyncImage(
-                                model = sourceUri,
-                                contentDescription = "裁剪预览",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .matchParentSize()
-                                    .graphicsLayer {
-                                        scaleX = scale
-                                        scaleY = scale
-                                        translationX = offsetX * 120f
-                                        translationY = offsetY * 120f
-                                    }
-                            )
-                            Box(modifier = Modifier.matchParentSize().border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.7f), RoundedCornerShape(18.dp)))
+        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = true)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("调整${displayLabel}画面", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "拖动图片调整取景，双指缩放；拖动白色框边缘或四角可移动、缩放裁剪框。",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(300.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color(0xFF101418))
+                        .onSizeChanged { areaSize = it }
+                        .pointerInput(sourceUri, areaSize, frame) {
+                            detectTransformGestures { centroid, pan, zoomChange, _ ->
+                                val minZ = minZoomForFrame(frame)
+                                val newZoom = (zoom * zoomChange).coerceIn(minZ, 4f)
+                                val ratio = newZoom / zoom
+                                val nx = panX * ratio + (areaSize.width / 2f - centroid.x) * (ratio - 1f) + pan.x
+                                val ny = panY * ratio + (areaSize.height / 2f - centroid.y) * (ratio - 1f) + pan.y
+                                val (cx, cy) = clampedPan(newZoom, nx, ny, frame)
+                                zoom = newZoom
+                                panX = cx
+                                panY = cy
+                            }
+                        }
+                ) {
+                    val dispW = imageWidth * fitScale * zoom
+                    val dispH = imageHeight * fitScale * zoom
+                    val imageLeft = (areaSize.width - dispW) / 2f + panX
+                    val imageTop = (areaSize.height - dispH) / 2f + panY
+                    val imageWidthDp = with(density) { dispW.toDp() }
+                    val imageHeightDp = with(density) { dispH.toDp() }
+                    Image(
+                        painter = painter,
+                        contentDescription = "裁剪预览",
+                        contentScale = ContentScale.FillBounds,
+                        modifier = Modifier
+                            .offset { IntOffset(imageLeft.roundToInt(), imageTop.roundToInt()) }
+                            .size(imageWidthDp, imageHeightDp)
+                    )
+
+                    Canvas(modifier = Modifier.matchParentSize()) {
+                        val f = frame
+                        val dark = Color.Black.copy(alpha = 0.5f)
+                        drawRect(dark, topLeft = Offset(0f, 0f), size = Size(f.left, size.height))
+                        drawRect(dark, topLeft = Offset(f.right, 0f), size = Size(size.width - f.right, size.height))
+                        drawRect(dark, topLeft = Offset(f.left, 0f), size = Size(f.width, f.top))
+                        drawRect(dark, topLeft = Offset(f.left, f.bottom), size = Size(f.width, size.height - f.bottom))
+                        drawRect(Color.White, topLeft = Offset(f.left, f.top), size = Size(f.width, f.height), style = Stroke(width = 2f))
+                        val thirdW = f.width / 3f
+                        val thirdH = f.height / 3f
+                        val grid = Color.White.copy(alpha = 0.6f)
+                        for (i in 1..2) {
+                            drawLine(grid, Offset(f.left + thirdW * i, f.top), Offset(f.left + thirdW * i, f.bottom), strokeWidth = 1f)
+                            drawLine(grid, Offset(f.left, f.top + thirdH * i), Offset(f.right, f.top + thirdH * i), strokeWidth = 1f)
                         }
                     }
+
+                    val stripSizePx = with(density) { 28.dp.toPx() }
+                    val cornerSizePx = with(density) { 44.dp.toPx() }
+                    CropEdgeStrip(
+                        offset = { IntOffset(frame.left.roundToInt(), (frame.top - stripSizePx / 2f).roundToInt()) },
+                        size = { IntSize((frame.width + stripSizePx).roundToInt(), stripSizePx.roundToInt()) },
+                        onDrag = ::moveFrame
+                    )
+                    CropEdgeStrip(
+                        offset = { IntOffset(frame.left.roundToInt(), (frame.bottom - stripSizePx / 2f).roundToInt()) },
+                        size = { IntSize((frame.width + stripSizePx).roundToInt(), stripSizePx.roundToInt()) },
+                        onDrag = ::moveFrame
+                    )
+                    CropEdgeStrip(
+                        offset = { IntOffset((frame.left - stripSizePx / 2f).roundToInt(), frame.top.roundToInt()) },
+                        size = { IntSize(stripSizePx.roundToInt(), (frame.height + stripSizePx).roundToInt()) },
+                        onDrag = ::moveFrame
+                    )
+                    CropEdgeStrip(
+                        offset = { IntOffset((frame.right - stripSizePx / 2f).roundToInt(), frame.top.roundToInt()) },
+                        size = { IntSize(stripSizePx.roundToInt(), (frame.height + stripSizePx).roundToInt()) },
+                        onDrag = ::moveFrame
+                    )
+                    CropCornerHandle(
+                        offset = { IntOffset((frame.left - cornerSizePx / 2f).roundToInt(), (frame.top - cornerSizePx / 2f).roundToInt()) },
+                        onDrag = { dx, dy -> resizeFromCorner(0, dx, dy) }
+                    )
+                    CropCornerHandle(
+                        offset = { IntOffset((frame.right - cornerSizePx / 2f).roundToInt(), (frame.top - cornerSizePx / 2f).roundToInt()) },
+                        onDrag = { dx, dy -> resizeFromCorner(1, dx, dy) }
+                    )
+                    CropCornerHandle(
+                        offset = { IntOffset((frame.left - cornerSizePx / 2f).roundToInt(), (frame.bottom - cornerSizePx / 2f).roundToInt()) },
+                        onDrag = { dx, dy -> resizeFromCorner(2, dx, dy) }
+                    )
+                    CropCornerHandle(
+                        offset = { IntOffset((frame.right - cornerSizePx / 2f).roundToInt(), (frame.bottom - cornerSizePx / 2f).roundToInt()) },
+                        onDrag = { dx, dy -> resizeFromCorner(3, dx, dy) }
+                    )
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = {
-                        scale = 1f
-                        offsetX = 0f
-                        offsetY = 0f
-                    }) { Text("重置") }
-                    OutlinedButton(onClick = { scale = (scale + 0.2f).coerceAtMost(3.5f) }) { Text("放大") }
-                    OutlinedButton(onClick = { scale = (scale - 0.2f).coerceAtLeast(1f) }) { Text("缩小") }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedButton(onClick = ::resetView, modifier = Modifier.weight(1f).height(48.dp)) {
+                        Icon(Icons.Default.Refresh, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("重置")
+                    }
+                    OutlinedButton(onClick = { changeZoomBy(0.2f) }, modifier = Modifier.weight(1f).height(48.dp)) {
+                        Icon(Icons.Default.Add, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("放大")
+                    }
+                    OutlinedButton(onClick = { changeZoomBy(-0.2f) }, modifier = Modifier.weight(1f).height(48.dp)) {
+                        Icon(Icons.Default.Remove, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("缩小")
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "裁剪比例：${cardCropAspectLabel(cropAspectRatio)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        TextButton(onClick = onDismiss, modifier = Modifier.height(48.dp)) { Text("取消") }
+                        Button(
+                            onClick = {
+                                val aw = areaSize.width.toFloat()
+                                val ah = areaSize.height.toFloat()
+                                val dispW = imageWidth * fitScale * zoom
+                                val dispH = imageHeight * fitScale * zoom
+                                val imageLeft = (aw - dispW) / 2f + panX
+                                val imageTop = (ah - dispH) / 2f + panY
+                                val scalePx = fitScale * zoom
+                                val left = ((frame.left - imageLeft) / scalePx / imageWidth).coerceIn(0f, 1f)
+                                val top = ((frame.top - imageTop) / scalePx / imageHeight).coerceIn(0f, 1f)
+                                val right = ((frame.right - imageLeft) / scalePx / imageWidth).coerceIn(0f, 1f)
+                                val bottom = ((frame.bottom - imageTop) / scalePx / imageHeight).coerceIn(0f, 1f)
+                                onSave(left, top, right - left, bottom - top)
+                            },
+                            modifier = Modifier.height(48.dp)
+                        ) { Text("保存") }
+                    }
                 }
             }
-        },
-        confirmButton = {
-            Button(onClick = { onSave(scale, offsetX, offsetY) }) { Text("保存裁剪") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
         }
+    }
+}
+
+@Composable
+private fun CropEdgeStrip(
+    offset: () -> IntOffset,
+    size: () -> IntSize,
+    onDrag: (Float, Float) -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .offset { offset() }
+            .size(with(LocalDensity.current) { size().width.toDp() }, with(LocalDensity.current) { size().height.toDp() })
+            .pointerInput(Unit) {
+                detectDragGestures { change, drag ->
+                    change.consume()
+                    onDrag(drag.x, drag.y)
+                }
+            }
     )
+}
+
+@Composable
+private fun CropCornerHandle(
+    offset: () -> IntOffset,
+    onDrag: (Float, Float) -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .offset { offset() }
+            .size(44.dp)
+            .pointerInput(Unit) {
+                detectDragGestures { change, drag ->
+                    change.consume()
+                    onDrag(drag.x, drag.y)
+                }
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(22.dp)
+                .background(Color.White, CircleShape)
+                .border(2.dp, Color.White.copy(alpha = 0.5f), CircleShape)
+        )
+    }
 }
 
 private fun cardCropAspectRatio(template: String): Float = when (template) {

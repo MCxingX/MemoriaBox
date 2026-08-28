@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
+import android.media.ExifInterface
 import android.net.Uri
 import android.webkit.MimeTypeMap
 import java.io.File
@@ -12,9 +13,10 @@ import org.json.JSONObject
 object ImageImportUtils {
     data class EditState(
         val sourceUri: String,
-        val scale: Float = 1f,
-        val offsetX: Float = 0f,
-        val offsetY: Float = 0f
+        val cropLeft: Float = 0f,
+        val cropTop: Float = 0f,
+        val cropWidth: Float = 1f,
+        val cropHeight: Float = 1f
     )
 
     private const val EDIT_STATE_PREFS = "image_edit_states"
@@ -33,9 +35,10 @@ object ImageImportUtils {
             val json = JSONObject(stored ?: return@runCatching EditState(fallbackSourceUri))
             EditState(
                 sourceUri = json.optString("sourceUri", fallbackSourceUri),
-                scale = json.optDouble("scale", 1.0).toFloat().coerceIn(1f, 3.5f),
-                offsetX = json.optDouble("offsetX", 0.0).toFloat().coerceIn(-1f, 1f),
-                offsetY = json.optDouble("offsetY", 0.0).toFloat().coerceIn(-1f, 1f)
+                cropLeft = json.optDouble("cropLeft", 0.0).toFloat().coerceIn(0f, 1f),
+                cropTop = json.optDouble("cropTop", 0.0).toFloat().coerceIn(0f, 1f),
+                cropWidth = json.optDouble("cropWidth", 1.0).toFloat().coerceIn(0.05f, 1f),
+                cropHeight = json.optDouble("cropHeight", 1.0).toFloat().coerceIn(0.05f, 1f)
             )
         }.getOrDefault(EditState(fallbackSourceUri))
     }
@@ -43,9 +46,10 @@ object ImageImportUtils {
     fun saveEditState(context: Context, displayUri: String, state: EditState) {
         val json = JSONObject()
             .put("sourceUri", state.sourceUri)
-            .put("scale", state.scale)
-            .put("offsetX", state.offsetX)
-            .put("offsetY", state.offsetY)
+            .put("cropLeft", state.cropLeft)
+            .put("cropTop", state.cropTop)
+            .put("cropWidth", state.cropWidth)
+            .put("cropHeight", state.cropHeight)
         context.getSharedPreferences(EDIT_STATE_PREFS, Context.MODE_PRIVATE)
             .edit().putString(displayUri, json.toString()).apply()
     }
@@ -73,48 +77,49 @@ object ImageImportUtils {
         context: Context,
         sourceUri: Uri,
         folder: String = "picked_images",
-        cropAspectRatio: Float,
-        scale: Float,
-        offsetX: Float,
-        offsetY: Float,
-        rotationDegrees: Float = 0f
+        sourceLeft: Float,
+        sourceTop: Float,
+        sourceWidth: Float,
+        sourceHeight: Float
     ): String? {
         return runCatching {
-            val source = context.contentResolver.openInputStream(sourceUri)?.use { input ->
-                BitmapFactory.decodeStream(input)
-            } ?: return null
-            val rotated = rotateBitmap(source, rotationDegrees)
-            val safeScale = scale.coerceAtLeast(1f)
-            val sourceAspectRatio = rotated.width.toFloat() / rotated.height.toFloat()
-            val baseCropWidth: Float
-            val baseCropHeight: Float
-            if (sourceAspectRatio > cropAspectRatio) {
-                baseCropHeight = rotated.height.toFloat()
-                baseCropWidth = baseCropHeight * cropAspectRatio
-            } else {
-                baseCropWidth = rotated.width.toFloat()
-                baseCropHeight = baseCropWidth / cropAspectRatio
-            }
-            val cropWidth = (baseCropWidth / safeScale).coerceAtLeast(1f)
-            val cropHeight = (baseCropHeight / safeScale).coerceAtLeast(1f)
-            val maxLeft = (rotated.width - cropWidth).coerceAtLeast(0f)
-            val maxTop = (rotated.height - cropHeight).coerceAtLeast(0f)
-            val normalizedX = ((offsetX + 1f) / 2f).coerceIn(0f, 1f)
-            val normalizedY = ((offsetY + 1f) / 2f).coerceIn(0f, 1f)
-            val left = (maxLeft * normalizedX).toInt().coerceIn(0, (rotated.width - 1).coerceAtLeast(0))
-            val top = (maxTop * normalizedY).toInt().coerceIn(0, (rotated.height - 1).coerceAtLeast(0))
-            val width = cropWidth.toInt().coerceIn(1, rotated.width - left)
-            val height = cropHeight.toInt().coerceIn(1, rotated.height - top)
-            val cropped = Bitmap.createBitmap(rotated, left, top, width, height)
+            val source = decodeWithOrientation(context, sourceUri) ?: return null
+            val left = (sourceLeft * source.width).toInt().coerceIn(0, (source.width - 1).coerceAtLeast(0))
+            val top = (sourceTop * source.height).toInt().coerceIn(0, (source.height - 1).coerceAtLeast(0))
+            val right = ((sourceLeft + sourceWidth) * source.width).toInt().coerceIn(left + 1, source.width)
+            val bottom = ((sourceTop + sourceHeight) * source.height).toInt().coerceIn(top + 1, source.height)
+            val cropped = Bitmap.createBitmap(source, left, top, right - left, bottom - top)
             val dir = File(context.filesDir, folder).apply { mkdirs() }
             val target = File(dir, "image_${System.currentTimeMillis()}.jpg")
             target.outputStream().use { output ->
                 cropped.compress(Bitmap.CompressFormat.JPEG, 92, output)
             }
-            if (rotated !== source) source.recycle()
+            if (source !== cropped) source.recycle()
             cropped.recycle()
             Uri.fromFile(target).toString()
         }.getOrNull()
+    }
+
+    private fun decodeWithOrientation(context: Context, uri: Uri): Bitmap? {
+        val source = when (uri.scheme) {
+            "file" -> BitmapFactory.decodeFile(uri.path)
+            else -> context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
+        } ?: return null
+        val rotation = runCatching {
+            val exif = if (uri.scheme == "file") {
+                ExifInterface(uri.path.orEmpty())
+            } else {
+                val stream = context.contentResolver.openInputStream(uri) ?: return@runCatching 0f
+                stream.use { ExifInterface(it) }
+            }
+            when (exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
+                ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+                ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+                ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+                else -> 0f
+            }
+        }.getOrDefault(0f)
+        return rotateBitmap(source, rotation)
     }
 
     private fun rotateBitmap(source: Bitmap, degrees: Float): Bitmap {

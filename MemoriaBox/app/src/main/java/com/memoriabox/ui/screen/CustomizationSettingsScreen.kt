@@ -312,17 +312,18 @@ fun CustomizationSettingsScreen(onNavigateBack: () -> Unit) {
                 sourceUri = uri,
                 cropAspectRatio = cropRatio,
                 displayLabel = if (isIcon) "底部图标" else "页面背景",
+                initialState = pendingEditState,
                 onDismiss = {
                     pendingCropUri = null
                     pendingEditState = null
                     targetForPick = null
                 },
-                onSave = { scale, offsetX, offsetY ->
+                onSave = { left, top, width, height ->
                     val value = ImageImportUtils.cropImageToPrivateStorage(
-                        context, uri, "customization_images", cropRatio, scale, -offsetX, -offsetY
+                        context, uri, "customization_images", left, top, width, height
                     ) ?: ImageImportUtils.copyImageToPrivateStorage(context, uri, "customization_images") ?: uri.toString()
                     applyPickedImage(value, target)
-                    ImageImportUtils.saveEditState(context, value, ImageImportUtils.EditState(uri.toString(), scale, offsetX, offsetY))
+                    ImageImportUtils.saveEditState(context, value, ImageImportUtils.EditState(uri.toString(), left, top, width, height))
                     pendingCropUri = null
                     pendingEditState = null
                     targetForPick = null
