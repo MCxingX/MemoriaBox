@@ -315,7 +315,7 @@ private fun eventTypeInitial(type: EventType): String = when (type) {
 }
 
 private fun eventStatusText(event: Event, daysRemaining: Long): String = when (event.type) {
-    EventType.COUNTDOWN -> if (daysRemaining >= 0) "还剩 $daysRemaining 天" else "已过 ${abs(daysRemaining)} 天"
+    EventType.COUNTDOWN -> "还剩 $daysRemaining 天"
     EventType.ANNIVERSARY -> "已走过 $daysRemaining 天"
     EventType.ELAPSED -> "已过去 $daysRemaining 天"
     EventType.BIRTHDAY -> if (daysRemaining == 0L) birthdayGreetingText(event.name) else "生日还有 $daysRemaining 天"
@@ -1622,7 +1622,15 @@ fun calculateDays(event: Event): Long = calculateDays(event.date, event.type, ev
 fun calculateDays(dateMillis: Long, type: EventType, lunar: String? = null): Long {
     val now = System.currentTimeMillis()
     return when (type) {
-        EventType.COUNTDOWN -> TimeUnit.MILLISECONDS.toDays(dateMillis - now)
+        EventType.COUNTDOWN -> {
+            val remaining = TimeUnit.MILLISECONDS.toDays(dateMillis - now)
+            if (remaining < 0) {
+                val nextDate = com.memoriabox.utils.AnnualDateUtils.nextOccurrenceMillis(dateMillis, now)
+                TimeUnit.MILLISECONDS.toDays(nextDate - now)
+            } else {
+                remaining
+            }
+        }
         EventType.ANNIVERSARY -> TimeUnit.MILLISECONDS.toDays(now - dateMillis)
         EventType.ELAPSED -> TimeUnit.MILLISECONDS.toDays(now - dateMillis)
         EventType.BIRTHDAY -> {
