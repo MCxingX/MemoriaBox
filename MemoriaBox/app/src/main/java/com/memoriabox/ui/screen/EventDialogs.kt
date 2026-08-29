@@ -22,6 +22,7 @@ import androidx.navigation.compose.*
 import com.memoriabox.ui.screen.components.*
 import com.memoriabox.data.model.*
 import com.memoriabox.viewmodel.*
+import kotlin.math.abs
 import java.util.Date
 
 @Composable
@@ -74,8 +75,10 @@ fun EventDetailDialog(
                             .align(Alignment.BottomStart)
                             .padding(16.dp)
                     ) {
-                        Text(days.toString(), style = MaterialTheme.typography.displayMedium, color = com.memoriabox.utils.ColorUtils.hexToColor(event.textColor))
-                        Text("天 · ${eventTypeLabel(event.type)}", style = MaterialTheme.typography.titleMedium, color = com.memoriabox.utils.ColorUtils.hexToColor(event.textColor))
+                        val displayDays = abs(days)
+                        val daysLabel = if (event.type == EventType.COUNTDOWN && days < 0) "已过" else "还剩"
+                        Text(displayDays.toString(), style = MaterialTheme.typography.displayMedium, color = com.memoriabox.utils.ColorUtils.hexToColor(event.textColor))
+                        Text("$daysLabel ${displayDays} 天 · ${eventTypeLabel(event.type)}", style = MaterialTheme.typography.titleMedium, color = com.memoriabox.utils.ColorUtils.hexToColor(event.textColor))
                     }
                 }
                 DetailLine("类型", eventTypeLabel(event.type))
@@ -124,7 +127,9 @@ fun EventDetailDialog(
                         text = { Text("分享文本") },
                         onClick = {
                             showMenu = false
-                            val shareText = "${event.name}\n${eventTypeLabel(event.type)}：${days} 天\n日期：${com.memoriabox.ui.screen.components.formatDate(event.date)}\n${event.note}"
+                            val displayDays = abs(days)
+                            val daysLabel = if (event.type == EventType.COUNTDOWN && days < 0) "已过" else "还剩"
+                            val shareText = "${event.name}\n${eventTypeLabel(event.type)}：$daysLabel $displayDays 天\n日期：${com.memoriabox.ui.screen.components.formatDate(event.date)}\n${event.note}"
                             context.startActivity(
                                 Intent.createChooser(
                                     Intent(Intent.ACTION_SEND).apply {

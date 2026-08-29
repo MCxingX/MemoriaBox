@@ -353,16 +353,7 @@ fun calculateDays(dateMillis: Long, type: EventType): Long {
         EventType.COUNTDOWN -> (dateMillis - now) / (1000 * 60 * 60 * 24)
         EventType.ANNIVERSARY -> (now - dateMillis) / (1000 * 60 * 60 * 24)
         EventType.ELAPSED -> (now - dateMillis) / (1000 * 60 * 60 * 24)
-        EventType.BIRTHDAY -> {
-            val eventCal = Calendar.getInstance().apply { timeInMillis = dateMillis }
-            val nowCal = Calendar.getInstance()
-            nowCal.set(Calendar.MONTH, eventCal.get(Calendar.MONTH))
-            nowCal.set(Calendar.DAY_OF_MONTH, eventCal.get(Calendar.DAY_OF_MONTH))
-            if (nowCal.before(Calendar.getInstance())) {
-                nowCal.add(Calendar.YEAR, 1)
-            }
-            (nowCal.timeInMillis - now) / (1000 * 60 * 60 * 24)
-        }
+        EventType.BIRTHDAY -> com.memoriabox.utils.AnnualDateUtils.daysUntil(dateMillis)
         EventType.TODO -> 0
     }
 }

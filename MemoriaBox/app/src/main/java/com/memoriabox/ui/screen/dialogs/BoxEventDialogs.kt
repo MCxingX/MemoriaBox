@@ -1287,17 +1287,17 @@ fun EventImageCropDialog(
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedButton(onClick = ::resetView, modifier = Modifier.weight(1f).height(48.dp)) {
+                    OutlinedButton(onClick = ::resetView, enabled = imageReady, modifier = Modifier.weight(1f).height(48.dp)) {
                         Icon(Icons.Default.Refresh, contentDescription = null)
                         Spacer(Modifier.width(6.dp))
                         Text("重置")
                     }
-                    OutlinedButton(onClick = { changeZoomBy(0.2f) }, modifier = Modifier.weight(1f).height(48.dp)) {
+                    OutlinedButton(onClick = { changeZoomBy(0.2f) }, enabled = imageReady, modifier = Modifier.weight(1f).height(48.dp)) {
                         Icon(Icons.Default.Add, contentDescription = null)
                         Spacer(Modifier.width(6.dp))
                         Text("放大")
                     }
-                    OutlinedButton(onClick = { changeZoomBy(-0.2f) }, modifier = Modifier.weight(1f).height(48.dp)) {
+                    OutlinedButton(onClick = { changeZoomBy(-0.2f) }, enabled = imageReady, modifier = Modifier.weight(1f).height(48.dp)) {
                         Icon(Icons.Default.Remove, contentDescription = null)
                         Spacer(Modifier.width(6.dp))
                         Text("缩小")
@@ -1512,6 +1512,21 @@ private fun CardTemplatePreview(
                     Text(dateText, color = foreground.copy(alpha = 0.80f), style = MaterialTheme.typography.labelSmall, maxLines = 1)
                     Text("99", color = foreground, style = MaterialTheme.typography.displaySmall)
                     Text(name, color = foreground, style = MaterialTheme.typography.titleSmall, maxLines = 1)
+                }
+                "HERO" -> Column(
+                    modifier = Modifier.fillMaxSize().padding(12.dp),
+                    verticalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Surface(color = glassPanel, shape = RoundedCornerShape(999.dp)) {
+                            Text("倒数日", color = foreground, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp))
+                        }
+                        Text(dateText, color = foreground.copy(alpha = 0.82f), style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                    }
+                    Column(modifier = Modifier.fillMaxWidth(0.84f)) {
+                        Text("99 天", color = foreground, style = MaterialTheme.typography.headlineMedium)
+                        Text(name, color = foreground, style = MaterialTheme.typography.titleSmall, maxLines = 1)
+                    }
                 }
                 else -> Column(
                     modifier = Modifier

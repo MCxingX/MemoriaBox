@@ -43,6 +43,9 @@ import android.graphics.Paint
 import android.graphics.Shader
 import android.graphics.Typeface
 import androidx.core.graphics.createBitmap
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 
@@ -162,6 +165,7 @@ fun ShareOptionsDialog(
     onShare: () -> Unit
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var isGenerating by remember { mutableStateOf(false) }
     var shareResult by remember { mutableStateOf<String?>(null) }
 
@@ -174,6 +178,9 @@ fun ShareOptionsDialog(
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
             ) {
+                if (isGenerating) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp))
+                }
                 Text("请选择分享类型", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(16.dp))
 
@@ -181,12 +188,19 @@ fun ShareOptionsDialog(
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable {
+                        .clickable(enabled = !isGenerating) {
                             val event = events.firstOrNull()
                             if (event != null) {
-                                val daysLeft = ((event.date - System.currentTimeMillis()) / 86_400_000L).coerceAtLeast(0)
-                                shareBitmap(context, generateEventCardBitmap(context, event, daysLeft), buildShareCaption(event, daysLeft))
-                                shareResult = "已生成第一张事件卡片，请在系统分享面板中选择目标应用。"
+                                isGenerating = true
+                                scope.launch {
+                                    val result = withContext(Dispatchers.IO) {
+                                        val daysLeft = ((event.date - System.currentTimeMillis()) / 86_400_000L).coerceAtLeast(0)
+                                        shareBitmap(context, generateEventCardBitmap(context, event, daysLeft), buildShareCaption(event, daysLeft))
+                                        "已生成第一张事件卡片，请在系统分享面板中选择目标应用。"
+                                    }
+                                    shareResult = result
+                                    isGenerating = false
+                                }
                             } else {
                                 shareResult = "当前没有可分享的带图事件。"
                             }
@@ -220,10 +234,17 @@ fun ShareOptionsDialog(
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable {
+                        .clickable(enabled = !isGenerating) {
                             if (events.isNotEmpty()) {
-                                shareBitmap(context, generateStatisticsBitmap(events), "我用 念记 记录了 ${events.size} 个重要日子。")
-                                shareResult = "已生成照片墙概览，请在系统分享面板中选择目标应用。"
+                                isGenerating = true
+                                scope.launch {
+                                    val result = withContext(Dispatchers.IO) {
+                                        shareBitmap(context, generateStatisticsBitmap(events), "我用 念记 记录了 ${events.size} 个重要日子。")
+                                        "已生成照片墙概览，请在系统分享面板中选择目标应用。"
+                                    }
+                                    shareResult = result
+                                    isGenerating = false
+                                }
                             } else {
                                 shareResult = "当前没有可分享的照片墙内容。"
                             }
@@ -257,9 +278,16 @@ fun ShareOptionsDialog(
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable {
-                            shareBitmap(context, generateStatisticsBitmap(events), "我的 念记 重要日子统计。")
-                            shareResult = "已生成统计图片，请在系统分享面板中选择目标应用。"
+                        .clickable(enabled = !isGenerating) {
+                            isGenerating = true
+                            scope.launch {
+                                val result = withContext(Dispatchers.IO) {
+                                    shareBitmap(context, generateStatisticsBitmap(events), "我的 念记 重要日子统计。")
+                                    "已生成统计图片，请在系统分享面板中选择目标应用。"
+                                }
+                                shareResult = result
+                                isGenerating = false
+                            }
                         }
                 ) {
                     Row(
@@ -311,6 +339,7 @@ fun ExportScreen(
     onNavigateBack: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val vm = remember { createCalendarViewModel(application) }
     val events by vm.allEvents.collectAsState(initial = emptyList())
     
@@ -321,7 +350,14 @@ fun ExportScreen(
         contract = ActivityResultContracts.CreateDocument("application/json")
     ) { uri ->
         uri?.let {
-            exportResult = if (writeTextToUri(context, it, buildJsonExport(events))) "JSON 导出成功" else "JSON 导出失败"
+            isExporting = true
+            scope.launch {
+                val result = withContext(Dispatchers.IO) {
+                    if (writeTextToUri(context, it, buildJsonExport(events))) "JSON 导出成功" else "JSON 导出失败"
+                }
+                exportResult = result
+                isExporting = false
+            }
         }
     }
 
@@ -329,7 +365,14 @@ fun ExportScreen(
         contract = ActivityResultContracts.CreateDocument("text/calendar")
     ) { uri ->
         uri?.let {
-            exportResult = if (writeTextToUri(context, it, buildIcalExport(events))) "iCal 导出成功" else "iCal 导出失败"
+            isExporting = true
+            scope.launch {
+                val result = withContext(Dispatchers.IO) {
+                    if (writeTextToUri(context, it, buildIcalExport(events))) "iCal 导出成功" else "iCal 导出失败"
+                }
+                exportResult = result
+                isExporting = false
+            }
         }
     }
 

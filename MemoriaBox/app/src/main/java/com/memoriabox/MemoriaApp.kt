@@ -76,10 +76,10 @@ class MemoriaApp : Application() {
         runCatching {
             val packageInfo = packageManager.getPackageInfo(packageName, 0)
             val lastUpdateTime = packageInfo.lastUpdateTime
-            val processStartTime = PROCESS_ATTACHED_AT
-            if (lastUpdateTime > processStartTime) {
-                Log.w(TAG, "Detected stale process from before last package update. Restarting.")
-                Process.killProcess(Process.myPid())
+            val prefs = getSharedPreferences("memoria_app", MODE_PRIVATE)
+            val lastKnownUpdate = prefs.getLong("last_apk_update", 0L)
+            if (lastUpdateTime > lastKnownUpdate) {
+                prefs.edit().putLong("last_apk_update", lastUpdateTime).apply()
             }
         }
     }
@@ -112,7 +112,7 @@ class MemoriaApp : Application() {
                 try {
                     writeCrashLog(context, thread, throwable)
                 } catch (_: Throwable) { }
-                previousHandler?.uncaughtException(thread, throwable)
+                runCatching { previousHandler?.uncaughtException(thread, throwable) }
             }
         }
 
@@ -147,6 +147,40 @@ class MemoriaApp : Application() {
                 val fallbackDir = File(context.getExternalFilesDir(null) ?: context.filesDir, "crash_logs")
                 if (!fallbackDir.exists()) fallbackDir.mkdirs()
                 File(fallbackDir, fileName).writeText(content)
+                cleanupOldLogs(fallbackDir)
+            } else {
+                cleanupOldLogsMediaStore(context)
+            }
+        }
+
+        private fun cleanupOldLogs(dir: File) {
+            runCatching {
+                val logs = dir.listFiles { f -> f.name.startsWith("crash_") && f.name.endsWith(".txt") }
+                    ?.sortedByDescending { it.lastModified() } ?: return
+                logs.drop(MAX_LOG_FILES).forEach { it.delete() }
+            }
+        }
+
+        private fun cleanupOldLogsMediaStore(context: Context) {
+            runCatching {
+                val collection = MediaStore.Downloads.EXTERNAL_CONTENT_URI
+                val relativePath = "${Environment.DIRECTORY_DOWNLOADS}/$RELATIVE_PATH"
+                val projection = arrayOf(MediaStore.MediaColumns._ID, MediaStore.MediaColumns.DATE_MODIFIED)
+                val selection = "${MediaStore.MediaColumns.RELATIVE_PATH} = ?"
+                val selectionArgs = arrayOf("$relativePath/")
+                val cursor = context.contentResolver.query(collection, projection, selection, selectionArgs, "${MediaStore.MediaColumns.DATE_MODIFIED} DESC")
+                cursor?.use {
+                    val ids = mutableListOf<Long>()
+                    while (it.moveToNext()) {
+                        ids.add(it.getLong(0))
+                    }
+                    ids.drop(MAX_LOG_FILES).forEach { id ->
+                        context.contentResolver.delete(
+                            android.net.Uri.withAppendedPath(collection, id.toString()),
+                            null, null
+                        )
+                    }
+                }
             }
         }
 

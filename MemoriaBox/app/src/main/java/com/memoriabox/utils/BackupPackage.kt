@@ -112,7 +112,12 @@ internal object BackupPackage {
                 if (entry.size >= 0 && expected.size > 0 && entry.size != expected.size) {
                     throw IllegalStateException("备份内容校验失败：${entry.name}")
                 }
-                val target = File(destDir, entry.name).also { it.parentFile?.mkdirs() }
+                val target = File(destDir, entry.name).canonicalFile
+                val destRoot = destDir.canonicalFile
+                require(target.path.startsWith(destRoot.path + File.separator) || target == destRoot) {
+                    "非法压缩条目：${entry.name}"
+                }
+                target.parentFile?.mkdirs()
                 target.outputStream().buffered().use { out -> zip.copyTo(out) }
                 val actualSha = sha256(target)
                 if (!actualSha.equals(expected.sha256, ignoreCase = true)) {

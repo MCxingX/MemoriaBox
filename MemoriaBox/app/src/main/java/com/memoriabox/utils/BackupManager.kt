@@ -425,8 +425,14 @@ class BackupManager(
     }
 
     private fun applyPreferencesXml(name: String, xmlFile: File) {
-        val doc = javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder()
-            .parse(xmlFile)
+        val dbf = javax.xml.parsers.DocumentBuilderFactory.newInstance().apply {
+            setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+            setFeature("http://xml.org/sax/features/external-general-entities", false)
+            setFeature("http://xml.org/sax/features/external-parameter-entities", false)
+            isExpandEntityReferences = false
+            isXIncludeAware = false
+        }
+        val doc = dbf.newDocumentBuilder().parse(xmlFile)
         val root = doc.documentElement
         val mapTag = root.getElementsByTagName("map")
         if (mapTag.length == 0) return

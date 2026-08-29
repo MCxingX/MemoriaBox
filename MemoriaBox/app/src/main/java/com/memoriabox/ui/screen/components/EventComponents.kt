@@ -47,6 +47,8 @@ import androidx.compose.ui.unit.dp
 import com.memoriabox.data.model.*
 import com.memoriabox.ui.theme.LocalMemoriaThemeTokens
 import com.memoriabox.ui.utils.rememberAdaptiveUiSize
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.memoriabox.utils.AppSettings
 import com.memoriabox.utils.ColorUtils
 import com.memoriabox.utils.ImageImportUtils
@@ -117,7 +119,7 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
             CardVisualStyle.MinimalBadge
         )
     }
-    val style = when (event.cardTemplate) {
+    val initialStyle = when (event.cardTemplate) {
         "POSTER" -> CardVisualStyle.PosterTall
         "GLASS", "SOFT_GLASS" -> CardVisualStyle.GlassCompact
         "SPLIT" -> CardVisualStyle.SplitPanel
@@ -126,8 +128,9 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
         else -> CardVisualStyle.HeroWide
     }
     var styleIndex by remember(event.id, event.cardTemplate) {
-        mutableIntStateOf(styleOptions.indexOf(style).coerceAtLeast(0))
+        mutableIntStateOf(styleOptions.indexOf(initialStyle).coerceAtLeast(0))
     }
+    val style = styleOptions[styleIndex]
     var horizontalDrag by remember { mutableFloatStateOf(0f) }
     var horizontalDragActive by remember { mutableStateOf(false) }
     val hasImage = event.avatarUri != null
@@ -138,9 +141,11 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
     var imageRatio by remember(event.avatarUri) { mutableStateOf<Float?>(null) }
     LaunchedEffect(event.avatarUri) {
         if (event.avatarUri == null) return@LaunchedEffect
-        imageRatio = runCatching {
-            com.memoriabox.utils.ImageImportUtils.getImageAspectRatio(context, event.avatarUri)
-        }.getOrNull()
+        imageRatio = withContext(Dispatchers.IO) {
+            runCatching {
+                com.memoriabox.utils.ImageImportUtils.getImageAspectRatio(context, event.avatarUri)
+            }.getOrNull()
+        }
     }
 
     val cardModifier = Modifier

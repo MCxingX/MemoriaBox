@@ -21,6 +21,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.memoriabox.data.model.Box
+import com.memoriabox.data.model.BgType
 import com.memoriabox.data.model.Event
 import com.memoriabox.data.model.LogEntry
 import com.memoriabox.data.model.TodoPriority
@@ -60,7 +61,11 @@ fun BoxCard(box: Box, onClick: () -> Unit) {
             .fillMaxWidth()
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
-            containerColor = ColorUtils.hexToColor(box.bgValue).copy(alpha = 0.15f)
+            containerColor = if (box.bgType == BgType.COLOR) {
+                ColorUtils.hexToColor(box.bgValue).copy(alpha = 0.15f)
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant
+            }
         )
     ) {
         Row(

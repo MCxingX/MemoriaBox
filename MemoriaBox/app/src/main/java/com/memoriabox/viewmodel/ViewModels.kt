@@ -178,21 +178,25 @@ class BoxDetailViewModel(
 
     private val _events = MutableStateFlow<List<Event>>(emptyList())
     private val _box = MutableStateFlow<Box?>(null)
+    private var loadJob: kotlinx.coroutines.Job? = null
 
     val events = _events.asStateFlow()
     val box = _box.asStateFlow()
     val allBoxes = boxRepository.getAllActiveBoxes()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    fun loadBox(boxId: String) = viewModelScope.launch {
-        try {
-            val b = boxRepository.getBoxById(boxId)
-            _box.value = b
-            eventRepository.getEventsByBoxId(boxId).collect { newEvents ->
-                _events.value = newEvents
+    fun loadBox(boxId: String) {
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
+            try {
+                val b = boxRepository.getBoxById(boxId)
+                _box.value = b
+                eventRepository.getEventsByBoxId(boxId).collect { newEvents ->
+                    _events.value = newEvents
+                }
+            } catch (e: Exception) {
+                Log.e("BoxDetailVM", "Load failed", e)
             }
-        } catch (e: Exception) {
-            Log.e("BoxDetailVM", "Load failed", e)
         }
     }
 
@@ -308,7 +312,7 @@ class CalendarViewModel(
     val monthlySummary = _monthlySummary.asStateFlow()
 
     fun getEventsForDay(timestamp: Long, events: List<Event>): List<Event> {
-        val dayStart = (timestamp / 86400000) * 86400000
+        val dayStart = startOfDay(timestamp)
         val dayEnd = dayStart + 86400000 - 1
         return events.filter { it.date >= dayStart && it.date <= dayEnd }
     }
@@ -751,8 +755,15 @@ class MoodViewModel(
     }
 
     fun moodForDate(date: Long): MoodEntry? {
-        val dayStart = (date / 86400000L) * 86400000L
-        return moods.value.firstOrNull { (it.date / 86400000L) * 86400000L == dayStart }
+        val cal = java.util.Calendar.getInstance()
+        cal.timeInMillis = date
+        cal.set(java.util.Calendar.HOUR_OF_DAY, 0)
+        cal.set(java.util.Calendar.MINUTE, 0)
+        cal.set(java.util.Calendar.SECOND, 0)
+        cal.set(java.util.Calendar.MILLISECOND, 0)
+        val dayStart = cal.timeInMillis
+        val dayEnd = dayStart + 86400000L - 1
+        return moods.value.firstOrNull { it.date >= dayStart && it.date <= dayEnd }
     }
 }
 
@@ -858,9 +869,17 @@ class FriendDetailViewModel(
     }
 
     private suspend fun syncBirthdayEvent(friend: Friend) {
-        val birthday = friend.birthdayDate ?: return
         val existing = eventRepository.getAllEventsOnce()
             .firstOrNull { it.type == EventType.BIRTHDAY && it.avatarUri == "friend:${friend.id}" }
+        val birthday = friend.birthdayDate
+        if (birthday == null) {
+            existing?.let {
+                eventRepository.deleteEvent(it)
+                logRepository.logEventOperation("DELETE", it.id, it.name)
+            }
+            _birthdayEvent.value = null
+            return
+        }
         val defaultBoxId = "default_1"
         // 使用月/日对齐，2/29 在非闰年自动落到 2/28
         val currentYearBirthday = com.memoriabox.utils.AnnualDateUtils.nextOccurrenceMillis(birthday)
