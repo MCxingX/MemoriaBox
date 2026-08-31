@@ -283,9 +283,9 @@ fun matchesEventFilter(event: Event, filter: EventFilter): Boolean = when (filte
 
 fun buildEventSubtitle(event: Event): String {
     val days = when (event.type) {
-        com.memoriabox.data.model.EventType.COUNTDOWN -> "还剩${(event.date - System.currentTimeMillis()) / (1000 * 60 * 60 * 24)}天"
-        com.memoriabox.data.model.EventType.ANNIVERSARY -> "已过${(System.currentTimeMillis() - event.date) / (1000 * 60 * 60 * 24)}天"
-        com.memoriabox.data.model.EventType.ELAPSED -> "已过${(System.currentTimeMillis() - event.date) / (1000 * 60 * 60 * 24)}天"
+        com.memoriabox.data.model.EventType.COUNTDOWN -> "还剩${com.memoriabox.ui.screen.components.calculateDays(event)}天"
+        com.memoriabox.data.model.EventType.ANNIVERSARY -> "已过${com.memoriabox.ui.screen.components.calculateDays(event)}天"
+        com.memoriabox.data.model.EventType.ELAPSED -> "已过${com.memoriabox.ui.screen.components.calculateDays(event)}天"
         com.memoriabox.data.model.EventType.BIRTHDAY -> "生日"
         com.memoriabox.data.model.EventType.TODO -> "待办"
     }

@@ -62,7 +62,7 @@ class CountdownWidget : AppWidgetProvider() {
 
             withContext(Dispatchers.Main) {
                 if (event != null) {
-                    val daysLeft = ((event.date - System.currentTimeMillis()) / 86_400_000L).coerceAtLeast(0)
+                    val daysLeft = com.memoriabox.ui.screen.components.calculateDays(event.date, event.type, event.lunar)
                     views.setTextViewText(R.id.widget_next_event, "下一个${widgetTypeLabel(event.type)}")
                     views.setTextViewText(R.id.widget_event_name, event.name)
                     views.setTextViewText(R.id.widget_event_meta, SimpleDateFormat("yyyy年M月d日", Locale.getDefault()).format(Date(event.date)))

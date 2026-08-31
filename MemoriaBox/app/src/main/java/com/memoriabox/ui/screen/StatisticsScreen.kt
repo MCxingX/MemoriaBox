@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -111,10 +112,8 @@ fun StatisticsScreen(application: Application) {
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Canvas(modifier = Modifier.size(12.dp)) {
-                                        drawCircle(
-                                            color = getTypeColor(type),
-                                            radius = size.minDimension / 2
-                                        )
+                                        val r = size.minDimension / 2f
+                                        if (r > 0f) drawCircle(color = getTypeColor(type), radius = r)
                                     }
                                 }
                                 Spacer(Modifier.width(8.dp))
@@ -167,7 +166,7 @@ fun StatisticsScreen(application: Application) {
                                     )
                                 }
                                 Text(
-                                    "${calculateDays(event.date, event.type)}天",
+                                    "${com.memoriabox.ui.screen.components.calculateDays(event.date, event.type, event.lunar)}天",
                                     color = MaterialTheme.colorScheme.primary,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -285,12 +284,15 @@ fun EventTypePieChart(stats: Map<EventType, Int>) {
 
     Canvas(modifier = Modifier.fillMaxSize()) {
         val diameter = size.minDimension
+        if (diameter <= 0f) return@Canvas
+        val topLeft = Offset((size.width - diameter) / 2f, (size.height - diameter) / 2f)
         slices.forEach { (startAngle, sweep, color) ->
             drawArc(
                 color = color,
                 startAngle = startAngle,
                 sweepAngle = sweep,
                 useCenter = true,
+                topLeft = topLeft,
                 size = Size(diameter, diameter)
             )
         }
@@ -347,15 +349,4 @@ fun getTypeColor(type: EventType): Color = when (type) {
     EventType.ELAPSED -> Color(0xFF98FB98)
     EventType.BIRTHDAY -> Color(0xFFFFD700)
     EventType.TODO -> Color(0xFF87CEEB)
-}
-
-fun calculateDays(dateMillis: Long, type: EventType): Long {
-    val now = System.currentTimeMillis()
-    return when (type) {
-        EventType.COUNTDOWN -> ((dateMillis - now) / (1000 * 60 * 60 * 24)).coerceAtLeast(0)
-        EventType.ANNIVERSARY -> (now - dateMillis) / (1000 * 60 * 60 * 24)
-        EventType.ELAPSED -> (now - dateMillis) / (1000 * 60 * 60 * 24)
-        EventType.BIRTHDAY -> com.memoriabox.utils.AnnualDateUtils.daysUntil(dateMillis)
-        EventType.TODO -> 0
-    }
 }

@@ -1363,10 +1363,15 @@ private fun CropEdgeStrip(
     size: () -> IntSize,
     onDrag: (Float, Float) -> Unit
 ) {
+    val density = LocalDensity.current
+    val computedSize = size()
+    val wDp = with(density) { computedSize.width.toDp() }
+    val hDp = with(density) { computedSize.height.toDp() }
+    if (wDp <= 0.dp || hDp <= 0.dp) return
     Box(
         modifier = Modifier
             .offset { offset() }
-            .size(with(LocalDensity.current) { size().width.toDp() }, with(LocalDensity.current) { size().height.toDp() })
+            .size(wDp, hDp)
             .pointerInput(Unit) {
                 detectDragGestures { change, drag ->
                     change.consume()

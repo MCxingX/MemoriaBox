@@ -330,8 +330,9 @@ private fun eventProgress(event: Event, daysRemaining: Long): Float {
             } ?: 0.35f
         }
         EventType.COUNTDOWN -> {
-            val start = event.createdAt.coerceAtMost(event.date)
-            ((now - start).toFloat() / (event.date - start).coerceAtLeast(1L).toFloat()).coerceIn(0f, 1f)
+            val nextDate = com.memoriabox.utils.AnnualDateUtils.nextOccurrenceMillis(event.date, now)
+            val start = event.createdAt.coerceAtMost(nextDate)
+            ((now - start).toFloat() / (nextDate - start).coerceAtLeast(1L).toFloat()).coerceIn(0f, 1f)
         }
         EventType.BIRTHDAY -> ((365L - daysRemaining.coerceIn(0L, 365L)).toFloat() / 365f).coerceIn(0f, 1f)
         EventType.ANNIVERSARY, EventType.ELAPSED -> ((daysRemaining % 365L).toFloat() / 365f).coerceIn(0.08f, 1f)
@@ -660,7 +661,7 @@ fun CalendarViewScreen(
         }
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val horizontalPadding = if (adaptiveUi.compact) 8.dp else adaptiveUi.screenPadding
-            val widthCell = (maxWidth - horizontalPadding * 2) / 7
+            val widthCell = if (maxWidth.value.isFinite() && maxWidth > 0.dp) (maxWidth - horizontalPadding * 2) / 7 else 52.dp
             val fontScale = LocalDensity.current.fontScale
             val cellSize = (widthCell * (1f + (fontScale - 1f).coerceAtLeast(0f) * 0.35f))
                 .coerceIn(52.dp, 78.dp)
@@ -1098,7 +1099,7 @@ private fun AnniversaryStoryStrip(events: List<Event>, onEventClick: (Event) -> 
                 Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(if (event.type == EventType.BIRTHDAY) "生日故事" else "纪念日故事", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                     Text(event.name, style = MaterialTheme.typography.titleSmall, maxLines = 1)
-                    Text("${kotlin.math.abs(calculateDays(event))} 天 · 点开查看详情", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("${calculateDays(event)} 天 · 点开查看详情", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -1131,7 +1132,7 @@ private fun SelectedDaySummaryCard(
             }
             val firstEvent = events.firstOrNull()
             if (firstEvent != null) {
-                Text("${firstEvent.name} · ${eventTypeText(firstEvent.type)} · ${kotlin.math.abs(calculateDays(firstEvent))} 天", style = MaterialTheme.typography.bodyMedium)
+                Text("${firstEvent.name} · ${eventTypeText(firstEvent.type)} · ${calculateDays(firstEvent)} 天", style = MaterialTheme.typography.bodyMedium)
             }
             if (diaries.isNotEmpty()) {
                 Text("今日日记 ${diaries.size} 篇：${diaries.first().content.take(28)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1586,12 +1587,11 @@ fun calculateDays(dateMillis: Long, type: EventType, lunar: String? = null): Lon
     val now = System.currentTimeMillis()
     return when (type) {
         EventType.COUNTDOWN -> {
-            val remaining = TimeUnit.MILLISECONDS.toDays(dateMillis - now)
-            if (remaining < 0) {
-                val nextDate = com.memoriabox.utils.AnnualDateUtils.nextOccurrenceMillis(dateMillis, now)
-                TimeUnit.MILLISECONDS.toDays(nextDate - now)
+            if (lunar != null) {
+                LunarDateUtils.daysUntilNextOccurrence(lunar, now)
+                    ?: com.memoriabox.utils.AnnualDateUtils.daysUntil(dateMillis, now)
             } else {
-                remaining
+                com.memoriabox.utils.AnnualDateUtils.daysUntil(dateMillis, now)
             }
         }
         EventType.ANNIVERSARY -> TimeUnit.MILLISECONDS.toDays(now - dateMillis)

@@ -1,12 +1,16 @@
 package com.memoriabox.utils
 
 import java.util.Calendar
+import java.util.TimeZone
+import java.util.concurrent.TimeUnit
 
 object AnnualDateUtils {
+    private val BEIJING_TZ = TimeZone.getTimeZone("Asia/Shanghai")
+
     fun nextOccurrenceMillis(dateMillis: Long, nowMillis: Long = System.currentTimeMillis()): Long {
         val today = startOfDay(nowMillis)
-        val source = Calendar.getInstance().apply { timeInMillis = dateMillis }
-        val target = Calendar.getInstance().apply {
+        val source = Calendar.getInstance(BEIJING_TZ).apply { timeInMillis = dateMillis }
+        val target = Calendar.getInstance(BEIJING_TZ).apply {
             timeInMillis = today
             set(Calendar.MONTH, source.get(Calendar.MONTH))
             set(Calendar.DAY_OF_MONTH, source.get(Calendar.DAY_OF_MONTH))
@@ -22,16 +26,10 @@ object AnnualDateUtils {
     fun daysUntil(dateMillis: Long, nowMillis: Long = System.currentTimeMillis()): Long {
         val today = startOfDay(nowMillis)
         val target = nextOccurrenceMillis(dateMillis, nowMillis)
-        val cursor = Calendar.getInstance().apply { timeInMillis = today }
-        var days = 0L
-        while (cursor.timeInMillis < target) {
-            cursor.add(Calendar.DAY_OF_MONTH, 1)
-            days++
-        }
-        return days
+        return TimeUnit.MILLISECONDS.toDays(target - today).coerceAtLeast(0)
     }
 
-    private fun startOfDay(timeMillis: Long): Long = Calendar.getInstance().apply {
+    private fun startOfDay(timeMillis: Long): Long = Calendar.getInstance(BEIJING_TZ).apply {
         timeInMillis = timeMillis
         set(Calendar.HOUR_OF_DAY, 0)
         set(Calendar.MINUTE, 0)
