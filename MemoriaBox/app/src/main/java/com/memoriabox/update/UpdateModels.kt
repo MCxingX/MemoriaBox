@@ -27,12 +27,12 @@ sealed interface UpdateState {
 object UpdateFormat {
     private val githubProxyPrefixes = listOf(
         "https://gh-proxy.com/",
-        "https://mirror.ghproxy.com/",
         "https://ghproxy.net/",
-        "https://ghfast.top/",
-        "https://ghproxy.cc/",
-        "https://github.moeyy.xyz/",
-        "https://gh-proxy.llyke.com/"
+        "https://gh.llkk.cc/",
+        "https://hub.gitmirror.com/",
+        "https://ghproxy.com/",
+        "https://gh-proxy.org/",
+        "https://ghfast.top/"
     )
 
     fun normalizeVersion(value: String): String = value.trim().removePrefix("v").removePrefix("V")

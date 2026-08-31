@@ -13,6 +13,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.selects.select
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -301,13 +303,23 @@ object UpdateManager {
         return saveToDownloads(context, versionName, source)
     }
 
-    private suspend fun fastestMirror(originalUrl: String): String? =
-        UpdateFormat.mirrorUrls(originalUrl)
-            .map { url -> scope.async { probe(url) } }
-            .awaitAll()
-            .filterNotNull()
-            .minByOrNull { it.second }
-            ?.first
+    private suspend fun fastestMirror(originalUrl: String): String? = supervisorScope {
+        val mirrors = UpdateFormat.mirrorUrls(originalUrl)
+        if (mirrors.isEmpty()) return@supervisorScope null
+        val probes = mirrors.map { url -> async { probe(url) } }
+        val pending = probes.toMutableList()
+        while (pending.isNotEmpty()) {
+            val (idx, result) = select<Pair<Int, Pair<String, Long>?>> {
+                pending.forEachIndexed { i, deferred -> deferred.onAwait { i to it } }
+            }
+            pending.removeAt(idx)
+            if (result != null) {
+                pending.forEach { it.cancel() }
+                return@supervisorScope result.first
+            }
+        }
+        null
+    }
 
     private fun probe(url: String): Pair<String, Long>? = runCatching {
         if (downloadCancelled) return null
