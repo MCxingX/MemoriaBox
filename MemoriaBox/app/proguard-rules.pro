@@ -2,6 +2,10 @@
 -keep class net.zetetic.** { *; }
 -keep class androidx.room.** { *; }
 -keep class com.memoriabox.data.model.** { *; }
+-keep class com.yalantis.ucrop.** { *; }
+-keep class com.yalantis.ucrop.model.** { *; }
+-keepclassmembers class com.yalantis.ucrop.** { *; }
 
 -dontwarn net.sqlcipher.**
 -dontwarn net.zetetic.**
+-dontwarn com.yalantis.ucrop.**

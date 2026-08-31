@@ -59,6 +59,10 @@
             </intent-filter>
         </activity>
         
+        <activity
+            android:name="com.yalantis.ucrop.UCropActivity"
+            android:theme="@style/Theme.UCrop" />
+
         <receiver
             android:name=".receiver.ReminderReceiver"
             android:enabled="true"

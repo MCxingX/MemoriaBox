@@ -22,7 +22,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.memoriabox.ui.utils.rememberAdaptiveUiSize
-import com.memoriabox.ui.screen.dialogs.EventImageCropDialog
 import com.memoriabox.utils.AppSettings
 import com.memoriabox.utils.ImageImportUtils
 import kotlinx.coroutines.Dispatchers
@@ -45,8 +44,6 @@ fun CustomizationSettingsScreen(onNavigateBack: () -> Unit) {
     var settingsIcon by remember { mutableStateOf(AppSettings.getSettingsIconUri(context)) }
 
     var targetForPick by remember { mutableStateOf<String?>(null) }
-    var pendingCropUri by remember { mutableStateOf<Uri?>(null) }
-    var pendingEditState by remember { mutableStateOf<ImageImportUtils.EditState?>(null) }
     var customQuotes by remember { mutableStateOf(AppSettings.getCustomDailyQuotes(context)) }
     var useCustomQuote by remember { mutableStateOf(AppSettings.getUseCustomQuote(context)) }
     var quoteDraft by remember { mutableStateOf("") }
@@ -90,15 +87,24 @@ fun CustomizationSettingsScreen(onNavigateBack: () -> Unit) {
         if (target?.endsWith("_BG") == true) updateAllBgState()
     }
 
+    val customizationCropLauncher = com.memoriabox.utils.UCropHelper.rememberCropLauncher("customization_images") { result ->
+        val target = targetForPick
+        if (result != null && target != null) {
+            applyPickedImage(result, target)
+        }
+        targetForPick = null
+    }
+
     val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri == null || targetForPick == null) {
             targetForPick = null
         } else {
-            val target = targetForPick
+            val target = targetForPick!!
             scope.launch(Dispatchers.IO) {
                 val sourceUri = ImageImportUtils.saveOriginalImage(context, uri)?.let(Uri::parse) ?: uri
-                pendingCropUri = sourceUri
-                pendingEditState = ImageImportUtils.EditState(sourceUri.toString())
+                val isIcon = target.endsWith("_ICON")
+                val cropRatio = if (isIcon) 1f else 9f / 16f
+                customizationCropLauncher(sourceUri, cropRatio)
             }
         }
     }
@@ -119,8 +125,10 @@ fun CustomizationSettingsScreen(onNavigateBack: () -> Unit) {
         }
         if (!current.isNullOrBlank()) {
             val editState = ImageImportUtils.getEditState(context, current)
-            pendingEditState = editState
-            pendingCropUri = Uri.parse(editState.sourceUri)
+            val sourceUri = Uri.parse(editState.sourceUri)
+            val isIcon = target.endsWith("_ICON")
+            val cropRatio = if (isIcon) 1f else 9f / 16f
+            customizationCropLauncher(sourceUri, cropRatio)
         } else {
             pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
         }
@@ -307,40 +315,6 @@ fun CustomizationSettingsScreen(onNavigateBack: () -> Unit) {
                 TextButton(onClick = { showResetIconsConfirm = false }) { Text("取消") }
             }
         )
-    }
-
-    pendingCropUri?.let { uri ->
-        val target = targetForPick
-        if (target != null) {
-            val isIcon = target.endsWith("_ICON")
-            val cropRatio = if (isIcon) 1f else 9f / 16f
-            EventImageCropDialog(
-                sourceUri = uri,
-                cropAspectRatio = cropRatio,
-                displayLabel = if (isIcon) "底部图标" else "页面背景",
-                initialState = pendingEditState,
-                onDismiss = {
-                    pendingCropUri = null
-                    pendingEditState = null
-                    targetForPick = null
-                },
-                onSave = { left, top, width, height ->
-                    val target = targetForPick
-                    if (target != null) {
-                        scope.launch(Dispatchers.IO) {
-                            val value = ImageImportUtils.cropImageToPrivateStorage(
-                                context, uri, "customization_images", left, top, width, height
-                            ) ?: ImageImportUtils.copyImageToPrivateStorage(context, uri, "customization_images") ?: uri.toString()
-                            applyPickedImage(value, target)
-                            ImageImportUtils.saveEditState(context, value, ImageImportUtils.EditState(uri.toString(), left, top, width, height))
-                            pendingCropUri = null
-                            pendingEditState = null
-                            targetForPick = null
-                        }
-                    }
-                }
-            )
-        }
     }
 }
 
