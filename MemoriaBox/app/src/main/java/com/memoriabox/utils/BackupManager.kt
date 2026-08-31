@@ -406,6 +406,9 @@ class BackupManager(
                     runCatching { db.execSQL(sql, arrayOf(newUri, oldUri)) }
                 }
             }
+            importDb.openHelper.writableDatabase.query("PRAGMA wal_checkpoint(TRUNCATE)").use { cursor ->
+                cursor.moveToFirst()
+            }
             importDb.close()
             importDbPath.copyTo(dbFile, overwrite = true)
         } finally {
@@ -498,6 +501,7 @@ class BackupManager(
                 val salt = ByteArray(16).also { input.readFully(it) }
                 val iv = ByteArray(12).also { input.readFully(it) }
 
+                // TODO: 大数据库可能 OOM，后续改为 CipherInputStream 流式解密
                 val remainingBytes = input.readBytes()
                 val decrypted = decryptBytes(remainingBytes, salt, iv, password)
 

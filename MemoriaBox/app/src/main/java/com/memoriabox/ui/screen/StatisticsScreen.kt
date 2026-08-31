@@ -271,14 +271,16 @@ fun StatCard(
 
 @Composable
 fun EventTypePieChart(stats: Map<EventType, Int>) {
-    val total = stats.values.sum().coerceAtLeast(1)
-    var startAngle = 0f
-    
-    val slices = stats.map { (type, count) ->
-        val sweep = (count.toFloat() / total * 360)
-        val slice = Triple(startAngle, sweep, getTypeColor(type))
-        startAngle += sweep
-        slice
+    val total = remember(stats) { stats.values.sum().coerceAtLeast(1) }
+
+    val slices = remember(stats) {
+        var startAngle = 0f
+        stats.map { (type, count) ->
+            val sweep = (count.toFloat() / total * 360)
+            val slice = Triple(startAngle, sweep, getTypeColor(type))
+            startAngle += sweep
+            slice
+        }
     }
 
     Canvas(modifier = Modifier.fillMaxSize()) {
@@ -350,7 +352,7 @@ fun getTypeColor(type: EventType): Color = when (type) {
 fun calculateDays(dateMillis: Long, type: EventType): Long {
     val now = System.currentTimeMillis()
     return when (type) {
-        EventType.COUNTDOWN -> (dateMillis - now) / (1000 * 60 * 60 * 24)
+        EventType.COUNTDOWN -> ((dateMillis - now) / (1000 * 60 * 60 * 24)).coerceAtLeast(0)
         EventType.ANNIVERSARY -> (now - dateMillis) / (1000 * 60 * 60 * 24)
         EventType.ELAPSED -> (now - dateMillis) / (1000 * 60 * 60 * 24)
         EventType.BIRTHDAY -> com.memoriabox.utils.AnnualDateUtils.daysUntil(dateMillis)

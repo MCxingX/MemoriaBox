@@ -90,7 +90,10 @@ fun BoxDetailScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showCreateEvent = true }) {
+            FloatingActionButton(onClick = {
+                if (box == null) return@FloatingActionButton
+                showCreateEvent = true
+            }) {
                 Icon(Icons.Default.Add, contentDescription = "添加事件")
             }
         }
@@ -159,6 +162,7 @@ fun BoxDetailScreen(
             onBatchMove = { showMoveDialog = true },
             onBatchEdit = {
                 showEditEvent = events.firstOrNull { selectedEvents.contains(it.id) }
+                selectedEvents = emptySet()
                 showBatchDialog = false
             }
         )

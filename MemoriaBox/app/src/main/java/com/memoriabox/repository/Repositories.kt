@@ -140,7 +140,10 @@ class MoodRepository(private val moodDao: MoodDao) {
 class SubtaskRepository(private val subtaskDao: SubtaskDao) {
     fun getSubtasks(todoId: String): Flow<List<TodoSubtask>> = subtaskDao.getSubtasks(todoId)
     suspend fun getSubtasksOnce(todoId: String): List<TodoSubtask> = subtaskDao.getSubtasksOnce(todoId)
-    suspend fun getSubtasksForTodosOnce(todoIds: List<String>): List<TodoSubtask> = subtaskDao.getSubtasksForTodos(todoIds)
+    suspend fun getSubtasksForTodosOnce(todoIds: List<String>): List<TodoSubtask> {
+        if (todoIds.isEmpty()) return emptyList()
+        return subtaskDao.getSubtasksForTodos(todoIds)
+    }
     suspend fun upsertSubtask(subtask: TodoSubtask) = subtaskDao.upsertSubtask(subtask)
     suspend fun updateSubtask(subtask: TodoSubtask) = subtaskDao.updateSubtask(subtask)
     suspend fun deleteSubtask(subtask: TodoSubtask) = subtaskDao.deleteSubtask(subtask)

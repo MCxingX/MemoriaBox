@@ -88,8 +88,8 @@ fun EventDetailDialog(
                 if (event.isPinned) DetailLine("状态", "已置顶")
                 DetailLine("模板", cardTemplateLabel(event.cardTemplate))
                 DetailLine("心情标签", eventMoodLabel(event))
-                DetailLine("封面主题", "可在编辑资料中选择背景、渐变色和卡片模板")
-                DetailLine("分享和小组件", "可分享图片/文本，也可在桌面添加小组件查看重要日子")
+                Spacer(Modifier.height(8.dp))
+                Text("提示：可在编辑资料中选择背景、渐变色和卡片模板；也可分享图片/文本或在桌面添加小组件。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 HorizontalDivider()
                 Text("时间线记录", style = MaterialTheme.typography.titleSmall)
                 if (event.note.isNotBlank()) {
@@ -187,7 +187,7 @@ fun repeatModeLabel(event: Event): String = when {
     event.repeatMode == RepeatMode.MONTHLY -> "每月重复"
     event.repeatMode == RepeatMode.CUSTOM_DAYS -> if (event.repeatInterval <= 1) "每日重复" else "每 ${event.repeatInterval} 天重复"
     event.repeatMode == RepeatMode.CUSTOM_WEEKS -> if (event.repeatInterval <= 1) "每周重复" else "每 ${event.repeatInterval} 周重复"
-    event.repeatMode == RepeatMode.CUSTOM_MONTHS -> "每 ${event.repeatInterval} 个月重复"
+    event.repeatMode == RepeatMode.CUSTOM_MONTHS -> if (event.repeatInterval <= 1) "每月重复" else "每 ${event.repeatInterval} 个月重复"
     event.type == EventType.BIRTHDAY -> "每年重复"
     else -> "不重复"
 }

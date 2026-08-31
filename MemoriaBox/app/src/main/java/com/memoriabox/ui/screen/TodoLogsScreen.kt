@@ -60,7 +60,7 @@ fun TodoScreen(application: Application) {
     val todoVM = remember { createTodoViewModel(application) }
     val todoEvents by todoVM.todoEvents.collectAsState(initial = emptyList())
     val subtaskMap by todoVM.subtaskMap.collectAsState(initial = emptyMap())
-    LaunchedEffect(todoEvents) {
+    LaunchedEffect(todoEvents.map { it.id }) {
         todoVM.loadSubtasks(todoEvents)
     }
 
@@ -91,14 +91,10 @@ fun TodoScreen(application: Application) {
 fun LogsScreen(application: Application) {
     val viewModel = remember { createLogViewModel(application) }
     val logs by viewModel.logs.collectAsState(initial = emptyList())
-    var filter by remember { mutableStateOf("") }
 
     Column(modifier = Modifier.fillMaxSize()) {
         LogFilterBar(
-            onFilterChange = {
-                filter = it
-                viewModel.setFilter(it)
-            }
+            onFilterChange = { viewModel.setFilter(it) }
         )
         LogsList(logs = logs)
     }

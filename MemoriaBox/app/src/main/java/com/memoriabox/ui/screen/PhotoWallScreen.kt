@@ -106,7 +106,7 @@ fun PhotoWallScreen(application: Application) {
                 horizontalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing),
                 verticalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing)
             ) {
-                items(eventsWithImages) { event ->
+                items(eventsWithImages, key = { it.id }) { event ->
                     Card(
                         modifier = Modifier
                             .aspectRatio(1f)
@@ -637,9 +637,9 @@ private fun buildIcalExport(events: List<Event>): String {
         events.forEach { event ->
             appendLine("BEGIN:VEVENT")
             appendLine("UID:${event.id}@memoriabox")
-            appendLine("SUMMARY:${event.name.escapeIcal()}")
+            appendLine(foldIcalLine("SUMMARY:${event.name.escapeIcal()}"))
             appendLine("DTSTART;VALUE=DATE:${formatter.format(Date(event.date))}")
-            appendLine("DESCRIPTION:${event.note.escapeIcal()}")
+            appendLine(foldIcalLine("DESCRIPTION:${event.note.escapeIcal()}"))
             appendLine("END:VEVENT")
         }
         appendLine("END:VCALENDAR")
@@ -649,6 +649,19 @@ private fun buildIcalExport(events: List<Event>): String {
 private fun String.escapeJson(): String = replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")
 
 private fun String.escapeIcal(): String = replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
+
+private fun foldIcalLine(line: String): String {
+    if (line.length <= 75) return line
+    val result = StringBuilder()
+    var i = 0
+    while (i < line.length) {
+        if (i > 0) result.append("\r\n ")
+        val end = minOf(i + 75, line.length)
+        result.append(line, i, end)
+        i = end
+    }
+    return result.toString()
+}
 
 // Generate shareable image from event
 fun generateEventCardBitmap(
@@ -763,7 +776,7 @@ fun generateEventCardBitmap(
 
 fun shareBitmap(context: android.content.Context, bitmap: Bitmap, caption: String = "") {
     try {
-        val file = File(context.cacheDir, "share_image.png")
+        val file = File(context.cacheDir, "share_image_${System.currentTimeMillis()}.png")
         FileOutputStream(file).use { fos ->
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos)
         }

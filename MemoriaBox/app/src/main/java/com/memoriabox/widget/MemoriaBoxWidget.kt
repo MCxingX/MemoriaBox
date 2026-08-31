@@ -25,8 +25,15 @@ class MemoriaBoxWidget : AppWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray
     ) {
-        for (appWidgetId in appWidgetIds) {
-            updateAppWidget(context, appWidgetManager, appWidgetId)
+        val pendingResult = goAsync()
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                for (appWidgetId in appWidgetIds) {
+                    updateAppWidget(context, appWidgetManager, appWidgetId)
+                }
+            } finally {
+                pendingResult.finish()
+            }
         }
     }
 
@@ -37,7 +44,7 @@ class MemoriaBoxWidget : AppWidgetProvider() {
     }
 
     companion object {
-        internal fun updateAppWidget(
+        internal suspend fun updateAppWidget(
             context: Context,
             appWidgetManager: AppWidgetManager,
             appWidgetId: Int
@@ -53,27 +60,25 @@ class MemoriaBoxWidget : AppWidgetProvider() {
             )
             views.setOnClickPendingIntent(R.id.widget_container, pendingIntent)
 
-            CoroutineScope(Dispatchers.IO).launch {
-                val event = runCatching {
-                    AppDatabase.getDatabase(context).eventDao()
-                        .getNextUpcomingEvent(System.currentTimeMillis())
-                }.getOrNull()
+            val event = runCatching {
+                AppDatabase.getDatabase(context).eventDao()
+                    .getNextUpcomingEvent(System.currentTimeMillis())
+            }.getOrNull()
 
-                withContext(Dispatchers.Main) {
-                    if (event != null) {
-                        val daysLeft = ((event.date - System.currentTimeMillis()) / 86_400_000L).coerceAtLeast(0)
-                        views.setTextViewText(R.id.widget_title, event.name)
-                        views.setTextViewText(R.id.widget_content, widgetTypeLabel(event.type))
-                        views.setTextViewText(R.id.widget_date, SimpleDateFormat("yyyy年M月d日", Locale.getDefault()).format(Date(event.date)))
-                        views.setTextViewText(R.id.widget_days, if (daysLeft == 0L) "今天" else "$daysLeft 天")
-                    } else {
-                        views.setTextViewText(R.id.widget_title, "念记")
-                        views.setTextViewText(R.id.widget_content, "点击添加第一个纪念日")
-                        views.setTextViewText(R.id.widget_date, "")
-                        views.setTextViewText(R.id.widget_days, "")
-                    }
-                    appWidgetManager.updateAppWidget(appWidgetId, views)
+            withContext(Dispatchers.Main) {
+                if (event != null) {
+                    val daysLeft = ((event.date - System.currentTimeMillis()) / 86_400_000L).coerceAtLeast(0)
+                    views.setTextViewText(R.id.widget_title, event.name)
+                    views.setTextViewText(R.id.widget_content, widgetTypeLabel(event.type))
+                    views.setTextViewText(R.id.widget_date, SimpleDateFormat("yyyy年M月d日", Locale.getDefault()).format(Date(event.date)))
+                    views.setTextViewText(R.id.widget_days, if (daysLeft == 0L) "今天" else "$daysLeft 天")
+                } else {
+                    views.setTextViewText(R.id.widget_title, "念记")
+                    views.setTextViewText(R.id.widget_content, "点击添加第一个纪念日")
+                    views.setTextViewText(R.id.widget_date, "")
+                    views.setTextViewText(R.id.widget_days, "")
                 }
+                appWidgetManager.updateAppWidget(appWidgetId, views)
             }
         }
 

@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -53,9 +54,18 @@ fun SettingsScreen(
     val context = LocalContext.current
     val installedVersion = remember(context) { context.installedAppVersion() }
     val pushPlusHelper = remember { com.memoriabox.utils.NotificationHelper(application) }
-    var pushPlusToken by remember { mutableStateOf(pushPlusHelper.getPushPlusToken()) }
+    var pushPlusToken by rememberSaveable { mutableStateOf(pushPlusHelper.getPushPlusToken()) }
     var pushPlusEnabled by remember { mutableStateOf(pushPlusHelper.isPushPlusEnabled()) }
-    var pushPlusChannel by remember { mutableStateOf(pushPlusHelper.getPushPlusChannel()) }
+    var pushPlusChannel by rememberSaveable { mutableStateOf(pushPlusHelper.getPushPlusChannel()) }
+
+    LaunchedEffect(pushPlusToken) {
+        kotlinx.coroutines.delay(500)
+        pushPlusHelper.setPushPlusToken(pushPlusToken)
+    }
+    LaunchedEffect(pushPlusChannel) {
+        kotlinx.coroutines.delay(500)
+        pushPlusHelper.setPushPlusChannel(pushPlusChannel)
+    }
     var showAboutDialog by remember { mutableStateOf(false) }
     var showDiarySettings by remember { mutableStateOf(false) }
     var showMonthlySummarySettings by remember { mutableStateOf(false) }
@@ -160,10 +170,7 @@ fun SettingsScreen(
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
                         value = pushPlusToken,
-                        onValueChange = { 
-                            pushPlusToken = it
-                            pushPlusHelper.setPushPlusToken(it)
-                        },
+                        onValueChange = { pushPlusToken = it },
                         label = { Text("Token") },
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -172,10 +179,7 @@ fun SettingsScreen(
                         listOf("wechat", "webhook", "mail", "sms").forEach { ch ->
                             FilterChip(
                                 selected = pushPlusChannel == ch,
-                                onClick = { 
-                                    pushPlusChannel = ch
-                                    pushPlusHelper.setPushPlusChannel(ch)
-                                },
+                                onClick = { pushPlusChannel = ch },
                                 label = { Text(ch, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                             )
                         }

@@ -71,9 +71,6 @@ fun EnhancedEventGrid(
     boxBgValue: String = "#F5F5F5"
 ) {
     val tokens = LocalMemoriaThemeTokens.current
-    val hasTodo = events.any { it.type == EventType.TODO }
-    val hasBirthday = events.any { it.type == EventType.BIRTHDAY }
-    val hasAnniversary = events.any { it.type == EventType.ANNIVERSARY || it.type == EventType.ELAPSED || it.type == EventType.COUNTDOWN }
     Box(
         modifier = Modifier.fillMaxSize()
             .background(if (boxBgType == BgType.COLOR) ColorUtils.hexToColor(boxBgValue) else Color.Gray)
@@ -278,40 +275,6 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
             }
         }
     }
-}
-
-@Composable
-private fun EventReminderLeading(event: Event, accent: Color, accentEnd: Color) {
-    Box(
-        modifier = Modifier
-            .size(44.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(Brush.linearGradient(listOf(accent.copy(alpha = 0.92f), accentEnd.copy(alpha = 0.78f)))),
-        contentAlignment = Alignment.Center
-    ) {
-        if (event.avatarUri != null) {
-            AsyncImage(
-                model = event.avatarUri,
-                contentDescription = event.name,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.matchParentSize()
-            )
-        } else {
-            Text(
-                text = eventTypeInitial(event.type),
-                style = MaterialTheme.typography.titleMedium,
-                color = Color.White
-            )
-        }
-    }
-}
-
-private fun eventTypeInitial(type: EventType): String = when (type) {
-    EventType.COUNTDOWN -> "D"
-    EventType.ANNIVERSARY -> "A"
-    EventType.ELAPSED -> "E"
-    EventType.BIRTHDAY -> "B"
-    EventType.TODO -> "T"
 }
 
 private fun eventStatusText(event: Event, daysRemaining: Long): String = when (event.type) {

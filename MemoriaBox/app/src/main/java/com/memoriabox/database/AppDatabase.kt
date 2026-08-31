@@ -36,12 +36,15 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun birthdayRecordDao(): BirthdayRecordDao
     
     companion object {
+        private const val CURRENT_REPAIR_VERSION = 1
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
         fun getDatabase(
             context: Context,
             passphrase: ByteArray? = null,
+            keyAlias: String? = null,
             migrationCallback: () -> Unit = {}
         ): AppDatabase {
             return INSTANCE ?: synchronized(this) {
@@ -74,14 +77,19 @@ abstract class AppDatabase : RoomDatabase() {
 
                     override fun onOpen(db: SupportSQLiteDatabase) {
                         super.onOpen(db)
-                        repairLegacyData(db)
+                        val prefs = context.getSharedPreferences("db_schema", Context.MODE_PRIVATE)
+                        val lastRepaired = prefs.getInt("last_repaired_version", 0)
+                        if (lastRepaired < CURRENT_REPAIR_VERSION) {
+                            repairLegacyData(db)
+                            prefs.edit().putInt("last_repaired_version", CURRENT_REPAIR_VERSION).apply()
+                        }
                         migrationCallback()
                     }
                 })
 
-                if (passphrase != null) {
-                    val passphraseOrNull: ByteArray? = passphrase
-                    val factory = SupportFactory(passphraseOrNull)
+                val effectivePassphrase = passphrase ?: getOrCreatePassphrase(context, keyAlias)
+                if (effectivePassphrase != null) {
+                    val factory = SupportFactory(effectivePassphrase)
                     dbBuilder.openHelperFactory(factory)
                 }
                 

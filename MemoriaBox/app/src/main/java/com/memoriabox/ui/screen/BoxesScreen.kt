@@ -21,8 +21,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import coil.compose.AsyncImage
 import androidx.navigation.compose.*
 import com.memoriabox.ui.navigation.Screen
@@ -335,7 +338,17 @@ fun HomeDashboard(
     val settingsVersion = AppSettings.settingsVersion
     val upcomingEnabled = remember(settingsVersion) { AppSettings.getUpcomingEventsEnabled(context) }
     val upcomingDays = remember(settingsVersion) { AppSettings.getUpcomingEventsDays(context) }
-    val now = remember(events, settingsVersion) { System.currentTimeMillis() }
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                now = System.currentTimeMillis()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     val sortedEvents = remember(events, upcomingEnabled, upcomingDays, now) {
         if (upcomingEnabled) {
             events.sortedWith(
@@ -392,7 +405,15 @@ fun HomeDashboard(
 
 @Composable
 private fun TodayHeader(adaptiveUi: AdaptiveUiSize) {
-    val now = remember { Date() }
+    var now by remember { mutableStateOf(Date()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            val current = System.currentTimeMillis()
+            val nextMidnight = startOfDay(current) + TimeUnit.DAYS.toMillis(1)
+            kotlinx.coroutines.delay(nextMidnight - current)
+            now = Date()
+        }
+    }
     val dateText = remember(now) { SimpleDateFormat("M月d日 EEEE", Locale.getDefault()).format(now) }
     val lunarText = remember(now) { LunarDateUtils.dayLabelForGregorian(now.time) }
     val holidayText = remember(now) { HolidayUtils.holidayForDay(now.time) }

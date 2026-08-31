@@ -304,7 +304,7 @@ private fun TodoCard(
 @Composable
 fun LogsList(logs: List<LogEntry>) {
     LazyColumn {
-        items(logs) { log ->
+        items(logs, key = { it.id }) { log ->
             Card(
                 modifier = Modifier
                     .fillMaxWidth()

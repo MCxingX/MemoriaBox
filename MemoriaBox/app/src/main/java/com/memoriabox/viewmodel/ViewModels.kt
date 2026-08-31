@@ -76,6 +76,7 @@ class MainViewModel(
     }
 
     fun deleteBox(box: Box) = viewModelScope.launch {
+        if (box.id == "default_1") return@launch
         try {
             val defaultBoxId = "default_1"
             if (box.id != defaultBoxId) {
@@ -268,6 +269,7 @@ class BoxDetailViewModel(
     }
 
     fun deleteBox(box: Box) = viewModelScope.launch {
+        if (box.id == "default_1") return@launch
         try {
             val defaultBoxId = "default_1"
             if (box.id != defaultBoxId) {
@@ -340,17 +342,23 @@ class CalendarViewModel(
         val context = getApplication<Application>()
         val normalizedMonth = startOfMonth(monthStart)
         _monthlySummary.value = _monthlySummary.value.copy(monthStart = normalizedMonth, isLoading = true)
-        val (start, end) = MonthlySummaryHelper.monthRange(normalizedMonth)
-        val diaries = diaryRepository.getDiariesBetweenOnce(start, end)
-        val media = if (diaries.isEmpty()) emptyList() else diaryRepository.getMediaForDiariesOnce(diaries.map { it.id })
-        _monthlySummary.value = MonthlySummaryHelper.buildSummary(
-            monthStart = normalizedMonth,
-            diaries = diaries,
-            media = media,
-            summaryEnabled = AppSettings.getMonthlySummaryTextEnabled(context),
-            playMode = AppSettings.getMonthlySummaryPlayMode(context),
-            playSpeedFactor = AppSettings.getMonthlySummaryPlaySpeedFactor(context)
-        )
+        try {
+            val (start, end) = MonthlySummaryHelper.monthRange(normalizedMonth)
+            val diaries = diaryRepository.getDiariesBetweenOnce(start, end)
+            val media = if (diaries.isEmpty()) emptyList() else diaryRepository.getMediaForDiariesOnce(diaries.map { it.id })
+            _monthlySummary.value = MonthlySummaryHelper.buildSummary(
+                monthStart = normalizedMonth,
+                diaries = diaries,
+                media = media,
+                summaryEnabled = AppSettings.getMonthlySummaryTextEnabled(context),
+                playMode = AppSettings.getMonthlySummaryPlayMode(context),
+                playSpeedFactor = AppSettings.getMonthlySummaryPlaySpeedFactor(context)
+            )
+        } catch (e: Exception) {
+            Log.e("CalendarViewModel", "loadMonthlySummary failed", e)
+        } finally {
+            _monthlySummary.value = _monthlySummary.value.copy(isLoading = false)
+        }
     }
 
     private suspend fun saveDiaryInternal(existingDiary: DiaryEntry?, date: Long, content: String, mediaItems: List<DiaryMedia>, backgroundUri: String?) {
@@ -838,7 +846,7 @@ class FriendDetailViewModel(
         relations.filter { it.isNotBlank() }.distinct().forEach { label ->
             friendRepository.upsertFriendRelation(FriendRelation(current.id, label.trim()))
         }
-        _relations.value = relations
+        _relations.value = relations.filter { it.isNotBlank() }.distinct()
         syncBirthdayEvent(updated)
         backupManager.onDataChanged()
     }

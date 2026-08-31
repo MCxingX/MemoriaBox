@@ -102,7 +102,7 @@ object UpdateManager {
     }
 
     private suspend fun fetchLatestRelease(): UpdateInfo {
-        val releaseJson = fetchTextWithFallback(RELEASE_API, "更新服务器连接失败")
+        val releaseJson = fetchTextTrusted(RELEASE_API)
         val release = JSONObject(releaseJson)
         require(!release.optBoolean("draft") && !release.optBoolean("prerelease")) { "最新版本尚未正式发布" }
         val versionName = UpdateFormat.normalizeVersion(release.getString("tag_name"))
@@ -129,8 +129,9 @@ object UpdateManager {
         val releaseBody = release.optString("body", "")
         val sha256 = UpdateFormat.parseSha256(releaseBody)
             ?: if (checksumUrl.isNotEmpty()) {
-                UpdateFormat.parseSha256(fetchTextWithFallback(checksumUrl, "更新校验信息获取失败"))
+                UpdateFormat.parseSha256(fetchTextTrusted(checksumUrl))
             } else null
+        require(!sha256.isNullOrEmpty()) { "GitHub Release 缺少 SHA-256 校验信息" }
         return UpdateInfo(
             versionName = versionName,
             releaseName = release.optString("name", "v$versionName"),
@@ -309,18 +310,21 @@ object UpdateManager {
             ?.first
 
     private fun probe(url: String): Pair<String, Long>? = runCatching {
+        if (downloadCancelled) return null
         val started = System.nanoTime()
         val request = Request.Builder()
             .url(url)
             .header("Range", "bytes=0-65535")
             .header("User-Agent", "MemoriaBox/${BuildConfig.VERSION_NAME}")
             .build()
-        speedClient.newCall(request).execute().use { response ->
+        val call = speedClient.newCall(request)
+        call.execute().use { response ->
             require(response.isSuccessful || response.code == 206) { "HTTP ${response.code}" }
             val input = response.body?.byteStream() ?: error("空响应")
             val buffer = ByteArray(8 * 1024)
             var received = 0
             while (received < 64 * 1024) {
+                if (downloadCancelled) return null
                 val count = input.read(buffer)
                 if (count < 0) break
                 received += count
@@ -344,6 +348,17 @@ object UpdateManager {
             response.getOrNull()?.let { return it }
         }
         error("$unavailableMessage，请检查网络后重试")
+    }
+
+    private fun fetchTextTrusted(url: String): String {
+        val directRequest = Request.Builder()
+            .url(url)
+            .header("Accept", "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .header("User-Agent", "MemoriaBox/${BuildConfig.VERSION_NAME}")
+            .build()
+        runCatching { executeText(directRequest) }.getOrNull()?.let { return it }
+        return fetchTextWithFallback(url, "更新服务器连接失败")
     }
 
     private fun executeText(request: Request): String = releaseClient.newCall(request).execute().use { response ->

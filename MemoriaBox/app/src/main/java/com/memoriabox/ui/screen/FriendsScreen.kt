@@ -39,8 +39,10 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,9 +66,12 @@ fun FriendsScreen(
 ) {
     val viewModel = remember { createFriendViewModel(application) }
     val friends by viewModel.friends.collectAsState()
-    var editingFriend by remember { mutableStateOf<Friend?>(null) }
-    var showEditor by remember { mutableStateOf(false) }
-    var deletingFriend by remember { mutableStateOf<Friend?>(null) }
+    var editingFriendId by rememberSaveable { mutableStateOf<String?>(null) }
+    val editingFriend = editingFriendId?.let { id -> friends.firstOrNull { it.id == id } }
+    var showEditor by rememberSaveable { mutableStateOf(false) }
+    var deletingFriendId by rememberSaveable { mutableStateOf<String?>(null) }
+    val deletingFriend = deletingFriendId?.let { id -> friends.firstOrNull { it.id == id } }
+    var editorToken by rememberSaveable { mutableIntStateOf(0) }
 
     Scaffold(
         topBar = {
@@ -81,7 +86,8 @@ fun FriendsScreen(
         },
         floatingActionButton = {
             FloatingActionButton(onClick = {
-                editingFriend = null
+                editorToken++
+                editingFriendId = null
                 showEditor = true
             }) {
                 Icon(Icons.Default.Add, contentDescription = "新增好友")
@@ -98,7 +104,8 @@ fun FriendsScreen(
             Spacer(Modifier.height(16.dp))
             if (friends.isEmpty()) {
                 EmptyFriendsCard(onAdd = {
-                    editingFriend = null
+                    editorToken++
+                    editingFriendId = null
                     showEditor = true
                 })
             } else {
@@ -108,10 +115,11 @@ fun FriendsScreen(
                             friend = friend,
                             onClick = { onNavigateToFriendDetail(friend.id) },
                             onEdit = {
-                                editingFriend = friend
+                                editorToken++
+                                editingFriendId = friend.id
                                 showEditor = true
                             },
-                            onDelete = { deletingFriend = friend }
+                            onDelete = { deletingFriendId = friend.id }
                         )
                     }
                 }
@@ -122,6 +130,7 @@ fun FriendsScreen(
     if (showEditor) {
         FriendEditorDialog(
             friend = editingFriend,
+            editorToken = editorToken,
             onDismiss = { showEditor = false },
             onSave = { name, birthday ->
                 viewModel.saveFriend(editingFriend, name, birthday)
@@ -132,17 +141,17 @@ fun FriendsScreen(
 
     deletingFriend?.let { friend ->
         AlertDialog(
-            onDismissRequest = { deletingFriend = null },
+            onDismissRequest = { deletingFriendId = null },
             title = { Text("删除好友") },
             text = { Text("确认删除“${friend.name}”？删除后好友管理列表会立即更新。") },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.deleteFriend(friend)
-                    deletingFriend = null
+                    deletingFriendId = null
                 }) { Text("删除") }
             },
             dismissButton = {
-                TextButton(onClick = { deletingFriend = null }) { Text("取消") }
+                TextButton(onClick = { deletingFriendId = null }) { Text("取消") }
             }
         )
     }
@@ -219,14 +228,14 @@ private fun EmptyFriendsCard(onAdd: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun FriendEditorDialog(friend: Friend?, onDismiss: () -> Unit, onSave: (String, Long?) -> Unit) {
-    var name by remember(friend?.id) { mutableStateOf(friend?.name ?: "") }
-    val initialBirthday = remember(friend?.id) {
+private fun FriendEditorDialog(friend: Friend?, editorToken: Int, onDismiss: () -> Unit, onSave: (String, Long?) -> Unit) {
+    var name by remember(editorToken) { mutableStateOf(friend?.name ?: "") }
+    val initialBirthday = remember(editorToken) {
         friend?.birthdayDate?.let { timestamp -> Calendar.getInstance().apply { timeInMillis = timestamp } }
     }
-    var month by remember(friend?.id) { mutableStateOf(initialBirthday?.get(Calendar.MONTH)?.plus(1)?.toString() ?: "") }
-    var day by remember(friend?.id) { mutableStateOf(initialBirthday?.get(Calendar.DAY_OF_MONTH)?.toString() ?: "") }
-    var year by remember(friend?.id) { mutableStateOf(initialBirthday?.get(Calendar.YEAR)?.takeIf { it != BIRTHDAY_UNKNOWN_YEAR }?.toString() ?: "") }
+    var month by remember(editorToken) { mutableStateOf(initialBirthday?.get(Calendar.MONTH)?.plus(1)?.toString() ?: "") }
+    var day by remember(editorToken) { mutableStateOf(initialBirthday?.get(Calendar.DAY_OF_MONTH)?.toString() ?: "") }
+    var year by remember(editorToken) { mutableStateOf(initialBirthday?.get(Calendar.YEAR)?.takeIf { it != BIRTHDAY_UNKNOWN_YEAR }?.toString() ?: "") }
 
     AlertDialog(
         onDismissRequest = onDismiss,

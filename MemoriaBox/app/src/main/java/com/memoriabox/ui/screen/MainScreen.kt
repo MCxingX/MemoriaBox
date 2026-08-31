@@ -21,6 +21,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.*
 import androidx.navigation.compose.rememberNavController
@@ -63,7 +64,7 @@ fun MainScreen(
 ) {
     val context = LocalContext.current
     val settingsVersion = AppSettings.settingsVersion
-    var selectedTab by remember { mutableStateOf(0) }
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var showNewMonthPrompt by remember { mutableStateOf(false) }
     var newMonthTarget by remember { mutableStateOf<Long?>(null) }
     var autoOpenCalendarSummary by remember { mutableStateOf<Long?>(null) }
@@ -125,11 +126,11 @@ fun MainScreen(
         selectedTab = index
         nextCuteText()
         navController.navigate(route) {
-            popUpTo(Screen.Boxes.route) {
-                saveState = false
+            popUpTo(navController.graph.findStartDestination().id) {
+                saveState = true
             }
             launchSingleTop = true
-            restoreState = false
+            restoreState = true
         }
     }
 
