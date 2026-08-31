@@ -103,7 +103,7 @@ fun CustomizationSettingsScreen(onNavigateBack: () -> Unit) {
             scope.launch(Dispatchers.IO) {
                 val sourceUri = ImageImportUtils.saveOriginalImage(context, uri)?.let(Uri::parse) ?: uri
                 val isIcon = target.endsWith("_ICON")
-                val cropRatio = if (isIcon) 1f else 9f / 16f
+                val cropRatio = if (isIcon) 1f else 0f
                 customizationCropLauncher(sourceUri, cropRatio)
             }
         }
@@ -127,7 +127,7 @@ fun CustomizationSettingsScreen(onNavigateBack: () -> Unit) {
             val editState = ImageImportUtils.getEditState(context, current)
             val sourceUri = Uri.parse(editState.sourceUri)
             val isIcon = target.endsWith("_ICON")
-            val cropRatio = if (isIcon) 1f else 9f / 16f
+            val cropRatio = if (isIcon) 1f else 0f
             customizationCropLauncher(sourceUri, cropRatio)
         } else {
             pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))

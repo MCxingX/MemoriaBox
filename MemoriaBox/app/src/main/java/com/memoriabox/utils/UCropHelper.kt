@@ -63,6 +63,9 @@ object UCropHelper {
                     setActiveControlsWidgetColor(0xFF7C4DFF.toInt())
                     setToolbarTitle("裁剪图片")
                     setLogoColor(0xFF7C4DFF.toInt())
+                    if (aspectRatio <= 0f) {
+                        setFreeStyleCropEnabled(true)
+                    }
                 }
 
                 val uCrop = UCrop.of(sourceUri, destination)

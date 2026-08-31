@@ -13,7 +13,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -40,8 +39,8 @@ object UpdateManager {
         .followRedirects(true)
         .build()
     private val speedClient = client.newBuilder()
-        .readTimeout(8, TimeUnit.SECONDS)
-        .callTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(10, TimeUnit.SECONDS)
+        .callTimeout(12, TimeUnit.SECONDS)
         .build()
     private val releaseClient = client.newBuilder()
         .connectTimeout(5, TimeUnit.SECONDS)
@@ -170,21 +169,31 @@ object UpdateManager {
             }
         }
         mutableState.value = UpdateState.Downloading(info, progressFromPart(temporary, info.apkSize))
-        val mirror = fastestMirror(info.apkUrl) ?: run {
+        val mirrors = fastestMirrors(info.apkUrl)
+        if (mirrors.isEmpty()) {
             mutableState.value = UpdateState.Error("更新镜像测速失败，请检查网络后重试", info)
             return
         }
-        runCatching { download(mirror, destination, info) }
-            .onFailure { error ->
-                if (downloadCancelled) {
-                    mutableState.value = UpdateState.Available(info)
-                } else {
-                    // 满大小但损坏的 .part 会导致 resume 死循环（HTTP 416），此处清理
-                    if (info.apkSize > 0 && temporary.length() >= info.apkSize) temporary.delete()
-                    mutableState.value = UpdateState.Error(error.message ?: "镜像下载失败", info)
-                }
+        var downloadError: Throwable? = null
+        for ((index, mirror) in mirrors.withIndex()) {
+            if (downloadCancelled) {
+                mutableState.value = UpdateState.Available(info)
                 return
             }
+            val isLast = index == mirrors.lastIndex
+            val result = runCatching { download(mirror, destination, info) }
+            if (result.isSuccess) break
+            downloadError = result.exceptionOrNull()
+            if (downloadCancelled) {
+                mutableState.value = UpdateState.Available(info)
+                return
+            }
+            if (info.apkSize > 0 && temporary.length() >= info.apkSize) temporary.delete()
+            if (isLast) {
+                mutableState.value = UpdateState.Error(downloadError?.message ?: "所有镜像下载失败", info)
+                return
+            }
+        }
         if (downloadCancelled) {
             mutableState.value = UpdateState.Available(info)
             return
@@ -303,47 +312,42 @@ object UpdateManager {
         return saveToDownloads(context, versionName, source)
     }
 
-    private suspend fun fastestMirror(originalUrl: String): String? = supervisorScope {
+    private suspend fun fastestMirrors(originalUrl: String): List<String> = supervisorScope {
         val mirrors = UpdateFormat.mirrorUrls(originalUrl)
-        if (mirrors.isEmpty()) return@supervisorScope null
+        if (mirrors.isEmpty()) return@supervisorScope emptyList()
         val probes = mirrors.map { url -> async { probe(url) } }
-        val pending = probes.toMutableList()
-        while (pending.isNotEmpty()) {
-            val (idx, result) = select<Pair<Int, Pair<String, Long>?>> {
-                pending.forEachIndexed { i, deferred -> deferred.onAwait { i to it } }
-            }
-            pending.removeAt(idx)
-            if (result != null) {
-                pending.forEach { it.cancel() }
-                return@supervisorScope result.first
-            }
-        }
-        null
+        val results = probes.awaitAll()
+            .filterNotNull()
+            .sortedByDescending { it.second }
+            .map { it.first }
+        results
     }
 
-    private fun probe(url: String): Pair<String, Long>? = runCatching {
+    private fun probe(url: String): Pair<String, Float>? = runCatching {
         if (downloadCancelled) return null
         val started = System.nanoTime()
         val request = Request.Builder()
             .url(url)
-            .header("Range", "bytes=0-16383")
+            .header("Range", "bytes=0-262143")
             .header("User-Agent", "MemoriaBox/${BuildConfig.VERSION_NAME}")
             .build()
         val call = speedClient.newCall(request)
         call.execute().use { response ->
             require(response.isSuccessful || response.code == 206) { "HTTP ${response.code}" }
             val input = response.body?.byteStream() ?: error("空响应")
-            val buffer = ByteArray(8 * 1024)
+            val buffer = ByteArray(16 * 1024)
             var received = 0
-            while (received < 16 * 1024) {
+            val target = 256 * 1024
+            while (received < target) {
                 if (downloadCancelled) return null
                 val count = input.read(buffer)
                 if (count < 0) break
                 received += count
             }
             require(received > 0) { "空响应" }
+            val elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started).coerceAtLeast(1)
+            url to (received.toFloat() / elapsedMs)
         }
-        url to TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started)
     }.getOrNull()
 
     private fun fetchTextWithFallback(url: String, unavailableMessage: String): String {
