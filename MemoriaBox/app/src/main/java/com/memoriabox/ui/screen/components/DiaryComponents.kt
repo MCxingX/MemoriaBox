@@ -38,8 +38,10 @@ import com.memoriabox.data.model.DiaryMediaType
 import com.memoriabox.utils.ColorUtils
 import com.memoriabox.utils.ImageImportUtils
 import com.memoriabox.ui.screen.dialogs.DatePickerDialog
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -330,6 +332,7 @@ fun DiaryEditorDialog(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val dateFormatter = remember { SimpleDateFormat("yyyy年M月d日", Locale.getDefault()) }
     var selectedDateStart by remember(existingDiary?.id, dateStart) { mutableLongStateOf(existingDiary?.dateStart ?: startOfDayForEditor(dateStart)) }
     var content by remember { mutableStateOf(existingDiary?.content ?: "") }
@@ -349,17 +352,19 @@ fun DiaryEditorDialog(
         contract = ActivityResultContracts.PickMultipleVisualMedia()
     ) { uris ->
         if (uris.isNotEmpty()) {
-            val copied = uris.mapNotNull { uri ->
-                ImageImportUtils.copyImageToPrivateStorage(context, uri, "diary_images")
+            scope.launch(Dispatchers.IO) {
+                val copied = uris.mapNotNull { uri ->
+                    ImageImportUtils.copyImageToPrivateStorage(context, uri, "diary_images")
+                }
+                mediaItems.addAll(copied.mapIndexed { index, uri ->
+                    DiaryMedia(
+                        diaryId = existingDiary?.id ?: "",
+                        mediaUri = uri,
+                        mediaType = DiaryMediaType.IMAGE,
+                        sortOrder = mediaItems.size + index
+                    )
+                })
             }
-            mediaItems.addAll(copied.mapIndexed { index, uri ->
-                DiaryMedia(
-                    diaryId = existingDiary?.id ?: "",
-                    mediaUri = uri,
-                    mediaType = DiaryMediaType.IMAGE,
-                    sortOrder = mediaItems.size + index
-                )
-            })
         }
     }
 
@@ -368,16 +373,18 @@ fun DiaryEditorDialog(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
         uri?.let {
-            val copied = ImageImportUtils.copyMediaToPrivateStorage(context, it, "diary_videos", "mp4")
-            copied?.let { uri ->
-                mediaItems.add(
-                    DiaryMedia(
-                        diaryId = existingDiary?.id ?: "",
-                        mediaUri = uri,
-                        mediaType = DiaryMediaType.VIDEO,
-                        sortOrder = mediaItems.size
+            scope.launch(Dispatchers.IO) {
+                val copied = ImageImportUtils.copyMediaToPrivateStorage(context, it, "diary_videos", "mp4")
+                copied?.let { uri ->
+                    mediaItems.add(
+                        DiaryMedia(
+                            diaryId = existingDiary?.id ?: "",
+                            mediaUri = uri,
+                            mediaType = DiaryMediaType.VIDEO,
+                            sortOrder = mediaItems.size
+                        )
                     )
-                )
+                }
             }
         }
     }
@@ -388,11 +395,13 @@ fun DiaryEditorDialog(
         val index = replacingMediaIndex
         replacingMediaIndex = null
         if (uri != null && index != null && index in mediaItems.indices) {
-            val copied = ImageImportUtils.copyMediaToPrivateStorage(context, uri, "diary_media", "jpg") ?: return@rememberLauncherForActivityResult
-            mediaItems[index] = mediaItems[index].copy(
-                mediaUri = copied,
-                mediaType = inferDiaryMediaTypeForEditor(copied)
-            )
+            scope.launch(Dispatchers.IO) {
+                val copied = ImageImportUtils.copyMediaToPrivateStorage(context, uri, "diary_media", "jpg") ?: return@launch
+                mediaItems[index] = mediaItems[index].copy(
+                    mediaUri = copied,
+                    mediaType = inferDiaryMediaTypeForEditor(copied)
+                )
+            }
         }
     }
 
@@ -400,9 +409,14 @@ fun DiaryEditorDialog(
     val bgPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
-        backgroundUri = uri?.let {
-            ImageImportUtils.copyMediaToPrivateStorage(context, it, "diary_backgrounds", "jpg")
-        } ?: backgroundUri
+        uri?.let {
+            scope.launch(Dispatchers.IO) {
+                val copied = ImageImportUtils.copyMediaToPrivateStorage(context, it, "diary_backgrounds", "jpg")
+                if (copied != null) {
+                    backgroundUri = copied
+                }
+            }
+        }
     }
 
     AlertDialog(

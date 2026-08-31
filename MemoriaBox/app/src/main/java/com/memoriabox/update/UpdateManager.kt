@@ -326,7 +326,7 @@ object UpdateManager {
         val started = System.nanoTime()
         val request = Request.Builder()
             .url(url)
-            .header("Range", "bytes=0-65535")
+            .header("Range", "bytes=0-16383")
             .header("User-Agent", "MemoriaBox/${BuildConfig.VERSION_NAME}")
             .build()
         val call = speedClient.newCall(request)
@@ -335,7 +335,7 @@ object UpdateManager {
             val input = response.body?.byteStream() ?: error("空响应")
             val buffer = ByteArray(8 * 1024)
             var received = 0
-            while (received < 64 * 1024) {
+            while (received < 16 * 1024) {
                 if (downloadCancelled) return null
                 val count = input.read(buffer)
                 if (count < 0) break

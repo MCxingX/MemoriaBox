@@ -18,6 +18,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import com.memoriabox.utils.ColorUtils
 import com.memoriabox.utils.ImageImportUtils
 
@@ -34,13 +36,17 @@ fun BackgroundCustomizerDialog(
     var blurLevel by remember { mutableFloatStateOf(0f) }
     var overlayAlpha by remember { mutableFloatStateOf(0f) }
     var showColorPicker by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         uri?.let {
-            selectedBgType = com.memoriabox.data.model.BgType.IMAGE
-            selectedBgValue = ImageImportUtils.copyImageToPrivateStorage(context, it, "dialog_backgrounds") ?: it.toString()
+            scope.launch(Dispatchers.IO) {
+                val saved = ImageImportUtils.copyImageToPrivateStorage(context, it, "dialog_backgrounds")
+                selectedBgType = com.memoriabox.data.model.BgType.IMAGE
+                selectedBgValue = saved ?: it.toString()
+            }
         }
     }
 

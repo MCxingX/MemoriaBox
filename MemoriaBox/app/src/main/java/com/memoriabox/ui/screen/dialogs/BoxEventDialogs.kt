@@ -60,6 +60,8 @@ import com.memoriabox.data.model.EventType
 import com.memoriabox.data.model.RepeatMode
 import com.memoriabox.utils.ColorUtils
 import com.memoriabox.utils.ImageImportUtils
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import com.memoriabox.utils.LunarDateUtils
 import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
@@ -88,6 +90,7 @@ fun BoxDialog(
     onSave: (name: String, icon: String, bgType: BgType, bgValue: String) -> Unit
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var name by remember { mutableStateOf(existingBox?.name ?: "") }
     var selectedIcon by remember { mutableStateOf(existingBox?.icon ?: "\uD83D\uDCE6") }
     var selectedBgType by remember { mutableStateOf(existingBox?.bgType ?: BgType.COLOR) }
@@ -98,9 +101,11 @@ fun BoxDialog(
     var pendingIconEditState by remember { mutableStateOf<ImageImportUtils.EditState?>(null) }
     val iconImagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         uri ?: return@rememberLauncherForActivityResult
-        val sourceUri = ImageImportUtils.saveOriginalImage(context, uri)?.let(Uri::parse) ?: uri
-        pendingIconCropUri = sourceUri
-        pendingIconEditState = ImageImportUtils.EditState(sourceUri.toString())
+        scope.launch(Dispatchers.IO) {
+            val sourceUri = ImageImportUtils.saveOriginalImage(context, uri)?.let(Uri::parse) ?: uri
+            pendingIconCropUri = sourceUri
+            pendingIconEditState = ImageImportUtils.EditState(sourceUri.toString())
+        }
     }
 
     AlertDialog(
@@ -266,13 +271,15 @@ fun BoxDialog(
                 pendingIconEditState = null
             },
             onSave = { left, top, width, height ->
-                selectedIcon = ImageImportUtils.cropImageToPrivateStorage(
-                    context, uri, "box_icons", left, top, width, height
-                )?.also { result ->
-                    ImageImportUtils.saveEditState(context, result, ImageImportUtils.EditState(uri.toString(), left, top, width, height))
-                } ?: ImageImportUtils.copyImageToPrivateStorage(context, uri, "box_icons") ?: selectedIcon
-                pendingIconCropUri = null
-                pendingIconEditState = null
+                scope.launch(Dispatchers.IO) {
+                    selectedIcon = ImageImportUtils.cropImageToPrivateStorage(
+                        context, uri, "box_icons", left, top, width, height
+                    )?.also { result ->
+                        ImageImportUtils.saveEditState(context, result, ImageImportUtils.EditState(uri.toString(), left, top, width, height))
+                    } ?: ImageImportUtils.copyImageToPrivateStorage(context, uri, "box_icons") ?: selectedIcon
+                    pendingIconCropUri = null
+                    pendingIconEditState = null
+                }
             }
         )
     }
@@ -379,11 +386,14 @@ fun EventDialog(
     var repeatEndDate by remember { mutableStateOf(existingEvent?.repeatEndDate) }
     var showRepeatEndPicker by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) {
-            val sourceUri = ImageImportUtils.saveOriginalImage(context, uri)?.let(Uri::parse) ?: uri
-            pendingCropUri = sourceUri
-            pendingCropEditState = ImageImportUtils.EditState(sourceUri.toString())
+            scope.launch(Dispatchers.IO) {
+                val sourceUri = ImageImportUtils.saveOriginalImage(context, uri)?.let(Uri::parse) ?: uri
+                pendingCropUri = sourceUri
+                pendingCropEditState = ImageImportUtils.EditState(sourceUri.toString())
+            }
         }
     }
 
@@ -971,22 +981,24 @@ fun EventDialog(
                 pendingCropEditState = null
             },
             onSave = { left, top, width, height ->
-                backgroundUri = ImageImportUtils.cropImageToPrivateStorage(
-                    context = context,
-                    sourceUri = uri,
-                    folder = "event_images",
-                    sourceLeft = left,
-                    sourceTop = top,
-                    sourceWidth = width,
-                    sourceHeight = height
-                )?.also { result ->
-                    ImageImportUtils.saveEditState(
-                        context, result,
-                        ImageImportUtils.EditState(uri.toString(), left, top, width, height)
-                    )
-                } ?: ImageImportUtils.copyImageToPrivateStorage(context, uri, "event_images") ?: backgroundUri
-                pendingCropUri = null
-                pendingCropEditState = null
+                scope.launch(Dispatchers.IO) {
+                    backgroundUri = ImageImportUtils.cropImageToPrivateStorage(
+                        context = context,
+                        sourceUri = uri,
+                        folder = "event_images",
+                        sourceLeft = left,
+                        sourceTop = top,
+                        sourceWidth = width,
+                        sourceHeight = height
+                    )?.also { result ->
+                        ImageImportUtils.saveEditState(
+                            context, result,
+                            ImageImportUtils.EditState(uri.toString(), left, top, width, height)
+                        )
+                    } ?: ImageImportUtils.copyImageToPrivateStorage(context, uri, "event_images") ?: backgroundUri
+                    pendingCropUri = null
+                    pendingCropEditState = null
+                }
             }
         )
     }

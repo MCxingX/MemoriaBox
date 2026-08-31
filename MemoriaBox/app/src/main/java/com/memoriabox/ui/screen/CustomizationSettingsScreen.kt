@@ -25,6 +25,8 @@ import com.memoriabox.ui.utils.rememberAdaptiveUiSize
 import com.memoriabox.ui.screen.dialogs.EventImageCropDialog
 import com.memoriabox.utils.AppSettings
 import com.memoriabox.utils.ImageImportUtils
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 @Composable
 fun CustomizationSettingsScreen(onNavigateBack: () -> Unit) {
@@ -53,6 +55,7 @@ fun CustomizationSettingsScreen(onNavigateBack: () -> Unit) {
     var quoteToDelete by remember { mutableStateOf<Int?>(null) }
     var showClearAllBgConfirm by remember { mutableStateOf(false) }
     var showResetIconsConfirm by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     fun updateAllBgState() {
         allBg = if (!homeBg.isNullOrBlank() && homeBg == calendarBg && homeBg == todoBg && homeBg == settingsBg) {
@@ -91,9 +94,12 @@ fun CustomizationSettingsScreen(onNavigateBack: () -> Unit) {
         if (uri == null || targetForPick == null) {
             targetForPick = null
         } else {
-            val sourceUri = ImageImportUtils.saveOriginalImage(context, uri)?.let(Uri::parse) ?: uri
-            pendingCropUri = sourceUri
-            pendingEditState = ImageImportUtils.EditState(sourceUri.toString())
+            val target = targetForPick
+            scope.launch(Dispatchers.IO) {
+                val sourceUri = ImageImportUtils.saveOriginalImage(context, uri)?.let(Uri::parse) ?: uri
+                pendingCropUri = sourceUri
+                pendingEditState = ImageImportUtils.EditState(sourceUri.toString())
+            }
         }
     }
 
@@ -319,14 +325,19 @@ fun CustomizationSettingsScreen(onNavigateBack: () -> Unit) {
                     targetForPick = null
                 },
                 onSave = { left, top, width, height ->
-                    val value = ImageImportUtils.cropImageToPrivateStorage(
-                        context, uri, "customization_images", left, top, width, height
-                    ) ?: ImageImportUtils.copyImageToPrivateStorage(context, uri, "customization_images") ?: uri.toString()
-                    applyPickedImage(value, target)
-                    ImageImportUtils.saveEditState(context, value, ImageImportUtils.EditState(uri.toString(), left, top, width, height))
-                    pendingCropUri = null
-                    pendingEditState = null
-                    targetForPick = null
+                    val target = targetForPick
+                    if (target != null) {
+                        scope.launch(Dispatchers.IO) {
+                            val value = ImageImportUtils.cropImageToPrivateStorage(
+                                context, uri, "customization_images", left, top, width, height
+                            ) ?: ImageImportUtils.copyImageToPrivateStorage(context, uri, "customization_images") ?: uri.toString()
+                            applyPickedImage(value, target)
+                            ImageImportUtils.saveEditState(context, value, ImageImportUtils.EditState(uri.toString(), left, top, width, height))
+                            pendingCropUri = null
+                            pendingEditState = null
+                            targetForPick = null
+                        }
+                    }
                 }
             )
         }

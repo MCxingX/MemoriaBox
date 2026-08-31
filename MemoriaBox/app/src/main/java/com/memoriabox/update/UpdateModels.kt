@@ -26,13 +26,21 @@ sealed interface UpdateState {
 
 object UpdateFormat {
     private val githubProxyPrefixes = listOf(
-        "https://gh-proxy.com/",
-        "https://ghproxy.net/",
-        "https://gh.llkk.cc/",
-        "https://hub.gitmirror.com/",
-        "https://ghproxy.com/",
-        "https://gh-proxy.org/",
-        "https://ghfast.top/"
+        "https://gh.ddlc.top/",
+        "https://hub.ddayh.com/",
+        "https://ghproxy.xzhouqd.com/",
+        "https://ghproxy.053000.xyz/",
+        "https://github.xxlab.tech/",
+        "https://github.geekery.cn/",
+        "https://gh.padao.fun/",
+        "https://gh.halonice.com/",
+        "https://github.cnxiaobai.com/",
+        "https://ghfast.top/",
+        "https://github.tbap.top/",
+        "https://github.chenc.dev/",
+        "https://30006000.xyz/",
+        "https://ghproxy.sakuramoe.dev/",
+        "https://jiashu.1win.eu.org/"
     )
 
     fun normalizeVersion(value: String): String = value.trim().removePrefix("v").removePrefix("V")
@@ -58,7 +66,11 @@ object UpdateFormat {
     /** 为 GitHub API 和 Release 资产构造可回退的代理地址。 */
     fun githubUrls(originalUrl: String): List<String> {
         val isGitHubUrl = originalUrl.startsWith("https://github.com/") ||
-            originalUrl.startsWith("https://api.github.com/")
+            originalUrl.startsWith("https://api.github.com/") ||
+            originalUrl.startsWith("https://raw.githubusercontent.com/") ||
+            originalUrl.startsWith("https://gist.github.com/") ||
+            originalUrl.startsWith("https://gist.githubusercontent.com/") ||
+            originalUrl.startsWith("https://codeload.github.com/")
         return if (isGitHubUrl) {
             (listOf(originalUrl) + githubProxyPrefixes.map { it + originalUrl }).distinct()
         } else {

@@ -28,6 +28,8 @@ import com.memoriabox.ui.utils.rememberAdaptiveUiSize
 import com.memoriabox.utils.AppSettings
 import com.memoriabox.utils.ImageImportUtils
 import com.memoriabox.utils.installedAppVersion
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsList(
@@ -322,18 +324,23 @@ fun MonthlySummarySettingsDialog(
     val settingsVersion = AppSettings.settingsVersion
     var monthImages by remember(settingsVersion, selectedYear, selectedMonth) { mutableStateOf(AppSettings.getMonthlyMediaImages(context, selectedYear, selectedMonth)) }
     var monthVideos by remember(settingsVersion, selectedYear, selectedMonth) { mutableStateOf(AppSettings.getMonthlyMediaVideos(context, selectedYear, selectedMonth)) }
+    val scope = rememberCoroutineScope()
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris ->
-        val copied = uris.mapNotNull { ImageImportUtils.copyImageToPrivateStorage(context, it, "monthly_media_images") }
-        if (copied.isNotEmpty()) {
-            monthImages = (monthImages + copied).distinct()
-            AppSettings.setMonthlyMediaImages(context, selectedYear, selectedMonth, monthImages)
+        scope.launch(Dispatchers.IO) {
+            val copied = uris.mapNotNull { ImageImportUtils.copyImageToPrivateStorage(context, it, "monthly_media_images") }
+            if (copied.isNotEmpty()) {
+                monthImages = (monthImages + copied).distinct()
+                AppSettings.setMonthlyMediaImages(context, selectedYear, selectedMonth, monthImages)
+            }
         }
     }
     val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris ->
-        val copied = uris.mapNotNull { ImageImportUtils.copyImageToPrivateStorage(context, it, "monthly_media_videos") }
-        if (copied.isNotEmpty()) {
-            monthVideos = (monthVideos + copied).distinct()
-            AppSettings.setMonthlyMediaVideos(context, selectedYear, selectedMonth, monthVideos)
+        scope.launch(Dispatchers.IO) {
+            val copied = uris.mapNotNull { ImageImportUtils.copyImageToPrivateStorage(context, it, "monthly_media_videos") }
+            if (copied.isNotEmpty()) {
+                monthVideos = (monthVideos + copied).distinct()
+                AppSettings.setMonthlyMediaVideos(context, selectedYear, selectedMonth, monthVideos)
+            }
         }
     }
 
