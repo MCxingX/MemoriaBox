@@ -7,6 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.memoriabox.data.dao.*
 import com.memoriabox.data.model.*
 import net.sqlcipher.database.SupportFactory
+import java.io.FileInputStream
 import java.security.SecureRandom
 import javax.crypto.spec.PBEKeySpec
 import javax.crypto.SecretKeyFactory
@@ -88,7 +89,7 @@ abstract class AppDatabase : RoomDatabase() {
                 })
 
                 val effectivePassphrase = passphrase ?: getOrCreatePassphrase(context, keyAlias)
-                if (effectivePassphrase != null) {
+                if (shouldUseEncryption(context, effectivePassphrase)) {
                     val factory = SupportFactory(effectivePassphrase)
                     dbBuilder.openHelperFactory(factory)
                 }
@@ -116,8 +117,26 @@ abstract class AppDatabase : RoomDatabase() {
             return android.util.Base64.decode(encodedKey, android.util.Base64.NO_WRAP)
         }
 
-        fun repairLegacyData(db: SupportSQLiteDatabase) {
-            db.execSQL("UPDATE boxes SET bg_type = 'COLOR' WHERE bg_type NOT IN ('COLOR', 'IMAGE')")
+        fun isExistingPlainDatabase(context: Context): Boolean {
+            val dbFile = context.getDatabasePath("memoriabox.db")
+            if (!dbFile.exists() || dbFile.length() < 16) return false
+
+            val header = ByteArray(16)
+            try {
+                FileInputStream(dbFile).use { it.read(header) }
+            } catch (e: Exception) {
+                return false
+            }
+
+            return String(header, Charsets.ISO_8859_1).startsWith("SQLite format 3")
+        }
+
+        fun shouldUseEncryption(context: Context, passphrase: ByteArray?): Boolean {
+            if (passphrase == null) return false
+            return !isExistingPlainDatabase(context)
+        }
+
+        fun repairLegacyData(db: SupportSQLiteDatabase) {            db.execSQL("UPDATE boxes SET bg_type = 'COLOR' WHERE bg_type NOT IN ('COLOR', 'IMAGE')")
             db.execSQL("UPDATE events SET type = 'COUNTDOWN' WHERE type NOT IN ('COUNTDOWN', 'ANNIVERSARY', 'ELAPSED', 'BIRTHDAY', 'TODO')")
             db.execSQL("UPDATE events SET todo_status = 'PENDING' WHERE todo_status NOT IN ('PENDING', 'COMPLETED', 'CANCELLED')")
             db.execSQL("UPDATE boxes SET sort_order = 0 WHERE sort_order IS NULL")

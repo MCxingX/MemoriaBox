@@ -56,6 +56,16 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - 日子、日历日记和日记素材都必须完整参与备份和导入。
   - 主键相同的数据可以更新覆盖；名称相同但主键不同的数据应保留，由用户自行决定是否删除重复项。
 
+[Release 版本号必须从 APK 读取]
+- Date: 2026-08-31
+- Context: Agent 在执行 GitHub Release 发布时发现
+- Category: 构建方法|排错调试
+- Instructions:
+  - 版本号是时间生成的 (3.8.0.yDDDHHmm)，assembleRelease 在构建开始时生成版本号，printVersion 在构建结束后运行会得到不同时间戳。
+  - 发布 Release 时必须从已构建的 APK 读取实际版本号：`JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 /opt/android-sdk/build-tools/35.0.0/aapt2 dump badging <apk> | rg versionName`。
+  - Release tag_name 必须与 APK 的 versionName 完全匹配（加 v 前缀），否则 UpdateVerifier 会报"更新包版本与 GitHub Release 不匹配"。
+  - 不要用 `./gradlew printVersion` 的输出作为 Release tag，因为它和 assembleRelease 运行时间不同。
+
 [核心交互保护]
 - Date: 2026-06-08
 - Context: 用户指出底部导航中间随机颜文字是刻意设计的核心功能
