@@ -150,10 +150,10 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
         .then(
             if (imageRatio != null) {
                 val adaptiveAspect = imageRatio!!.coerceIn(0.62f, 1.56f)
-                Modifier.heightIn(min = 156.dp, max = 360.dp)
+                Modifier.heightIn(max = 360.dp)
                     .aspectRatio(adaptiveAspect, matchHeightConstraintsFirst = false)
             } else {
-                Modifier.height(156.dp)
+                Modifier.aspectRatio(1f)
             }
         )
         .shadow(elevation = 3.dp, shape = RoundedCornerShape(20.dp))

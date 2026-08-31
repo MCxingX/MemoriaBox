@@ -511,7 +511,7 @@ fun EventDialog(
                 Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(120.dp)
+                            .aspectRatio(cardCropRatio)
                             .clip(RoundedCornerShape(20.dp))
                             .clickable {
                                 if (!backgroundUri.isNullOrBlank()) {
@@ -988,7 +988,7 @@ private fun CardTemplatePreview(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(156.dp),
+            .aspectRatio(cardCropAspectRatio(template)),
         shape = RoundedCornerShape(20.dp),
         border = BorderStroke(0.8.dp, Color.White.copy(alpha = 0.30f))
     ) {
