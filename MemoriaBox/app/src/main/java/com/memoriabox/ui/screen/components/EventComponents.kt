@@ -149,8 +149,8 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
         .fillMaxWidth()
         .then(
             if (imageRatio != null) {
-                val adaptiveAspect = imageRatio!!.coerceIn(0.62f, 1.56f)
-                Modifier.heightIn(max = 360.dp)
+                val adaptiveAspect = imageRatio!!.coerceIn(0.5f, 2.0f)
+                Modifier.heightIn(max = 240.dp)
                     .aspectRatio(adaptiveAspect, matchHeightConstraintsFirst = false)
             } else {
                 Modifier.aspectRatio(1f)

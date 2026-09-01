@@ -368,7 +368,7 @@ fun EventDialog(
         if (uri != null) {
             scope.launch(Dispatchers.IO) {
                 val sourceUri = ImageImportUtils.saveOriginalImage(context, uri)?.let(Uri::parse) ?: uri
-                eventCropLauncher(sourceUri, cardCropRatio)
+                eventCropLauncher(sourceUri, 0f)
             }
         }
     }
@@ -530,7 +530,7 @@ fun EventDialog(
                                         }
                                     }.getOrDefault(false)
                                     if (sourceExists) {
-                                        eventCropLauncher(Uri.parse(sourceStr), cardCropRatio)
+                                        eventCropLauncher(Uri.parse(sourceStr), 0f)
                                     } else {
                                         val displayExists = runCatching {
                                             val u = Uri.parse(displayUri)
@@ -540,7 +540,7 @@ fun EventDialog(
                                             }
                                         }.getOrDefault(false)
                                         if (displayExists) {
-                                            eventCropLauncher(Uri.parse(displayUri), cardCropRatio)
+                                            eventCropLauncher(Uri.parse(displayUri), 0f)
                                         } else {
                                             imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                                         }

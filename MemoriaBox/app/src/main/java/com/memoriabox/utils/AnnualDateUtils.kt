@@ -19,7 +19,7 @@ object AnnualDateUtils {
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
         }
-        if (target.before(today)) target.add(Calendar.YEAR, 1)
+        if (target.timeInMillis < today) target.add(Calendar.YEAR, 1)
         return target.timeInMillis
     }
 
