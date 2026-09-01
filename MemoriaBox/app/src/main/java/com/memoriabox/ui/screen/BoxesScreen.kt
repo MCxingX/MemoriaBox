@@ -388,8 +388,10 @@ fun HomeDashboard(
         if (!adaptiveUi.compact) {
             Spacer(Modifier.height(adaptiveUi.sectionSpacing))
             HomeHeroCard(adaptiveUi = adaptiveUi)
+            Spacer(Modifier.height(adaptiveUi.sectionSpacing + 8.dp))
+        } else {
+            Spacer(Modifier.height(adaptiveUi.sectionSpacing))
         }
-        Spacer(Modifier.height(adaptiveUi.sectionSpacing))
         AllEventsTab(
             events = visibleEvents,
             upcomingEnabled = upcomingEnabled,
