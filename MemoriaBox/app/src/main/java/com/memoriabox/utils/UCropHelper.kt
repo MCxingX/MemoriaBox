@@ -11,12 +11,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import com.yalantis.ucrop.UCrop
+import com.yalantis.ucrop.model.AspectRatio
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.File
 
 object UCropHelper {
     private const val TAG = "UCropHelper"
+
+    data class RatioOption(val title: String, val x: Float, val y: Float)
 
     @Composable
     fun rememberCropLauncher(
@@ -29,24 +33,7 @@ object UCropHelper {
         val launcher = rememberLauncherForActivityResult(
             ActivityResultContracts.StartActivityForResult()
         ) { result ->
-            if (result.resultCode == Activity.RESULT_OK && result.data != null) {
-                val resultUri = UCrop.getOutput(result.data!!)
-                if (resultUri != null) {
-                    scope.launch(Dispatchers.IO) {
-                        val finalPath = copyToDestination(context, resultUri, folder)
-                        runCatching { resultUri.path?.let { File(it).delete() } }
-                        onResult(finalPath)
-                    }
-                } else {
-                    onResult(null)
-                }
-            } else if (result.resultCode == UCrop.RESULT_ERROR && result.data != null) {
-                val error = UCrop.getError(result.data!!)
-                Log.e(TAG, "uCrop error: ${error?.message}")
-                onResult(null)
-            } else {
-                onResult(null)
-            }
+            handleCropResult(result, context, scope, folder, onResult)
         }
 
         return remember(launcher, folder) {
@@ -78,6 +65,79 @@ object UCropHelper {
 
                 launcher.launch(uCrop.getIntent(context))
             }
+        }
+    }
+
+    @Composable
+    fun rememberRatioCropLauncher(
+        folder: String,
+        onResult: (String?) -> Unit,
+        options: List<RatioOption>,
+        defaultIndex: Int = 0
+    ): (Uri) -> Unit {
+        val context = LocalContext.current
+        val scope = rememberCoroutineScope()
+
+        val launcher = rememberLauncherForActivityResult(
+            ActivityResultContracts.StartActivityForResult()
+        ) { result ->
+            handleCropResult(result, context, scope, folder, onResult)
+        }
+
+        return remember(launcher, folder, options, defaultIndex) {
+            { sourceUri: Uri ->
+                val cacheDir = File(context.cacheDir, "ucrop").apply { mkdirs() }
+                val destination = Uri.fromFile(File(cacheDir, "crop_${System.currentTimeMillis()}.jpg"))
+
+                val ratioList = options.map { AspectRatio(it.title, it.x, it.y) }.toTypedArray()
+                val safeIndex = defaultIndex.coerceIn(0, ratioList.size - 1)
+
+                val uCropOptions = UCrop.Options().apply {
+                    setCompressionQuality(92)
+                    setToolbarColor(0xFF7C4DFF.toInt())
+                    setStatusBarColor(0xFF3700B3.toInt())
+                    setToolbarWidgetColor(android.graphics.Color.WHITE)
+                    setRootViewBackgroundColor(android.graphics.Color.WHITE)
+                    setActiveControlsWidgetColor(0xFF7C4DFF.toInt())
+                    setToolbarTitle("裁剪图片")
+                    setLogoColor(0xFF7C4DFF.toInt())
+                    setFreeStyleCropEnabled(true)
+                    setAspectRatioOptions(safeIndex, *ratioList)
+                }
+
+                val uCrop = UCrop.of(sourceUri, destination)
+                    .withOptions(uCropOptions)
+                    .withMaxResultSize(1920, 1920)
+
+                launcher.launch(uCrop.getIntent(context))
+            }
+        }
+    }
+
+    private fun handleCropResult(
+        result: androidx.activity.result.ActivityResult,
+        context: Context,
+        scope: CoroutineScope,
+        folder: String,
+        onResult: (String?) -> Unit
+    ) {
+        if (result.resultCode == Activity.RESULT_OK && result.data != null) {
+            val resultUri = UCrop.getOutput(result.data!!)
+            if (resultUri != null) {
+                scope.launch(Dispatchers.IO) {
+                    val finalPath = copyToDestination(context, resultUri, folder)
+                    runCatching { resultUri.path?.let { File(it).delete() } }
+                    onResult(finalPath)
+                }
+            } else {
+                onResult(null)
+            }
+        } else if (result.resultCode == UCrop.RESULT_ERROR && result.data != null) {
+            val error = UCrop.getError(result.data!!)
+            Log.e(TAG, "uCrop error: ${error?.message}")
+            onResult(null)
+        } else {
+            onResult(null)
         }
     }
 

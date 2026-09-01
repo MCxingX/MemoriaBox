@@ -19,6 +19,21 @@ object ImageImportUtils {
         val cropHeight: Float = 1f
     )
 
+    private val COMMON_ASPECT_RATIOS = listOf(
+        0.5625f,  // 9:16
+        0.75f,    // 3:4
+        1f,       // 1:1
+        1.5f,     // 3:2
+        4f / 3f,  // 4:3
+        16f / 9f  // 16:9
+    )
+
+    fun snapToCommonAspectRatio(ratio: Float): Float {
+        if (!ratio.isFinite() || ratio <= 0f) return 1f
+        val nearest = COMMON_ASPECT_RATIOS.minByOrNull { kotlin.math.abs(it - ratio) } ?: return ratio.coerceIn(0.5f, 2f)
+        return if (kotlin.math.abs(nearest - ratio) / nearest <= 0.06f) ratio else nearest
+    }
+
     private const val EDIT_STATE_PREFS = "image_edit_states"
 
     fun copyImageToPrivateStorage(context: Context, uri: Uri, folder: String = "picked_images"): String? {

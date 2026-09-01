@@ -149,7 +149,7 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
         .fillMaxWidth()
         .then(
             if (imageRatio != null) {
-                val adaptiveAspect = imageRatio!!.coerceIn(0.5f, 2.0f)
+                val adaptiveAspect = com.memoriabox.utils.ImageImportUtils.snapToCommonAspectRatio(imageRatio!!).coerceIn(0.5f, 2.0f)
                 Modifier.heightIn(max = 240.dp)
                     .aspectRatio(adaptiveAspect, matchHeightConstraintsFirst = false)
             } else {

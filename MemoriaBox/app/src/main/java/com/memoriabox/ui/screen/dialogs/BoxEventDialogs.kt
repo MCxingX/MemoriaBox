@@ -62,6 +62,7 @@ import com.memoriabox.utils.ColorUtils
 import com.memoriabox.utils.ImageImportUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.memoriabox.utils.LunarDateUtils
 import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
@@ -325,6 +326,7 @@ fun EventDialog(
     var pushPlusEnabled by remember { mutableStateOf(existingEvent?.pushPlusEnabled ?: defaultPushPlusEnabled) }
     var calendarSyncEnabled by remember { mutableStateOf(existingEvent?.calendarSyncEnabled ?: false) }
     var backgroundUri by remember { mutableStateOf(existingEvent?.avatarUri) }
+    var backgroundRatio by remember { mutableStateOf<Float?>(null) }
     var repeatMode by remember {
         mutableStateOf(
             when {
@@ -353,9 +355,19 @@ fun EventDialog(
     var showLunarCalendar by remember { mutableStateOf(false) }
     var selectedLunar by remember { mutableStateOf(existingEvent?.lunar) }
     val cardCropRatio = cardCropAspectRatio(cardTemplate)
-    val eventCropLauncher = com.memoriabox.utils.UCropHelper.rememberCropLauncher("event_images") { result ->
-        backgroundUri = result ?: backgroundUri
-    }
+    val eventCropLauncher = com.memoriabox.utils.UCropHelper.rememberRatioCropLauncher(
+        "event_images",
+        onResult = { result -> backgroundUri = result ?: backgroundUri },
+        options = listOf(
+            com.memoriabox.utils.UCropHelper.RatioOption("原图", 0f, 0f),
+            com.memoriabox.utils.UCropHelper.RatioOption("1:1", 1f, 1f),
+            com.memoriabox.utils.UCropHelper.RatioOption("3:4", 3f, 4f),
+            com.memoriabox.utils.UCropHelper.RatioOption("4:3", 4f, 3f),
+            com.memoriabox.utils.UCropHelper.RatioOption("3:2", 3f, 2f),
+            com.memoriabox.utils.UCropHelper.RatioOption("16:9", 16f, 9f)
+        ),
+        defaultIndex = 3
+    )
     var selectedBoxId by remember { mutableStateOf(existingEvent?.boxId ?: defaultBoxId ?: (availableBoxes.firstOrNull()?.id ?: "")) }
     var showColorPickerFor by remember { mutableStateOf<String?>(null) }
     var reminderOffsetsText by remember { mutableStateOf(existingEvent?.reminderOffsets ?: (existingEvent?.reminderDays ?: 1).toString()) }
@@ -364,11 +376,18 @@ fun EventDialog(
     var showRepeatEndPicker by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    LaunchedEffect(backgroundUri) {
+        backgroundRatio = backgroundUri?.let { uri ->
+            withContext(Dispatchers.IO) {
+                com.memoriabox.utils.ImageImportUtils.getImageAspectRatio(context, uri)
+            }
+        }
+    }
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) {
             scope.launch(Dispatchers.IO) {
                 val sourceUri = ImageImportUtils.saveOriginalImage(context, uri)?.let(Uri::parse) ?: uri
-                eventCropLauncher(sourceUri, 0f)
+                eventCropLauncher(sourceUri)
             }
         }
     }
@@ -508,10 +527,11 @@ fun EventDialog(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text("卡片背景", style = MaterialTheme.typography.labelLarge)
+                val previewRatio = backgroundRatio?.let { com.memoriabox.utils.ImageImportUtils.snapToCommonAspectRatio(it).coerceIn(0.5f, 2f) } ?: cardCropRatio
                 Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .aspectRatio(cardCropRatio)
+                            .aspectRatio(previewRatio)
                             .clip(RoundedCornerShape(20.dp))
                             .clickable {
                                 if (!backgroundUri.isNullOrBlank()) {
@@ -530,7 +550,7 @@ fun EventDialog(
                                         }
                                     }.getOrDefault(false)
                                     if (sourceExists) {
-                                        eventCropLauncher(Uri.parse(sourceStr), 0f)
+                                        eventCropLauncher(Uri.parse(sourceStr))
                                     } else {
                                         val displayExists = runCatching {
                                             val u = Uri.parse(displayUri)
@@ -540,7 +560,7 @@ fun EventDialog(
                                             }
                                         }.getOrDefault(false)
                                         if (displayExists) {
-                                            eventCropLauncher(Uri.parse(displayUri), 0f)
+                                            eventCropLauncher(Uri.parse(displayUri))
                                         } else {
                                             imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                                         }
