@@ -24,6 +24,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import android.net.Uri
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -355,9 +356,19 @@ fun EventDialog(
     var showLunarCalendar by remember { mutableStateOf(false) }
     var selectedLunar by remember { mutableStateOf(existingEvent?.lunar) }
     val cardCropRatio = cardCropAspectRatio(cardTemplate)
+    val context = LocalContext.current
+    var pendingCropSource by remember { mutableStateOf<Uri?>(null) }
     val eventCropLauncher = com.memoriabox.utils.UCropHelper.rememberRatioCropLauncher(
         "event_images",
-        onResult = { result -> backgroundUri = result ?: backgroundUri },
+        onResult = { result ->
+            if (result != null) {
+                pendingCropSource?.let { src ->
+                    ImageImportUtils.saveEditState(context, result, ImageImportUtils.EditState(sourceUri = src.toString()))
+                }
+                backgroundUri = result
+            }
+            pendingCropSource = null
+        },
         options = listOf(
             com.memoriabox.utils.UCropHelper.RatioOption("原图", 0f, 0f),
             com.memoriabox.utils.UCropHelper.RatioOption("1:1", 1f, 1f),
@@ -374,7 +385,6 @@ fun EventDialog(
     var repeatCountText by remember { mutableStateOf(existingEvent?.repeatCount?.takeIf { it > 0 }?.toString() ?: "") }
     var repeatEndDate by remember { mutableStateOf(existingEvent?.repeatEndDate) }
     var showRepeatEndPicker by remember { mutableStateOf(false) }
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     LaunchedEffect(backgroundUri) {
         backgroundRatio = backgroundUri?.let { uri ->
@@ -387,20 +397,90 @@ fun EventDialog(
         if (uri != null) {
             scope.launch(Dispatchers.IO) {
                 val sourceUri = ImageImportUtils.saveOriginalImage(context, uri)?.let(Uri::parse) ?: uri
+                pendingCropSource = sourceUri
                 eventCropLauncher(sourceUri)
             }
         }
     }
 
-    AlertDialog(
+    var basicExpanded by remember { mutableStateOf(true) }
+    var appearanceExpanded by remember { mutableStateOf(true) }
+    var repeatExpanded by remember {
+        mutableStateOf(existingEvent?.repeatMode?.let { it != RepeatMode.NONE } ?: false)
+    }
+    var reminderExpanded by remember {
+        mutableStateOf(existingEvent?.reminderEnabled ?: defaultReminderEnabled)
+    }
+
+    val saveEvent: () -> Unit = {
+        val event = Event(
+            id = existingEvent?.id ?: UUID.randomUUID().toString(),
+            boxId = selectedBoxId,
+            name = name,
+            date = selectedDate ?: System.currentTimeMillis(),
+            lunar = selectedLunar,
+            type = selectedType,
+            note = note,
+            reminderEnabled = reminderEnabled,
+            reminderDays = reminderDays,
+            reminderOffsets = reminderOffsetsText.split(",").mapNotNull { it.trim().toIntOrNull() }.filter { it in 0..365 }.distinct().joinToString(",").ifBlank { reminderDays.toString() },
+            avatarUri = backgroundUri,
+            isPinned = existingEvent?.isPinned ?: false,
+            pushPlusEnabled = pushPlusEnabled && reminderEnabled,
+            calendarSyncEnabled = calendarSyncEnabled && reminderEnabled,
+            repeatMode = if (selectedType == EventType.BIRTHDAY) RepeatMode.YEARLY else repeatMode,
+            repeatInterval = repeatInterval.coerceAtLeast(1),
+            repeatEndDate = repeatEndDate,
+            repeatCount = repeatCountText.toIntOrNull()?.coerceAtLeast(0) ?: 0,
+            gradientStart = gradientStart,
+            gradientEnd = gradientEnd,
+            textColor = textColor,
+            cardTemplate = cardTemplate,
+            displayFields = displayFieldSet.filterValues { it }.keys.joinToString(","),
+            isBirthday = selectedType == EventType.BIRTHDAY,
+            repeatYearly = selectedType == EventType.BIRTHDAY || repeatMode == RepeatMode.YEARLY,
+            createdAt = existingEvent?.createdAt ?: System.currentTimeMillis()
+        )
+        if (pushPlusEnabled && reminderEnabled) {
+            onPushPlusEnabledChange(true)
+        }
+        onSave(event)
+    }
+
+    Dialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (existingEvent == null) "添加日子" else "编辑日子") },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-            ) {
+        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = true, dismissOnClickOutside = false)
+    ) {
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 4.dp, end = 8.dp, top = 8.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "关闭")
+                    }
+                    Text(
+                        if (existingEvent == null) "添加日子" else "编辑日子",
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.weight(1f).padding(start = 4.dp)
+                    )
+                    TextButton(onClick = saveEvent, enabled = name.isNotBlank() && selectedDate != null) {
+                        Text("保存", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+                HorizontalDivider()
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp)
+                        .padding(top = 14.dp, bottom = 28.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                EditSection(title = "基本信息", expanded = basicExpanded, onToggle = { basicExpanded = !basicExpanded }) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
@@ -523,9 +603,9 @@ fun EventDialog(
                     modifier = Modifier.fillMaxWidth(),
                     maxLines = 3
                 )
+                }
 
-                Spacer(modifier = Modifier.height(12.dp))
-
+                EditSection(title = "卡片外观", expanded = appearanceExpanded, onToggle = { appearanceExpanded = !appearanceExpanded }) {
                 Text("卡片背景", style = MaterialTheme.typography.labelLarge)
                 val previewRatio = backgroundRatio?.let { com.memoriabox.utils.ImageImportUtils.snapToCommonAspectRatio(it).coerceIn(0.5f, 2f) } ?: cardCropRatio
                 Card(
@@ -550,6 +630,7 @@ fun EventDialog(
                                         }
                                     }.getOrDefault(false)
                                     if (sourceExists) {
+                                        pendingCropSource = Uri.parse(sourceStr)
                                         eventCropLauncher(Uri.parse(sourceStr))
                                     } else {
                                         val displayExists = runCatching {
@@ -560,6 +641,7 @@ fun EventDialog(
                                             }
                                         }.getOrDefault(false)
                                         if (displayExists) {
+                                            pendingCropSource = Uri.parse(displayUri)
                                             eventCropLauncher(Uri.parse(displayUri))
                                         } else {
                                             imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
@@ -590,7 +672,7 @@ fun EventDialog(
                                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
                                     Icon(Icons.Default.Edit, contentDescription = null, tint = Color.White, modifier = Modifier.size(13.dp))
-                                    Text("点击编辑", color = Color.White, style = MaterialTheme.typography.labelSmall)
+                                    Text("切换背景图", color = Color.White, style = MaterialTheme.typography.labelSmall)
                                 }
                             }
                         } else {
@@ -599,6 +681,18 @@ fun EventDialog(
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text("选择背景图", style = MaterialTheme.typography.bodyMedium)
                             }
+                        }
+                    }
+                }
+
+                if (backgroundUri != null) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = {
+                            ImageImportUtils.removeEditState(context, backgroundUri)
+                            backgroundUri = null
+                            backgroundRatio = null
+                        }) {
+                            Text("移除背景", style = MaterialTheme.typography.labelMedium)
                         }
                     }
                 }
@@ -686,9 +780,9 @@ fun EventDialog(
                         )
                     }
                 }
+                }
 
-                Spacer(modifier = Modifier.height(12.dp))
-
+                EditSection(title = "重复规则", expanded = repeatExpanded, onToggle = { repeatExpanded = !repeatExpanded }) {
                 if (selectedType != EventType.BIRTHDAY) {
                     Text("重复规则", style = MaterialTheme.typography.labelLarge)
                     FlowRow(
@@ -755,9 +849,9 @@ fun EventDialog(
                         }
                     }
                 }
+                }
 
-                Spacer(modifier = Modifier.height(12.dp))
-
+                EditSection(title = "提醒", expanded = reminderExpanded, onToggle = { reminderExpanded = !reminderExpanded }) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
@@ -860,55 +954,11 @@ fun EventDialog(
                         }
                     }
                 }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    val event = Event(
-                        id = existingEvent?.id ?: UUID.randomUUID().toString(),
-                        boxId = selectedBoxId,
-                        name = name,
-                        date = selectedDate ?: System.currentTimeMillis(),
-                        lunar = selectedLunar,
-                        type = selectedType,
-                        note = note,
-                        reminderEnabled = reminderEnabled,
-                        reminderDays = reminderDays,
-                        reminderOffsets = reminderOffsetsText.split(",").mapNotNull { it.trim().toIntOrNull() }.filter { it in 0..365 }.distinct().joinToString(",").ifBlank { reminderDays.toString() },
-                        avatarUri = backgroundUri,
-                        isPinned = existingEvent?.isPinned ?: false,
-                        pushPlusEnabled = pushPlusEnabled && reminderEnabled,
-                        calendarSyncEnabled = calendarSyncEnabled && reminderEnabled,
-                        repeatMode = if (selectedType == EventType.BIRTHDAY) RepeatMode.YEARLY else repeatMode,
-                        repeatInterval = repeatInterval.coerceAtLeast(1),
-                        repeatEndDate = repeatEndDate,
-                        repeatCount = repeatCountText.toIntOrNull()?.coerceAtLeast(0) ?: 0,
-                        gradientStart = gradientStart,
-                        gradientEnd = gradientEnd,
-                        textColor = textColor,
-                        cardTemplate = cardTemplate,
-                        displayFields = displayFieldSet.filterValues { it }.keys.joinToString(","),
-                        isBirthday = selectedType == EventType.BIRTHDAY,
-                        repeatYearly = selectedType == EventType.BIRTHDAY || repeatMode == RepeatMode.YEARLY,
-                        createdAt = existingEvent?.createdAt ?: System.currentTimeMillis()
-                    )
-                    if (pushPlusEnabled && reminderEnabled) {
-                        onPushPlusEnabledChange(true)
-                    }
-                    onSave(event)
-                },
-                enabled = name.isNotBlank() && selectedDate != null
-            ) {
-                Text("保存")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("取消")
+                }
+                }
             }
         }
-    )
+    }
 
     if (showDatePicker) {
         DatePickerDialog(
@@ -963,6 +1013,49 @@ fun EventDialog(
                 showColorPickerFor = null
             }
         )
+    }
+}
+
+@Composable
+private fun EditSection(
+    title: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.30f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onToggle() }
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f)
+                )
+                Icon(
+                    imageVector = if (expanded) Icons.Default.KeyboardArrowDown else Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = if (expanded) "收起" else "展开",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (expanded) {
+                Column(
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 14.dp),
+                    content = content
+                )
+            }
+        }
     }
 }
 
