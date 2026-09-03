@@ -111,6 +111,9 @@ fun EventDetailDialog(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TextButton(onClick = { showMenu = true }) { Text("更多") }
                     TextButton(onClick = onEdit) { Text("编辑") }
+                    TextButton(onClick = { showDeleteConfirm = true }) {
+                        Text("删除", color = MaterialTheme.colorScheme.error)
+                    }
                 }
                 DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                     DropdownMenuItem(

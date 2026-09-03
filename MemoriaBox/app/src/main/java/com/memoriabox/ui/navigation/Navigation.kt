@@ -14,8 +14,6 @@ sealed class Screen(val route: String) {
     object BackupSettings : Screen("backup_settings")
     object WebDavSettings : Screen("webdav_settings")
     object Todo : Screen("todo")
-    object Statistics : Screen("statistics")
-    object PhotoWall : Screen("photo_wall")
     object Export : Screen("export")
     object Timeline : Screen("timeline")
     object SyncStatus : Screen("sync_status")

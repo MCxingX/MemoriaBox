@@ -30,6 +30,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.LifecycleOwner
 import coil.compose.AsyncImage
 import com.memoriabox.data.model.DiaryEntry
@@ -156,41 +158,130 @@ fun DiaryVideoPlayer(
     autoPlay: Boolean = false,
     loop: Boolean = false,
     muted: Boolean = false,
-    onCompletion: (() -> Unit)? = null
+    onCompletion: (() -> Unit)? = null,
+    onFullscreen: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
-    AndroidView(
+    Box(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
-            .background(Color.Black),
-        factory = {
-            VideoView(context).apply {
-                setVideoURI(Uri.parse(uri))
-                if (showControls) {
-                    setMediaController(MediaController(context).also { controller -> controller.setAnchorView(this) })
+            .background(Color.Black)
+    ) {
+        AndroidView(
+            modifier = Modifier.matchParentSize(),
+            factory = {
+                VideoView(context).apply {
+                    setVideoURI(Uri.parse(uri))
+                    if (showControls) {
+                        setMediaController(MediaController(context).also { controller -> controller.setAnchorView(this) })
+                    }
+                    setOnPreparedListener { player ->
+                        player.isLooping = loop
+                        if (muted) player.setVolume(0f, 0f)
+                        if (autoPlay) start()
+                    }
+                    setOnCompletionListener {
+                        if (!loop) onCompletion?.invoke()
+                    }
                 }
-                setOnPreparedListener { player ->
-                    player.isLooping = loop
-                    if (muted) player.setVolume(0f, 0f)
-                    if (autoPlay) start()
+            },
+            update = { view ->
+                val currentUri = Uri.parse(uri)
+                if (view.tag != uri) {
+                    view.tag = uri
+                    view.setVideoURI(currentUri)
                 }
-                setOnCompletionListener {
-                    if (!loop) onCompletion?.invoke()
-                }
+                if (autoPlay && !view.isPlaying) view.start()
+            },
+            onRelease = { view ->
+                view.stopPlayback()
             }
-        },
-        update = { view ->
-            val currentUri = Uri.parse(uri)
-            if (view.tag != uri) {
-                view.tag = uri
-                view.setVideoURI(currentUri)
+        )
+        if (onFullscreen != null) {
+            SmallIconButton(
+                onClick = onFullscreen,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
+                contentDescription = "全屏播放"
+            ) {
+                Icon(Icons.Default.Fullscreen, contentDescription = "全屏播放", tint = Color.White)
             }
-            if (autoPlay && !view.isPlaying) view.start()
-        },
-        onRelease = { view ->
-            view.stopPlayback()
         }
-    )
+    }
+}
+
+@Composable
+private fun SmallIconButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    contentDescription: String? = null,
+    content: @Composable () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .size(36.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color.Black.copy(alpha = 0.55f))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) { content() }
+}
+
+@Composable
+fun FullscreenVideoDialog(
+    uri: String,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val view = androidx.compose.ui.platform.LocalView.current
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black),
+            contentAlignment = Alignment.Center
+        ) {
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = {
+                    VideoView(context).apply {
+                        setVideoURI(Uri.parse(uri))
+                        setMediaController(MediaController(context).also { controller -> controller.setAnchorView(this) })
+                        setOnPreparedListener { player ->
+                            player.isLooping = false
+                            player.setVolume(1f, 1f)
+                            start()
+                        }
+                    }
+                },
+                onRelease = { view -> view.stopPlayback() }
+            )
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier.align(Alignment.TopEnd).padding(12.dp)
+            ) {
+                Icon(Icons.Default.Close, contentDescription = "关闭", tint = Color.White)
+            }
+        }
+    }
+    androidx.compose.runtime.DisposableEffect(uri) {
+        val window = (context as? android.app.Activity)?.window
+            ?: (view.parent as? android.view.View)?.let { (it.context as? android.app.Activity)?.window }
+        val originalFlags = window?.decorView?.systemUiVisibility ?: 0
+        window?.decorView?.systemUiVisibility = (
+            android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                or android.view.View.SYSTEM_UI_FLAG_FULLSCREEN
+                or android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                or android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                or android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                or android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+        )
+        onDispose {
+            window?.decorView?.systemUiVisibility = originalFlags
+        }
+    }
 }
 
 @Composable
@@ -203,6 +294,7 @@ fun DiaryDetailDialog(
     modifier: Modifier = Modifier
 ) {
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var fullscreenVideoUri by remember { mutableStateOf<String?>(null) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -274,7 +366,8 @@ fun DiaryDetailDialog(
                                                 .fillMaxWidth()
                                                 .aspectRatio(media.aspectRatio.toFloatRatio()),
                                             showControls = true,
-                                            autoPlay = false
+                                            autoPlay = false,
+                                            onFullscreen = { fullscreenVideoUri = media.mediaUri }
                                         )
                                     }
                                 }
@@ -316,6 +409,10 @@ fun DiaryDetailDialog(
                 TextButton(onClick = { showDeleteConfirm = false }) { Text("取消") }
             }
         )
+    }
+
+    fullscreenVideoUri?.let { videoUri ->
+        FullscreenVideoDialog(uri = videoUri, onDismiss = { fullscreenVideoUri = null })
     }
 }
 

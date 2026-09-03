@@ -8,7 +8,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
@@ -158,7 +157,7 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
         )
         .shadow(elevation = 3.dp, shape = RoundedCornerShape(20.dp))
         .pointerInput(event.id) {
-            detectDragGestures(
+            detectHorizontalDragGestures(
                 onDragStart = {
                     horizontalDrag = 0f
                     horizontalDragActive = false
@@ -189,12 +188,10 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
                     horizontalDrag = 0f
                     horizontalDragActive = false
                 },
-                onDrag = { change, dragAmount ->
-                    if (abs(dragAmount.x) > abs(dragAmount.y) * 1.2f || horizontalDragActive) {
-                        horizontalDragActive = true
-                        horizontalDrag += dragAmount.x
-                        change.consume()
-                    }
+                onHorizontalDrag = { change, dragAmount ->
+                    horizontalDragActive = true
+                    horizontalDrag += dragAmount
+                    change.consume()
                 }
             )
         }
@@ -237,7 +234,6 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
                                 listOf(
                                     ColorUtils.hexToColor(event.gradientStart),
                                     ColorUtils.hexToColor(event.gradientEnd),
-                                    MaterialTheme.colorScheme.tertiaryContainer
                                 )
                             )
                         )
@@ -508,7 +504,8 @@ fun CalendarViewScreen(
     onSummaryPlayModeChange: (Boolean) -> Unit = {},
     onSummarySpeedChange: (Float) -> Unit = {},
     onSummaryTextEnabledChange: (Boolean) -> Unit = {},
-    onLoadMonthlySummary: (Long) -> Unit = {}
+    onLoadMonthlySummary: (Long) -> Unit = {},
+    onPlayDaySummary: (Long) -> Unit = {}
 ) {
     val adaptiveUi = rememberAdaptiveUiSize()
     val themeTokens = LocalMemoriaThemeTokens.current
@@ -543,6 +540,7 @@ fun CalendarViewScreen(
         monthEvents.minByOrNull { kotlin.math.abs(it.date - System.currentTimeMillis()) }
     }
     var selectedDay by remember { mutableStateOf<Pair<Long, List<Event>>?>(null) }
+    var detailDay by remember { mutableStateOf<Pair<Long, List<Event>>?>(null) }
     var selectedDiaryForView by remember { mutableStateOf<DiaryEntry?>(null) }
     var editingDiary by remember { mutableStateOf<DiaryEntry?>(null) }
     var editingDiaryDate by remember { mutableStateOf<Long?>(null) }
@@ -582,9 +580,7 @@ fun CalendarViewScreen(
             }
     ) {
         TopAppBar(
-            modifier = Modifier.height(adaptiveUi.topBarHeight),
             title = { Text("日历视图") },
-            windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
             actions = {
                 if (monthlySummaryEnabled) {
@@ -656,7 +652,9 @@ fun CalendarViewScreen(
                 events = dayEvents,
                 diaries = diaryMap[startOfDayMillis(date)] ?: emptyList(),
                 onAddEvent = onAddEvent,
-                onWriteDiary = { editingDiaryDate = date }
+                onWriteDiary = { editingDiaryDate = date },
+                onPlayDaySummary = { onPlayDaySummary(date) },
+                onOpenDetail = { detailDay = date to dayEvents }
             )
         }
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
@@ -688,20 +686,20 @@ fun CalendarViewScreen(
         )
     }
 
-    selectedDay?.let { (date, dayEvents) ->
+    detailDay?.let { (date, dayEvents) ->
         val dayDiaries = diaryMap[startOfDayMillis(date)] ?: emptyList()
         CalendarDayDetailDialog(
             date = date,
             events = dayEvents,
             diaries = dayDiaries,
             diaryMediaMap = diaryMediaMap,
-            onDismiss = { selectedDay = null },
+            onDismiss = { detailDay = null },
             onAddEvent = {
-                selectedDay = null
+                detailDay = null
                 onAddEvent(date)
             },
             onEventClick = { event ->
-                selectedDay = null
+                detailDay = null
                 onEventClick(event)
             },
             onWriteDiary = {
@@ -1112,7 +1110,9 @@ private fun SelectedDaySummaryCard(
     events: List<Event>,
     diaries: List<DiaryEntry>,
     onAddEvent: (Long) -> Unit,
-    onWriteDiary: () -> Unit
+    onWriteDiary: () -> Unit,
+    onPlayDaySummary: () -> Unit,
+    onOpenDetail: () -> Unit
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
@@ -1140,9 +1140,25 @@ private fun SelectedDaySummaryCard(
             if (events.isEmpty() && diaries.isEmpty()) {
                 Text("这一天还没有内容，可以新增日子或写日记。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 TextButton(onClick = { onAddEvent(date) }) { Text("新增日子") }
                 TextButton(onClick = onWriteDiary) { Text("写日记") }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                TextButton(onClick = onOpenDetail) { Text("查看详情") }
+                if (diaries.isNotEmpty()) {
+                    TextButton(onClick = onPlayDaySummary) {
+                        Icon(Icons.Default.AutoStories, contentDescription = "今日总结", modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("今日总结")
+                    }
+                }
             }
         }
     }

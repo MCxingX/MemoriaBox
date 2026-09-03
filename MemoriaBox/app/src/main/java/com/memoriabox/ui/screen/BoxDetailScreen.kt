@@ -35,7 +35,10 @@ fun BoxDetailScreen(
     val notificationHelper = remember { com.memoriabox.utils.NotificationHelper(application) }
 
     var showCreateEvent by remember { mutableStateOf(false) }
+    var selectedEvent by remember { mutableStateOf<Event?>(null) }
+    var eventForActions by remember { mutableStateOf<Event?>(null) }
     var showEditEvent by remember { mutableStateOf<Event?>(null) }
+    var eventForDelete by remember { mutableStateOf<Event?>(null) }
     var showBatchDialog by remember { mutableStateOf(false) }
     var showMoveDialog by remember { mutableStateOf(false) }
     var showEditBox by remember { mutableStateOf(false) }
@@ -50,8 +53,6 @@ fun BoxDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                modifier = Modifier.height(adaptiveUi.topBarHeight),
-                windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
                 title = { Text(box?.name ?: "日子详情") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
@@ -107,8 +108,8 @@ fun BoxDetailScreen(
             )
             EnhancedEventGrid(
                 events = events,
-                onEventClick = { showEditEvent = it },
-                onEventEdit = { showEditEvent = it },
+                onEventClick = { selectedEvent = it },
+                onEventEdit = { eventForActions = it },
                 onCardTemplateChange = { event, newTemplate ->
                     viewModel.updateEvent(event.copy(cardTemplate = newTemplate))
                 },
@@ -129,6 +130,63 @@ fun BoxDetailScreen(
             onSave = { event ->
                 viewModel.createEvent(event)
                 showCreateEvent = false
+            }
+        )
+    }
+
+    selectedEvent?.let { event ->
+        EventDetailDialog(
+            event = event,
+            logs = emptyList(),
+            onDismiss = { selectedEvent = null },
+            onEdit = {
+                showEditEvent = event
+                selectedEvent = null
+            },
+            onTogglePin = {
+                viewModel.togglePinned(event)
+                selectedEvent = null
+            },
+            onDelete = {
+                eventForDelete = event
+                selectedEvent = null
+            },
+            onOpenCategory = { selectedEvent = null }
+        )
+    }
+
+    eventForActions?.let { event ->
+        EventActionDialog(
+            event = event,
+            onDismiss = { eventForActions = null },
+            onEdit = {
+                showEditEvent = event
+                eventForActions = null
+            },
+            onTogglePin = {
+                viewModel.togglePinned(event)
+                eventForActions = null
+            },
+            onDelete = {
+                eventForDelete = event
+                eventForActions = null
+            }
+        )
+    }
+
+    eventForDelete?.let { event ->
+        AlertDialog(
+            onDismissRequest = { eventForDelete = null },
+            title = { Text("删除日子") },
+            text = { Text("删除后无法在应用内恢复。确认删除“${event.name}”？") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deleteEvent(event)
+                    eventForDelete = null
+                }) { Text("删除") }
+            },
+            dismissButton = {
+                TextButton(onClick = { eventForDelete = null }) { Text("取消") }
             }
         )
     }

@@ -134,7 +134,7 @@ fun CustomizationSettingsScreen(onNavigateBack: () -> Unit) {
         }
     }
 
-    Scaffold(topBar = { TopAppBar(modifier = Modifier.height(adaptiveUi.topBarHeight), windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp), title = { Text("个性化设置") }, navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } }) }) { paddingValues ->
+    Scaffold(topBar = { TopAppBar(title = { Text("个性化设置") }, navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } }) }) { paddingValues ->
         Column(modifier = Modifier.padding(paddingValues).fillMaxSize().verticalScroll(rememberScrollState()).padding(adaptiveUi.screenPadding), verticalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing + 4.dp)) {
             Text("页面背景", style = MaterialTheme.typography.titleLarge)
             CustomizationBgCard(title = "全部页面背景", uri = allBg, onClick = { chooseImage("ALL_BG") }, onClear = { allBg?.let { ImageImportUtils.removeEditState(context, it) }; allBg = null; homeBg = null; calendarBg = null; todoBg = null; settingsBg = null; AppSettings.setHomeBgUri(context, null); AppSettings.setCalendarBgUri(context, null); AppSettings.setTodoBgUri(context, null); AppSettings.setSettingsBgUri(context, null) })

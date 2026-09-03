@@ -52,9 +52,7 @@ import java.util.concurrent.TimeUnit
 fun BoxesScreen(
     application: Application,
     onBoxClick: (String) -> Unit,
-    onNavigateToCalendar: () -> Unit,
-    onNavigateToPhotoWall: () -> Unit,
-    onNavigateToStatistics: () -> Unit
+    onNavigateToCalendar: () -> Unit
 ) {
     val viewModel = remember { createMainViewModel(application) }
     val notificationHelper = remember { com.memoriabox.utils.NotificationHelper(application) }
@@ -104,7 +102,6 @@ fun BoxesScreen(
             containerColor = Color.Transparent,
             topBar = {
                 TopAppBar(
-                    modifier = Modifier.height(adaptiveUi.topBarHeight),
                     title = {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -114,7 +111,6 @@ fun BoxesScreen(
                             Text("今天", style = MaterialTheme.typography.titleMedium)
                         }
                     },
-                    windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                     actions = {
                         Row(
@@ -150,8 +146,6 @@ fun BoxesScreen(
                 onBoxClick = onBoxClick,
                 onCreateBox = { showCreateDialog = true },
                 onNavigateToCalendar = onNavigateToCalendar,
-                onNavigateToPhotoWall = onNavigateToPhotoWall,
-                onNavigateToStatistics = onNavigateToStatistics,
                 onEventClick = { event -> selectedEvent = event },
                 onEventLongClick = { event -> eventForActions = event },
                 selectedBoxId = selectedBoxId,
@@ -327,8 +321,6 @@ fun HomeDashboard(
     onBoxClick: (String) -> Unit,
     onCreateBox: () -> Unit,
     onNavigateToCalendar: () -> Unit,
-    onNavigateToPhotoWall: () -> Unit,
-    onNavigateToStatistics: () -> Unit,
     onEventClick: (Event) -> Unit,
     onEventLongClick: (Event) -> Unit,
     adaptiveUi: AdaptiveUiSize,
@@ -385,13 +377,9 @@ fun HomeDashboard(
                 .padding(horizontal = adaptiveUi.screenPadding, vertical = adaptiveUi.sectionSpacing)
         ) {
         TodayHeader(adaptiveUi = adaptiveUi)
-        if (!adaptiveUi.compact) {
-            Spacer(Modifier.height(adaptiveUi.sectionSpacing))
-            HomeHeroCard(adaptiveUi = adaptiveUi)
-            Spacer(Modifier.height(adaptiveUi.sectionSpacing + 8.dp))
-        } else {
-            Spacer(Modifier.height(adaptiveUi.sectionSpacing))
-        }
+        Spacer(Modifier.height(adaptiveUi.sectionSpacing))
+        HomeHeroCard(adaptiveUi = adaptiveUi)
+        Spacer(Modifier.height(adaptiveUi.sectionSpacing + 8.dp))
         AllEventsTab(
             events = visibleEvents,
             upcomingEnabled = upcomingEnabled,

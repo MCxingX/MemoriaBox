@@ -139,6 +139,113 @@ fun MonthlySummaryPanel(
 }
 
 @Composable
+fun DailySummaryPanel(
+    state: MonthlySummaryUiState,
+    onDismiss: () -> Unit,
+    onPlayModeChange: (Boolean) -> Unit,
+    onSpeedChange: (Float) -> Unit,
+    onTextEnabledChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var selectedIndex by remember(state.monthStart, state.slides) { mutableIntStateOf(0) }
+    var selectedMediaIndex by remember(state.monthStart, selectedIndex) { mutableIntStateOf(0) }
+    var playing by remember(state.isPlayMode) { mutableStateOf(state.isPlayMode) }
+    val dayFormat = remember { SimpleDateFormat("yyyy年M月d日 EEEE", Locale.getDefault()) }
+    val slideDayFormat = remember { SimpleDateFormat("M月d日", Locale.getDefault()) }
+    val currentSlide = state.slides.getOrNull(selectedIndex)
+    val currentMedia = currentSlide?.photos?.getOrNull(selectedMediaIndex)
+
+    fun advancePlayback() {
+        val slide = state.slides.getOrNull(selectedIndex)
+        if (slide != null && selectedMediaIndex < slide.photos.lastIndex) {
+            selectedMediaIndex++
+            return
+        }
+        if (selectedIndex < state.slides.lastIndex) {
+            selectedIndex++
+            selectedMediaIndex = 0
+        } else {
+            playing = false
+        }
+    }
+
+    LaunchedEffect(playing, selectedIndex, selectedMediaIndex, currentMedia?.mediaUri, state.playSpeedFactor, state.slides.size) {
+        if (playing && state.slides.isNotEmpty() && currentMedia?.mediaType != DiaryMediaType.VIDEO) {
+            delay(MonthlySummaryHelper.slideDelayMillis(state.playSpeedFactor))
+            advancePlayback()
+        }
+    }
+
+    ImmersiveSummaryDialog(onDismiss = onDismiss, modifier = modifier) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Brush.verticalGradient(listOf(Color(0xAA101828), Color(0xDD111827))))
+        ) {
+            Column(modifier = Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Default.AutoStories, contentDescription = null, tint = Color.White)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("今日总结", color = Color.White, style = MaterialTheme.typography.titleLarge)
+                        Text(dayFormat.format(state.monthStart), color = Color.White.copy(alpha = 0.78f), style = MaterialTheme.typography.bodySmall)
+                    }
+                    IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, contentDescription = "关闭", tint = Color.White) }
+                }
+
+                MonthlySummaryControls(
+                    playing = playing,
+                    textEnabled = state.isSummaryEnabled,
+                    speed = state.playSpeedFactor,
+                    canMovePrev = selectedIndex > 0,
+                    canMoveNext = selectedIndex < state.slides.lastIndex,
+                    onPlayPause = {
+                        playing = !playing
+                        onPlayModeChange(playing)
+                    },
+                    onStop = {
+                        playing = false
+                        selectedIndex = 0
+                        onPlayModeChange(false)
+                    },
+                    onPrev = { if (selectedIndex > 0) selectedIndex-- },
+                    onNext = { advancePlayback() },
+                    onSpeedChange = onSpeedChange,
+                    onTextEnabledChange = onTextEnabledChange
+                )
+
+                when (state.summaryStatus) {
+                    MonthlySummaryStatus.LOADING -> LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    MonthlySummaryStatus.ERROR -> Text("今日总结加载失败，请稍后重试。", color = Color.White)
+                    MonthlySummaryStatus.EMPTY -> MonthlySummaryEmpty(slideDayFormat.format(state.monthStart), modifier = Modifier.weight(1f))
+                    MonthlySummaryStatus.READY -> {
+                        if (playing && state.slides.isNotEmpty()) {
+                            MonthlySummarySlideCard(
+                                slide = state.slides[selectedIndex.coerceIn(0, state.slides.lastIndex)],
+                                dayText = slideDayFormat.format(state.slides[selectedIndex.coerceIn(0, state.slides.lastIndex)].dateStart),
+                                textEnabled = state.isSummaryEnabled,
+                                focusMediaIndex = selectedMediaIndex,
+                                autoPlayVideo = true,
+                                onVideoComplete = { advancePlayback() },
+                                modifier = Modifier.weight(1f)
+                            )
+                        } else {
+                            LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                if (state.isSummaryEnabled) {
+                                    item { SummaryTextCard(state.summaryText) }
+                                }
+                                items(state.slides) { slide ->
+                                    MonthlySummarySlideCard(slide = slide, dayText = slideDayFormat.format(slide.dateStart), textEnabled = state.isSummaryEnabled)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun ImmersiveSummaryDialog(onDismiss: () -> Unit, modifier: Modifier, content: @Composable () -> Unit) {
     val configuration = LocalConfiguration.current
     val compact = configuration.screenWidthDp < 600

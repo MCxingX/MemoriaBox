@@ -66,6 +66,17 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - Release tag_name 必须与 APK 的 versionName 完全匹配（加 v 前缀），否则 UpdateVerifier 会报"更新包版本与 GitHub Release 不匹配"。
   - 不要用 `./gradlew printVersion` 的输出作为 Release tag，因为它和 assembleRelease 运行时间不同。
 
+[构建与发布流程]
+- Date: 2026-09-02
+- Context: Agent 在执行事件对话框重写发版时确认
+- Category: 构建方法|运维部署
+- Instructions:
+  - Release 构建：`JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 ./gradlew :app:assembleRelease --no-daemon`（Android SDK 在 `/opt/android-sdk`）。约 8 分钟，R8 阶段峰值内存约 3.5GiB，须用 background_terminal_create 并设 memory_percent≥50。
+  - 快速语法验证用 `:app:compileDebugKotlin`（约 1.5 分钟，内存更低）。
+  - APK 产物：`app/build/outputs/apk/release/MemoriaBox.apk`，大小约 16M。
+  - 发布：`gh release create v<versionName> app/build/outputs/apk/release/MemoriaBox.apk --title "v<versionName>" --notes "..."`，notes 中附 `sha256sum` 计算的 SHA-256。
+  - 本地分支为 `main`，远程为 `origin/master`（`git push origin main` 推送）；TLS 偶发失败需重试。
+
 [核心交互保护]
 - Date: 2026-06-08
 - Context: 用户指出底部导航中间随机颜文字是刻意设计的核心功能

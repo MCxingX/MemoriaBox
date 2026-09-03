@@ -215,9 +215,7 @@ fun MainScreen(
                 BoxesScreen(
                     application = application,
                     onBoxClick = { navController.navigate(Screen.BoxDetail.createRoute(it)) },
-                    onNavigateToCalendar = { navController.navigate(Screen.Calendar.route) },
-                    onNavigateToPhotoWall = { navController.navigate(Screen.PhotoWall.route) },
-                    onNavigateToStatistics = { navController.navigate(Screen.Statistics.route) }
+                    onNavigateToCalendar = { navController.navigate(Screen.Calendar.route) }
                 )
             }
             composable(Screen.BoxDetail.route) { backStackEntry ->
@@ -234,6 +232,8 @@ fun MainScreen(
                 val diaries by calendarVM.allDiaries.collectAsState(initial = emptyList())
                 val diaryMedia by calendarVM.allDiaryMedia.collectAsState(initial = emptyList())
                 val monthlySummaryState by calendarVM.monthlySummary.collectAsState(initial = com.memoriabox.utils.MonthlySummaryUiState())
+                val dailySummaryState by calendarVM.dailySummary.collectAsState(initial = com.memoriabox.utils.MonthlySummaryUiState())
+                var dailySummaryDate by remember { mutableStateOf<Long?>(null) }
                 var addDateFromCalendar by remember { mutableStateOf<Long?>(null) }
                 var selectedCalendarEvent by remember { mutableStateOf<Event?>(null) }
                 var editCalendarEvent by remember { mutableStateOf<Event?>(null) }
@@ -284,6 +284,23 @@ fun MainScreen(
                         },
                         onLoadMonthlySummary = { monthStart ->
                             calendarVM.loadMonthlySummary(monthStart)
+                        },
+                        onPlayDaySummary = { date ->
+                            calendarVM.loadDailySummary(date)
+                            dailySummaryDate = date
+                        }
+                    )
+                }
+                dailySummaryDate?.let {
+                    DailySummaryPanel(
+                        state = dailySummaryState,
+                        onDismiss = { dailySummaryDate = null },
+                        onPlayModeChange = { },
+                        onSpeedChange = { speed ->
+                            AppSettings.setMonthlySummaryPlaySpeedFactor(calendarContext, speed)
+                        },
+                        onTextEnabledChange = { enabled ->
+                            AppSettings.setMonthlySummaryTextEnabled(calendarContext, enabled)
                         }
                     )
                 }
@@ -361,12 +378,6 @@ fun MainScreen(
                     }
                 )
                 }
-            }
-            composable(Screen.Statistics.route) {
-                StatisticsScreen(application)
-            }
-            composable(Screen.PhotoWall.route) {
-                PhotoWallScreen(application)
             }
             composable(Screen.Export.route) {
                 ExportScreen(

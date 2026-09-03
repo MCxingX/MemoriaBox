@@ -222,6 +222,16 @@ class BoxDetailViewModel(
         }
     }
 
+    fun togglePinned(event: Event) = viewModelScope.launch {
+        try {
+            eventRepository.updatePinned(event.id, !event.isPinned)
+            logRepository.logEventOperation("PIN", event.id, event.name)
+            backupManager.onDataChanged()
+        } catch (e: Exception) {
+            Log.e("BoxDetailVM", "Toggle pin failed", e)
+        }
+    }
+
     fun deleteEvent(event: Event) = viewModelScope.launch {
         try {
             notificationHelper.cancelReminder(event)
@@ -313,6 +323,9 @@ class CalendarViewModel(
     private val _monthlySummary = MutableStateFlow(MonthlySummaryUiState())
     val monthlySummary = _monthlySummary.asStateFlow()
 
+    private val _dailySummary = MutableStateFlow(MonthlySummaryUiState())
+    val dailySummary = _dailySummary.asStateFlow()
+
     fun getEventsForDay(timestamp: Long, events: List<Event>): List<Event> {
         val dayStart = startOfDay(timestamp)
         val dayEnd = dayStart + 86400000 - 1
@@ -358,6 +371,30 @@ class CalendarViewModel(
             Log.e("CalendarViewModel", "loadMonthlySummary failed", e)
         } finally {
             _monthlySummary.value = _monthlySummary.value.copy(isLoading = false)
+        }
+    }
+
+    fun loadDailySummary(dayStart: Long) = viewModelScope.launch {
+        val context = getApplication<Application>()
+        val normalizedDay = startOfDay(dayStart)
+        _dailySummary.value = _dailySummary.value.copy(monthStart = normalizedDay, isLoading = true)
+        try {
+            val start = normalizedDay
+            val end = normalizedDay + 24 * 60 * 60 * 1000 - 1
+            val diaries = diaryRepository.getDiariesBetweenOnce(start, end)
+            val media = if (diaries.isEmpty()) emptyList() else diaryRepository.getMediaForDiariesOnce(diaries.map { it.id })
+            _dailySummary.value = MonthlySummaryHelper.buildSummary(
+                monthStart = normalizedDay,
+                diaries = diaries,
+                media = media,
+                summaryEnabled = AppSettings.getMonthlySummaryTextEnabled(context),
+                playMode = AppSettings.getMonthlySummaryPlayMode(context),
+                playSpeedFactor = AppSettings.getMonthlySummaryPlaySpeedFactor(context)
+            )
+        } catch (e: Exception) {
+            Log.e("CalendarViewModel", "loadDailySummary failed", e)
+        } finally {
+            _dailySummary.value = _dailySummary.value.copy(isLoading = false)
         }
     }
 
