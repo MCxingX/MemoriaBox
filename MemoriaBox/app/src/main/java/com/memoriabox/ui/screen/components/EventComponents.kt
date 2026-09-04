@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
@@ -103,7 +104,7 @@ fun EnhancedEventGrid(
 }
 
 @Composable
-fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit, onStyleChange: (String) -> Unit = {}) {
+fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit, onStyleChange: (String) -> Unit = {}, listSpacing: Boolean = false) {
     val daysRemaining = calculateDays(event)
     val styleOptions = remember {
         listOf(
@@ -153,6 +154,21 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
                     .aspectRatio(adaptiveAspect, matchHeightConstraintsFirst = false)
             } else {
                 Modifier.aspectRatio(1f)
+            }
+        )
+        .then(
+            if (listSpacing) {
+                Modifier.layout { measurable, constraints ->
+                    val placeable = measurable.measure(constraints)
+                    val minGap = 6.dp.toPx().toInt()
+                    val maxGap = 16.dp.toPx().toInt()
+                    val gapPx = (placeable.height * 0.04f).toInt().coerceIn(minGap, maxGap)
+                    layout(placeable.width, placeable.height + gapPx) {
+                        placeable.placeRelative(0, 0)
+                    }
+                }
+            } else {
+                Modifier
             }
         )
         .shadow(elevation = 3.dp, shape = RoundedCornerShape(20.dp))

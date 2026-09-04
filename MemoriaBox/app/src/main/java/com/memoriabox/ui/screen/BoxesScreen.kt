@@ -602,22 +602,21 @@ fun AllEventsTab(
         }
     } else if (upcomingEnabled) {
         events.forEach { event ->
-            EnhancedEventCard(event = event, onClick = { onEventClick(event) }, onLongPress = { onEventLongClick(event) })
-            Spacer(Modifier.height(eventSpacing))
+            EnhancedEventCard(event = event, onClick = { onEventClick(event) }, onLongPress = { onEventLongClick(event) }, listSpacing = true)
         }
     } else if (pinnedEvents.isNotEmpty()) {
         Text("置顶", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.height(eventSpacing))
         pinnedEvents.forEach { event ->
-            EnhancedEventCard(event = event, onClick = { onEventClick(event) }, onLongPress = { onEventLongClick(event) })
+            EnhancedEventCard(event = event, onClick = { onEventClick(event) }, onLongPress = { onEventLongClick(event) }, listSpacing = true)
+        }
+        if (normalEvents.isNotEmpty()) {
             Spacer(Modifier.height(eventSpacing))
         }
-        Spacer(Modifier.height(eventSpacing))
     }
     if (events.isNotEmpty() && !upcomingEnabled) {
         normalEvents.forEach { event ->
-            EnhancedEventCard(event = event, onClick = { onEventClick(event) }, onLongPress = { onEventLongClick(event) })
-            Spacer(Modifier.height(eventSpacing))
+            EnhancedEventCard(event = event, onClick = { onEventClick(event) }, onLongPress = { onEventLongClick(event) }, listSpacing = true)
         }
     }
 }
