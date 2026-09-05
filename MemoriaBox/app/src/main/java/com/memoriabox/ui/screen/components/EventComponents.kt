@@ -1340,7 +1340,7 @@ private fun MonthJumpDialog(initialMonth: Long, onDismiss: () -> Unit, onConfirm
             TextButton(onClick = {
                 val year = yearText.toIntOrNull()?.coerceIn(1900, 2100) ?: initial.get(Calendar.YEAR)
                 val month = monthText.toIntOrNull()?.coerceIn(1, 12) ?: initial.get(Calendar.MONTH) + 1
-                onConfirm(Calendar.getInstance().apply { set(year, month - 1, 1, 0, 0, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis)
+                onConfirm(Calendar.getInstance().apply { clear(); set(Calendar.ERA, java.util.GregorianCalendar.AD); set(year, month - 1, 1, 0, 0, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis)
             }) { Text("跳转") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
@@ -1626,8 +1626,8 @@ fun calculateDays(dateMillis: Long, type: EventType, lunar: String? = null): Lon
                 com.memoriabox.utils.AnnualDateUtils.daysUntil(dateMillis, now)
             }
         }
-        EventType.ANNIVERSARY -> TimeUnit.MILLISECONDS.toDays(now - dateMillis)
-        EventType.ELAPSED -> TimeUnit.MILLISECONDS.toDays(now - dateMillis)
+        EventType.ANNIVERSARY -> TimeUnit.MILLISECONDS.toDays(now - dateMillis).coerceAtLeast(0)
+        EventType.ELAPSED -> TimeUnit.MILLISECONDS.toDays(now - dateMillis).coerceAtLeast(0)
         EventType.BIRTHDAY -> {
             lunar?.let { lunarValue ->
                 LunarDateUtils.daysUntilNextOccurrence(lunarValue, now)?.let { return it }

@@ -20,7 +20,9 @@ object LunarDateUtils {
     fun monthDayToGregorian(year: Int, month: Int, day: Int): Long? {
         val cursor = Calendar.getInstance().apply {
             clear()
+            set(Calendar.ERA, java.util.GregorianCalendar.AD)
             set(year.coerceIn(1900, 2100), Calendar.JANUARY, 1, 0, 0, 0)
+            set(Calendar.MILLISECOND, 0)
         }
         repeat(420) {
             if (isYearMonthDay(cursor.timeInMillis, year, month, day)) return cursor.timeInMillis

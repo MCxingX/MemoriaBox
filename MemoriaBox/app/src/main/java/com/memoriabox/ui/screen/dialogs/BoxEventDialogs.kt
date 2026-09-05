@@ -1244,12 +1244,16 @@ fun DatePickerDialog(
         val selectedDay = Calendar.getInstance().apply { timeInMillis = selectedDate }.get(Calendar.DAY_OF_MONTH)
         visibleMonth = Calendar.getInstance().apply {
             clear()
+            set(Calendar.ERA, java.util.GregorianCalendar.AD)
             set(year.coerceIn(1900, 2100), month.coerceIn(0, 11), 1, 0, 0, 0)
         }
+        val maxDay = visibleMonth.getActualMaximum(Calendar.DAY_OF_MONTH)
         selectedDate = Calendar.getInstance().apply {
             clear()
+            set(Calendar.ERA, java.util.GregorianCalendar.AD)
             set(visibleMonth.get(Calendar.YEAR), visibleMonth.get(Calendar.MONTH), 1, 0, 0, 0)
-            set(Calendar.DAY_OF_MONTH, selectedDay.coerceIn(1, getActualMaximum(Calendar.DAY_OF_MONTH)))
+            set(Calendar.DAY_OF_MONTH, selectedDay.coerceIn(1, maxDay))
+            set(Calendar.MILLISECOND, 0)
         }.timeInMillis
         yearText = visibleMonth.get(Calendar.YEAR).toString()
     }
@@ -1347,6 +1351,7 @@ fun DatePickerDialog(
                                 if (day in 1..daysInMonth) {
                                     val dayMillis = Calendar.getInstance().apply {
                                         clear()
+                                        set(Calendar.ERA, java.util.GregorianCalendar.AD)
                                         set(
                                             visibleMonth.get(Calendar.YEAR),
                                             visibleMonth.get(Calendar.MONTH),
@@ -1355,6 +1360,7 @@ fun DatePickerDialog(
                                             0,
                                             0
                                         )
+                                        set(Calendar.MILLISECOND, 0)
                                     }.timeInMillis
                                     val isSelected = selectedCal.get(Calendar.YEAR) == visibleMonth.get(Calendar.YEAR) &&
                                         selectedCal.get(Calendar.MONTH) == visibleMonth.get(Calendar.MONTH) &&
@@ -1544,6 +1550,8 @@ private fun toLocalStartOfDay(timestamp: Long): Long {
 private fun localDateMillis(year: Int, month: Int, day: Int): Long {
     return Calendar.getInstance().apply {
         clear()
+        set(Calendar.ERA, java.util.GregorianCalendar.AD)
         set(year, month, day, 0, 0, 0)
+        set(Calendar.MILLISECOND, 0)
     }.timeInMillis
 }
