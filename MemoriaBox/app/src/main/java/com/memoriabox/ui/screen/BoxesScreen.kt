@@ -344,16 +344,16 @@ fun HomeDashboard(
     val sortedEvents = remember(events, upcomingEnabled, upcomingDays, now) {
         if (upcomingEnabled) {
             events.sortedWith(
-                compareBy<Event> { event ->
-                    val daysLeft = daysUntilNextOccurrence(event, now)
-                    when {
-                        daysLeft != null && daysLeft in 0..upcomingDays -> 0
-                        daysLeft != null && daysLeft > upcomingDays -> 1
-                        else -> 2
+                compareByDescending<Event> { it.isPinned }
+                    .thenBy { event ->
+                        val daysLeft = daysUntilNextOccurrence(event, now)
+                        when {
+                            daysLeft != null && daysLeft in 0..upcomingDays -> 0
+                            daysLeft != null && daysLeft > upcomingDays -> 1
+                            else -> 2
+                        }
                     }
-                }
                     .thenBy { event -> daysUntilNextOccurrence(event, now) ?: Long.MAX_VALUE }
-                    .thenByDescending { it.isPinned }
                     .thenBy { it.date }
             )
         } else {
@@ -380,6 +380,12 @@ fun HomeDashboard(
         Spacer(Modifier.height(adaptiveUi.sectionSpacing))
         HomeHeroCard(adaptiveUi = adaptiveUi)
         Spacer(Modifier.height(adaptiveUi.sectionSpacing + 8.dp))
+        CategoryFoldersTab(
+            boxes = boxes,
+            onBoxClick = onBoxClick,
+            onCreateBox = onCreateBox
+        )
+        Spacer(Modifier.height(adaptiveUi.sectionSpacing))
         AllEventsTab(
             events = visibleEvents,
             upcomingEnabled = upcomingEnabled,
@@ -736,7 +742,7 @@ private fun nextOccurrenceMillis(event: Event, nowMillis: Long): Long {
     if (event.type == EventType.BIRTHDAY && !event.lunar.isNullOrBlank()) {
         LunarDateUtils.nextOccurrenceMillis(event.lunar, nowMillis)?.let { return it }
     }
-    if (event.repeatYearly || event.type == EventType.BIRTHDAY || event.type == EventType.ANNIVERSARY) {
+    if (eventRepeatsYearly(event) || event.type == EventType.ANNIVERSARY) {
         if (event.lunar.isNullOrBlank()) {
             return com.memoriabox.utils.AnnualDateUtils.nextOccurrenceMillis(event.date, nowMillis)
         }

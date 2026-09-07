@@ -36,6 +36,7 @@ fun EventDetailDialog(
 ) {
     val context = LocalContext.current
     val days = com.memoriabox.ui.screen.components.calculateDays(event)
+    val statusText = com.memoriabox.ui.screen.components.eventStatusText(event, days)
     var showMenu by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     AlertDialog(
@@ -75,7 +76,7 @@ fun EventDetailDialog(
                             .padding(16.dp)
                     ) {
                         Text(days.toString(), style = MaterialTheme.typography.displayMedium, color = com.memoriabox.utils.ColorUtils.hexToColor(event.textColor))
-                        Text("还剩 $days 天 · ${eventTypeLabel(event.type)}", style = MaterialTheme.typography.titleMedium, color = com.memoriabox.utils.ColorUtils.hexToColor(event.textColor))
+                        Text("$statusText · ${eventTypeLabel(event.type)}", style = MaterialTheme.typography.titleMedium, color = com.memoriabox.utils.ColorUtils.hexToColor(event.textColor))
                     }
                 }
                 DetailLine("类型", eventTypeLabel(event.type))
@@ -127,7 +128,7 @@ fun EventDetailDialog(
                         text = { Text("分享文本") },
                         onClick = {
                             showMenu = false
-                            val shareText = "${event.name}\n${eventTypeLabel(event.type)}：还剩 $days 天\n日期：${com.memoriabox.ui.screen.components.formatDate(event.date)}\n${event.note}"
+                            val shareText = "${event.name}\n${eventTypeLabel(event.type)}：$statusText\n日期：${com.memoriabox.ui.screen.components.formatDate(event.date)}\n${event.note}"
                             context.startActivity(
                                 Intent.createChooser(
                                     Intent(Intent.ACTION_SEND).apply {

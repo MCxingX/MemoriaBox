@@ -59,6 +59,8 @@ import com.memoriabox.data.model.Box
 import com.memoriabox.data.model.Event
 import com.memoriabox.data.model.EventType
 import com.memoriabox.data.model.RepeatMode
+import com.memoriabox.data.model.TodoPriority
+import com.memoriabox.data.model.TodoStatus
 import com.memoriabox.utils.ColorUtils
 import com.memoriabox.utils.ImageImportUtils
 import kotlinx.coroutines.Dispatchers
@@ -423,6 +425,9 @@ fun EventDialog(
             note = note,
             reminderEnabled = reminderEnabled,
             reminderDays = reminderDays,
+            alarmEnabled = existingEvent?.alarmEnabled ?: false,
+            alarmTime = existingEvent?.alarmTime ?: "09:00",
+            cardStyleJson = existingEvent?.cardStyleJson,
             reminderOffsets = reminderOffsetsText.split(",").mapNotNull { it.trim().toIntOrNull() }.filter { it in 0..365 }.distinct().joinToString(",").ifBlank { reminderDays.toString() },
             avatarUri = backgroundUri,
             isPinned = existingEvent?.isPinned ?: false,
@@ -439,6 +444,9 @@ fun EventDialog(
             displayFields = displayFieldSet.filterValues { it }.keys.joinToString(","),
             isBirthday = selectedType == EventType.BIRTHDAY,
             repeatYearly = selectedType == EventType.BIRTHDAY || repeatMode == RepeatMode.YEARLY,
+            todoStatus = existingEvent?.todoStatus ?: TodoStatus.PENDING,
+            dueDate = existingEvent?.dueDate,
+            todoPriority = existingEvent?.todoPriority ?: TodoPriority.MEDIUM,
             createdAt = existingEvent?.createdAt ?: System.currentTimeMillis()
         )
         if (pushPlusEnabled && reminderEnabled) {
@@ -522,6 +530,11 @@ fun EventDialog(
                             overflow = TextOverflow.Ellipsis,
                             style = MaterialTheme.typography.bodySmall
                         )
+                    }
+                    if (selectedLunar != null) {
+                        OutlinedButton(onClick = { selectedLunar = null }) {
+                            Text("清除农历", style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                 }
 

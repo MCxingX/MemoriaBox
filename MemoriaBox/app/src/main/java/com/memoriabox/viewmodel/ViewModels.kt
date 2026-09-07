@@ -594,6 +594,7 @@ class BackupViewModel(
     init { backupManager.initialize() }
 
     fun saveBackupDirUri(uri: Uri) { backupManager.saveBackupDirUri(uri) }
+    fun hasBackupDir(): Boolean = backupManager.hasBackupDir
 
     fun updateConfig(config: BackupConfig) {
         backupManager.updateConfig(config)

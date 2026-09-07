@@ -63,6 +63,12 @@ class MemoriaApp : Application() {
         }
 
         try {
+            com.memoriabox.utils.CardSpacingCache.onAppStart(this)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to initialize card spacing cache", e)
+        }
+
+        try {
             if (AppSettings.getHolidayReminderEnabled(this)) {
                 HolidayReminderReceiver.schedule(this)
                 Log.d(TAG, "Holiday reminder scheduled")

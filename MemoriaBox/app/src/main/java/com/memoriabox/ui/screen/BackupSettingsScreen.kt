@@ -30,6 +30,7 @@ fun BackupSettingsScreen(
     val snackbarScope = rememberCoroutineScope()
     var backupPassword by rememberSaveable { mutableStateOf("") }
     var pendingImportUri by remember { mutableStateOf<Uri?>(null) }
+    var pendingImportConfirm by remember { mutableStateOf<Uri?>(null) }
     var importSummary by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(operationState.message) {
@@ -78,7 +79,7 @@ fun BackupSettingsScreen(
                     pendingImportUri = uri
                 } else {
                     pendingImportUri = null
-                    viewModel.importBackup(uri, "")
+                    pendingImportConfirm = uri
                 }
             }
         } else {
@@ -106,7 +107,25 @@ fun BackupSettingsScreen(
             onSelectDir = { dirPicker.launch(null) },
             onManualBackup = { exportPicker.launch(null) },
             onImport = { importPicker.launch(arrayOf("application/octet-stream", "application/x-sqlite3", "application/vnd.sqlite3", "*/*")) },
-            isBusy = operationState.inProgress
+            isBusy = operationState.inProgress,
+            autoBackupEnabled = viewModel.hasBackupDir()
+        )
+    }
+
+    pendingImportConfirm?.let { uri ->
+        AlertDialog(
+            onDismissRequest = { pendingImportConfirm = null },
+            title = { Text("确认导入备份") },
+            text = {
+                Text("导入会合并到当前数据。同 ID 的日子、日记和素材会被备份数据覆盖，其余内容保留。确认导入？")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.importBackup(uri, "")
+                    pendingImportConfirm = null
+                }) { Text("确认导入") }
+            },
+            dismissButton = { TextButton(onClick = { pendingImportConfirm = null }) { Text("取消") } }
         )
     }
 

@@ -166,7 +166,7 @@ fun StatisticsScreen(application: Application) {
                                     )
                                 }
                                 Text(
-                                    "${com.memoriabox.ui.screen.components.calculateDays(event.date, event.type, event.lunar)}天",
+                                    "${com.memoriabox.ui.screen.components.calculateDays(event)}天",
                                     color = MaterialTheme.colorScheme.primary,
                                     fontWeight = FontWeight.Bold
                                 )

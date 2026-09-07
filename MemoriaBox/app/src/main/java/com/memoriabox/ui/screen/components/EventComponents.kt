@@ -34,8 +34,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.layout
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
@@ -88,14 +88,15 @@ fun EnhancedEventGrid(
                 columns = GridCells.Fixed(2),
                 contentPadding = PaddingValues(16.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.Top
             ) {
                 items(events) { event ->
                     EnhancedEventCard(
                         event = event,
                         onClick = { onEventClick(event) },
                         onLongPress = { onEventEdit(event) },
-                        onStyleChange = { newTemplate -> onCardTemplateChange(event, newTemplate) }
+                        onStyleChange = { newTemplate -> onCardTemplateChange(event, newTemplate) },
+                        spacingMode = CardSpacingMode.Grid
                     )
                 }
             }
@@ -103,8 +104,10 @@ fun EnhancedEventGrid(
     }
 }
 
+enum class CardSpacingMode { None, List, Grid }
+
 @Composable
-fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit, onStyleChange: (String) -> Unit = {}, listSpacing: Boolean = false) {
+fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit, onStyleChange: (String) -> Unit = {}, listSpacing: Boolean = false, spacingMode: CardSpacingMode = if (listSpacing) CardSpacingMode.List else CardSpacingMode.None) {
     val daysRemaining = calculateDays(event)
     val styleOptions = remember {
         listOf(
@@ -145,6 +148,32 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
         }
     }
 
+    val configuration = LocalConfiguration.current
+    val adaptiveUi = rememberAdaptiveUiSize()
+    val resolvedSpacing = if (listSpacing) CardSpacingMode.List else spacingMode
+    val listGap = remember(event.id, event.avatarUri, imageRatio, resolvedSpacing, configuration.screenWidthDp, adaptiveUi.screenPadding) {
+        if (resolvedSpacing == CardSpacingMode.None) 0.dp
+        else {
+            val ratioKey = imageRatio?.let { String.format(java.util.Locale.US, "%.3f", it) } ?: "none"
+            val cacheKey = "${resolvedSpacing.name}:${event.id}:$ratioKey:${configuration.screenWidthDp}"
+            val gap = com.memoriabox.utils.CardSpacingCache.gapDp(context, cacheKey) {
+                when (resolvedSpacing) {
+                    CardSpacingMode.List -> com.memoriabox.utils.CardSpacingCache.listGapDp(
+                        configuration.screenWidthDp.toFloat(),
+                        adaptiveUi.screenPadding.value,
+                        imageRatio
+                    )
+                    CardSpacingMode.Grid -> com.memoriabox.utils.CardSpacingCache.gridGapDp(
+                        configuration.screenWidthDp.toFloat(),
+                        imageRatio
+                    )
+                    CardSpacingMode.None -> 0f
+                }
+            }
+            gap.dp
+        }
+    }
+
     val cardModifier = Modifier
         .fillMaxWidth()
         .then(
@@ -156,21 +185,7 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
                 Modifier.aspectRatio(1f)
             }
         )
-        .then(
-            if (listSpacing) {
-                Modifier.layout { measurable, constraints ->
-                    val placeable = measurable.measure(constraints)
-                    val minGap = 6.dp.toPx().toInt()
-                    val maxGap = 16.dp.toPx().toInt()
-                    val gapPx = (placeable.height * 0.04f).toInt().coerceIn(minGap, maxGap)
-                    layout(placeable.width, placeable.height + gapPx) {
-                        placeable.placeRelative(0, 0)
-                    }
-                }
-            } else {
-                Modifier
-            }
-        )
+        .then(if (resolvedSpacing != CardSpacingMode.None && listGap > 0.dp) Modifier.padding(bottom = listGap) else Modifier)
         .shadow(elevation = 3.dp, shape = RoundedCornerShape(20.dp))
         .pointerInput(event.id) {
             detectHorizontalDragGestures(
@@ -289,8 +304,8 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
     }
 }
 
-private fun eventStatusText(event: Event, daysRemaining: Long): String = when (event.type) {
-    EventType.COUNTDOWN -> "还剩 $daysRemaining 天"
+fun eventStatusText(event: Event, daysRemaining: Long): String = when (event.type) {
+    EventType.COUNTDOWN -> if (daysRemaining == 0L) "已到期" else "还剩 $daysRemaining 天"
     EventType.ANNIVERSARY -> "已走过 $daysRemaining 天"
     EventType.ELAPSED -> "已过去 $daysRemaining 天"
     EventType.BIRTHDAY -> if (daysRemaining == 0L) birthdayGreetingText(event.name) else "生日还有 $daysRemaining 天"
@@ -1613,21 +1628,40 @@ fun LogFilterBar(
     }
 }
 
-fun calculateDays(event: Event): Long = calculateDays(event.date, event.type, event.lunar)
+fun calculateDays(event: Event): Long = calculateDays(
+    dateMillis = event.date,
+    type = event.type,
+    lunar = event.lunar,
+    repeatsYearly = eventRepeatsYearly(event)
+)
 
 fun calculateDays(dateMillis: Long, type: EventType, lunar: String? = null): Long {
+    return calculateDays(dateMillis, type, lunar, repeatsYearly = type == EventType.BIRTHDAY)
+}
+
+fun calculateDays(
+    dateMillis: Long,
+    type: EventType,
+    lunar: String? = null,
+    repeatsYearly: Boolean
+): Long {
     val now = System.currentTimeMillis()
+    val today = startOfDayMillis(now)
     return when (type) {
         EventType.COUNTDOWN -> {
-            if (lunar != null) {
-                LunarDateUtils.daysUntilNextOccurrence(lunar, now)
-                    ?: com.memoriabox.utils.AnnualDateUtils.daysUntil(dateMillis, now)
+            if (repeatsYearly) {
+                if (!lunar.isNullOrBlank()) {
+                    LunarDateUtils.daysUntilNextOccurrence(lunar, now)
+                        ?: com.memoriabox.utils.AnnualDateUtils.daysUntil(dateMillis, now)
+                } else {
+                    com.memoriabox.utils.AnnualDateUtils.daysUntil(dateMillis, now)
+                }
             } else {
-                com.memoriabox.utils.AnnualDateUtils.daysUntil(dateMillis, now)
+                TimeUnit.MILLISECONDS.toDays(startOfDayMillis(dateMillis) - today).coerceAtLeast(0)
             }
         }
-        EventType.ANNIVERSARY -> TimeUnit.MILLISECONDS.toDays(now - dateMillis).coerceAtLeast(0)
-        EventType.ELAPSED -> TimeUnit.MILLISECONDS.toDays(now - dateMillis).coerceAtLeast(0)
+        EventType.ANNIVERSARY -> TimeUnit.MILLISECONDS.toDays(today - startOfDayMillis(dateMillis)).coerceAtLeast(0)
+        EventType.ELAPSED -> TimeUnit.MILLISECONDS.toDays(today - startOfDayMillis(dateMillis)).coerceAtLeast(0)
         EventType.BIRTHDAY -> {
             lunar?.let { lunarValue ->
                 LunarDateUtils.daysUntilNextOccurrence(lunarValue, now)?.let { return it }
@@ -1636,6 +1670,12 @@ fun calculateDays(dateMillis: Long, type: EventType, lunar: String? = null): Lon
         }
         EventType.TODO -> 0
     }
+}
+
+fun eventRepeatsYearly(event: Event): Boolean {
+    return event.repeatYearly ||
+        event.repeatMode == RepeatMode.YEARLY ||
+        event.type == EventType.BIRTHDAY
 }
 
 fun formatDate(timestamp: Long): String {

@@ -70,6 +70,7 @@ class BackupManager(
     private var debounceJob: Job? = null
     private var config = BackupConfig()
     private var backupDirUri: Uri? = null
+    val hasBackupDir: Boolean get() = backupDirUri != null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     companion object {

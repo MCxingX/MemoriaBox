@@ -127,7 +127,8 @@ fun BackupSettingsContent(
     onSelectDir: () -> Unit = {},
     onManualBackup: () -> Unit = {},
     onImport: () -> Unit = {},
-    isBusy: Boolean = false
+    isBusy: Boolean = false,
+    autoBackupEnabled: Boolean = false
 ) {
     Column(
         modifier = modifier
@@ -140,6 +141,13 @@ fun BackupSettingsContent(
         OutlinedCard(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text("本地备份", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    if (autoBackupEnabled) "自动备份已开启，数据变动后会自动备份到已选目录。"
+                    else "自动备份未开启，请先选择备份目录。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (autoBackupEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                )
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = backupPassword,
@@ -175,7 +183,7 @@ fun BackupSettingsContent(
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "备份文件可跨设备导入。导入会合并到当前数据，保留现有日子、日记和素材。",
+                    "备份文件可跨设备导入。导入会合并到当前数据，同 ID 内容会被覆盖，其余保留。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
