@@ -95,19 +95,19 @@ fun SettingsItem(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
-            modifier = Modifier.padding(if (adaptiveUi.compact) 12.dp else 16.dp),
+            modifier = Modifier.padding(adaptiveUi.cardPadding),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 modifier = Modifier
-                    .size(if (adaptiveUi.compact) 42.dp else 48.dp)
+                    .size(adaptiveUi.buttonHeight)
                     .clip(MaterialTheme.shapes.medium)
                     .background(gradient),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(icon, contentDescription = title, modifier = Modifier.size(if (adaptiveUi.compact) 22.dp else 25.dp), tint = Color.White)
+                Icon(icon, contentDescription = title, modifier = Modifier.size(adaptiveUi.iconMedium), tint = Color.White)
             }
-            Spacer(Modifier.width(if (adaptiveUi.compact) 12.dp else 16.dp))
+            Spacer(Modifier.width(adaptiveUi.cardPadding))
             Column(modifier = Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.titleMedium)
                 Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -130,18 +130,19 @@ fun BackupSettingsContent(
     isBusy: Boolean = false,
     autoBackupEnabled: Boolean = false
 ) {
+    val adaptiveUi = rememberAdaptiveUiSize()
     Column(
         modifier = modifier
-            .padding(16.dp)
+            .padding(adaptiveUi.screenPadding)
             .fillMaxWidth()
     ) {
         Text("备份设置", style = MaterialTheme.typography.titleLarge)
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(adaptiveUi.cardPadding))
         
         OutlinedCard(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(modifier = Modifier.padding(adaptiveUi.cardPadding)) {
                 Text("本地备份", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(adaptiveUi.sectionSpacing))
                 Text(
                     if (autoBackupEnabled) "自动备份已开启，数据变动后会自动备份到已选目录。"
                     else "自动备份未开启，请先选择备份目录。",

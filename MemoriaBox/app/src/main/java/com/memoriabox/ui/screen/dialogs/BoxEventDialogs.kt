@@ -61,6 +61,7 @@ import com.memoriabox.data.model.EventType
 import com.memoriabox.data.model.RepeatMode
 import com.memoriabox.data.model.TodoPriority
 import com.memoriabox.data.model.TodoStatus
+import com.memoriabox.ui.utils.rememberAdaptiveUiSize
 import com.memoriabox.utils.ColorUtils
 import com.memoriabox.utils.ImageImportUtils
 import kotlinx.coroutines.Dispatchers
@@ -101,6 +102,7 @@ fun BoxDialog(
     var selectedBgValue by remember { mutableStateOf(existingBox?.bgValue ?: "#7C4DFF") }
     var showEmojiPicker by remember { mutableStateOf(false) }
     var showColorPicker by remember { mutableStateOf(false) }
+    val adaptiveUi = rememberAdaptiveUiSize()
     val iconCropLauncher = com.memoriabox.utils.UCropHelper.rememberCropLauncher("box_icons") { result ->
         selectedIcon = result ?: selectedIcon
     }
@@ -129,21 +131,21 @@ fun BoxDialog(
                 )
 
                 if (existingBox != null) {
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(adaptiveUi.cardPadding))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        horizontalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing)
                     ) {
                     Column(
                         modifier = Modifier.weight(1f),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text("图标", style = MaterialTheme.typography.labelLarge)
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(adaptiveUi.sectionSpacing))
                         Box(
                             modifier = Modifier
-                                .size(48.dp)
+                                .size(adaptiveUi.buttonHeight)
                                 .clip(CircleShape)
                                 .background(MaterialTheme.colorScheme.primary.copy(0.2f))
                                 .clickable { showEmojiPicker = true }
@@ -169,10 +171,10 @@ fun BoxDialog(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text("背景", style = MaterialTheme.typography.labelLarge)
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(adaptiveUi.sectionSpacing))
                         Box(
                             modifier = Modifier
-                                .size(48.dp)
+                                .size(adaptiveUi.buttonHeight)
                                 .clip(CircleShape)
                                 .background(ColorUtils.hexToColor(selectedBgValue))
                                 .clickable { showColorPicker = true }
@@ -185,18 +187,18 @@ fun BoxDialog(
                     }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(adaptiveUi.cardPadding))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing)
                     ) {
                     OutlinedButton(
                         onClick = { showEmojiPicker = true },
                         modifier = Modifier.weight(1f)
                     ) {
                         Icon(Icons.Default.EmojiEmotions, contentDescription = null)
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.width(adaptiveUi.tightSpacing))
                         Text("选择图标")
                     }
                     OutlinedButton(
@@ -211,7 +213,7 @@ fun BoxDialog(
                         modifier = Modifier.weight(1f)
                     ) {
                         Icon(Icons.Default.AddPhotoAlternate, contentDescription = null)
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.width(adaptiveUi.tightSpacing))
                         Text("上传图片")
                     }
                     OutlinedButton(
@@ -219,7 +221,7 @@ fun BoxDialog(
                         modifier = Modifier.weight(1f)
                     ) {
                         Icon(Icons.Default.Palette, contentDescription = null)
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.width(adaptiveUi.tightSpacing))
                         Text("选择颜色")
                     }
                     }
@@ -348,9 +350,9 @@ fun EventDialog(
     val displayFieldSet = remember(existingEvent?.id) {
         mutableStateMapOf(
             "date" to (existingEvent?.displayFields?.contains("date") ?: true),
-            "note" to (existingEvent?.displayFields?.contains("note") ?: true),
-            "lunar" to (existingEvent?.displayFields?.contains("lunar") ?: true),
-            "reminder" to (existingEvent?.displayFields?.contains("reminder") ?: true)
+            "note" to (existingEvent?.displayFields?.contains("note") ?: false),
+            "lunar" to (existingEvent?.displayFields?.contains("lunar") ?: false),
+            "reminder" to (existingEvent?.displayFields?.contains("reminder") ?: false)
         )
     }
     var reminderDays by remember { mutableIntStateOf(existingEvent?.reminderDays ?: 1) }
@@ -406,12 +408,16 @@ fun EventDialog(
     }
 
     var basicExpanded by remember { mutableStateOf(true) }
-    var appearanceExpanded by remember { mutableStateOf(true) }
-    var repeatExpanded by remember {
-        mutableStateOf(existingEvent?.repeatMode?.let { it != RepeatMode.NONE } ?: false)
-    }
-    var reminderExpanded by remember {
-        mutableStateOf(existingEvent?.reminderEnabled ?: defaultReminderEnabled)
+    var appearanceExpanded by remember { mutableStateOf(false) }
+    var repeatExpanded by remember { mutableStateOf(false) }
+    var reminderExpanded by remember { mutableStateOf(false) }
+    var moreExpanded by remember { mutableStateOf(!existingEvent?.lunar.isNullOrBlank()) }
+    var reminderAdvancedExpanded by remember {
+        mutableStateOf(
+            reminderOffsetsText.split(",").mapNotNull { it.trim().toIntOrNull() }.distinct().let { offsets ->
+                offsets.size > 1 || offsets.any { it !in setOf(0, 1, 7) }
+            }
+        )
     }
 
     val saveEvent: () -> Unit = {
@@ -455,6 +461,7 @@ fun EventDialog(
         onSave(event)
     }
 
+    val adaptiveUi = rememberAdaptiveUiSize()
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = true, dismissOnClickOutside = false)
@@ -464,7 +471,7 @@ fun EventDialog(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 4.dp, end = 8.dp, top = 8.dp, bottom = 4.dp),
+                        .padding(start = adaptiveUi.tightSpacing, end = adaptiveUi.sectionSpacing, top = adaptiveUi.sectionSpacing, bottom = adaptiveUi.tightSpacing),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = onDismiss) {
@@ -473,7 +480,7 @@ fun EventDialog(
                     Text(
                         if (existingEvent == null) "添加日子" else "编辑日子",
                         style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.weight(1f).padding(start = 4.dp)
+                        modifier = Modifier.weight(1f).padding(start = adaptiveUi.tightSpacing)
                     )
                     TextButton(onClick = saveEvent, enabled = name.isNotBlank() && selectedDate != null) {
                         Text("保存", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -484,9 +491,9 @@ fun EventDialog(
                     modifier = Modifier
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp)
-                        .padding(top = 14.dp, bottom = 28.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                        .padding(horizontal = adaptiveUi.screenPadding)
+                        .padding(top = adaptiveUi.cardPadding, bottom = adaptiveUi.screenPadding * 1.75f),
+                    verticalArrangement = Arrangement.spacedBy(adaptiveUi.cardPadding)
                 ) {
                 EditSection(title = "基本信息", expanded = basicExpanded, onToggle = { basicExpanded = !basicExpanded }) {
                 OutlinedTextField(
@@ -496,7 +503,7 @@ fun EventDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(adaptiveUi.contentSpacing))
 
                 OutlinedTextField(
                     value = selectedDate?.let { formatDate(it) } ?: "",
@@ -513,39 +520,14 @@ fun EventDialog(
                     }
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = { showLunarCalendar = true },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(
-                            selectedLunar ?: "选择农历",
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-                    if (selectedLunar != null) {
-                        OutlinedButton(onClick = { selectedLunar = null }) {
-                            Text("清除农历", style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(adaptiveUi.contentSpacing))
 
                 if (availableBoxes.isNotEmpty()) {
                     Text("所属分类", style = MaterialTheme.typography.labelLarge)
                     FlowRow(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing),
+                        verticalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing)
                     ) {
                         availableBoxes.forEach { box ->
                             FilterChip(
@@ -559,15 +541,15 @@ fun EventDialog(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(adaptiveUi.contentSpacing))
                 }
 
                 if (allowTypeChange) {
                     Text("事件类型", style = MaterialTheme.typography.labelLarge)
                     FlowRow(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing),
+                        verticalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing)
                     ) {
                         EventType.entries.forEach { type ->
                             FilterChip(
@@ -607,7 +589,7 @@ fun EventDialog(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(adaptiveUi.contentSpacing))
 
                 OutlinedTextField(
                     value = note,
@@ -710,17 +692,17 @@ fun EventDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(adaptiveUi.contentSpacing))
 
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
+                    shape = RoundedCornerShape(adaptiveUi.cardRadius),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
                 ) {
                     Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                        modifier = Modifier.padding(adaptiveUi.cardPadding),
+                        verticalArrangement = Arrangement.spacedBy(adaptiveUi.contentSpacing)
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -755,8 +737,8 @@ fun EventDialog(
                         )
                         FlowRow(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing),
+                            verticalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing)
                         ) {
                             listOf(
                                 "HERO" to "封面",
@@ -775,24 +757,6 @@ fun EventDialog(
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    ColorSelectButton("起色", gradientStart, { showColorPickerFor = "start" }, Modifier.weight(1f))
-                    ColorSelectButton("止色", gradientEnd, { showColorPickerFor = "end" }, Modifier.weight(1f))
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-                ColorSelectButton("字体颜色", textColor, { showColorPickerFor = "text" }, Modifier.fillMaxWidth())
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("展示字段", style = MaterialTheme.typography.labelMedium)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("date" to "日期", "note" to "备注", "lunar" to "农历", "reminder" to "提醒").forEach { (key, label) ->
-                        FilterChip(
-                            selected = displayFieldSet[key] == true,
-                            onClick = { displayFieldSet[key] = displayFieldSet[key] != true },
-                            label = { Text(label) }
-                        )
-                    }
-                }
                 }
 
                 EditSection(title = "重复规则", expanded = repeatExpanded, onToggle = { repeatExpanded = !repeatExpanded }) {
@@ -800,8 +764,8 @@ fun EventDialog(
                     Text("重复规则", style = MaterialTheme.typography.labelLarge)
                     FlowRow(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing),
+                        verticalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing)
                     ) {
                         listOf(
                             RepeatMode.NONE to "不重复",
@@ -822,8 +786,8 @@ fun EventDialog(
                         }
                     }
                     if (repeatMode in listOf(RepeatMode.CUSTOM_DAYS, RepeatMode.CUSTOM_WEEKS, RepeatMode.CUSTOM_MONTHS)) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Spacer(modifier = Modifier.height(adaptiveUi.sectionSpacing))
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing)) {
                             Text("每", style = MaterialTheme.typography.bodySmall)
                             OutlinedTextField(
                                 value = repeatInterval.toString(),
@@ -843,8 +807,8 @@ fun EventDialog(
                         }
                     }
                     if (repeatMode != RepeatMode.NONE) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        Spacer(modifier = Modifier.height(adaptiveUi.sectionSpacing))
+                        Row(horizontalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing), modifier = Modifier.fillMaxWidth()) {
                             OutlinedTextField(
                                 value = repeatCountText,
                                 onValueChange = { repeatCountText = it.filter { char -> char.isDigit() } },
@@ -880,57 +844,44 @@ fun EventDialog(
                     }
 
                     if (reminderEnabled) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Text("提前", style = MaterialTheme.typography.bodySmall)
-                            OutlinedTextField(
-                                value = reminderDays.toString(),
-                                onValueChange = {
-                                    reminderDays = it.toIntOrNull()?.coerceIn(0, 365) ?: 1
-                                },
-                                modifier = Modifier.width(88.dp),
-                                singleLine = true,
-                                textStyle = MaterialTheme.typography.bodySmall
-                            )
-                            Text("天提醒", style = MaterialTheme.typography.bodySmall)
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = reminderOffsetsText,
-                            onValueChange = { reminderOffsetsText = it.filter { char -> char.isDigit() || char == ',' } },
-                            label = { Text("多提醒点") },
-                            placeholder = { Text("例如 0,1,3,7") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("提醒时间", style = MaterialTheme.typography.labelMedium)
+                        Spacer(modifier = Modifier.height(adaptiveUi.sectionSpacing))
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing), verticalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing)) {
                             listOf(
                                 "当天" to 0,
-                                "提前1天" to 1,
-                                "提前3天" to 3,
-                                "提前7天" to 7,
-                                "提前30天" to 30
+                                "提前 1 天" to 1,
+                                "提前 7 天" to 7
                             ).forEach { (label, offset) ->
-                                val offsets = reminderOffsetsText.split(",").mapNotNull { it.trim().toIntOrNull() }.toSet()
                                 FilterChip(
-                                    selected = offset in offsets,
+                                    selected = reminderDays == offset && !reminderAdvancedExpanded,
                                     onClick = {
-                                        val updated = if (offset in offsets) offsets - offset else offsets + offset
-                                        reminderOffsetsText = updated.sorted().joinToString(",")
+                                        reminderDays = offset
+                                        reminderOffsetsText = offset.toString()
+                                        reminderAdvancedExpanded = false
                                     },
                                     label = { Text(label) }
                                 )
                             }
                         }
-                        Text(
-                            "0 表示当天提醒，多个提醒点用英文逗号分隔",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
+                        TextButton(onClick = { reminderAdvancedExpanded = !reminderAdvancedExpanded }) {
+                            Text(if (reminderAdvancedExpanded) "收起高级" else "高级提醒")
+                        }
+                        if (reminderAdvancedExpanded) {
+                            OutlinedTextField(
+                                value = reminderOffsetsText,
+                                onValueChange = { reminderOffsetsText = it.filter { char -> char.isDigit() || char == ',' } },
+                                label = { Text("多提醒点") },
+                                placeholder = { Text("例如 0,1,3,7") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
+                            )
+                            Text(
+                                "0 表示当天提醒，多个提醒点用英文逗号分隔",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(adaptiveUi.sectionSpacing))
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.clickable { pushPlusEnabled = !pushPlusEnabled }
@@ -967,6 +918,49 @@ fun EventDialog(
                         }
                     }
                 }
+                }
+
+                EditSection(title = "更多", expanded = moreExpanded, onToggle = { moreExpanded = !moreExpanded }) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { showLunarCalendar = true },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                selectedLunar ?: "选择农历",
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        if (selectedLunar != null) {
+                            OutlinedButton(onClick = { selectedLunar = null }) {
+                                Text("清除农历", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(adaptiveUi.contentSpacing))
+                    Row(horizontalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing), modifier = Modifier.fillMaxWidth()) {
+                        ColorSelectButton("起色", gradientStart, { showColorPickerFor = "start" }, Modifier.weight(1f))
+                        ColorSelectButton("止色", gradientEnd, { showColorPickerFor = "end" }, Modifier.weight(1f))
+                    }
+                    Spacer(modifier = Modifier.height(adaptiveUi.sectionSpacing))
+                    ColorSelectButton("字体颜色", textColor, { showColorPickerFor = "text" }, Modifier.fillMaxWidth())
+                    Spacer(modifier = Modifier.height(adaptiveUi.sectionSpacing))
+                    Text("展示字段", style = MaterialTheme.typography.labelMedium)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing), verticalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing)) {
+                        listOf("date" to "日期", "note" to "备注", "lunar" to "农历", "reminder" to "提醒").forEach { (key, label) ->
+                            FilterChip(
+                                selected = displayFieldSet[key] == true,
+                                onClick = { displayFieldSet[key] = displayFieldSet[key] != true },
+                                label = { Text(label) }
+                            )
+                        }
+                    }
                 }
                 }
             }
@@ -1036,9 +1030,10 @@ private fun EditSection(
     onToggle: () -> Unit,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val adaptiveUi = rememberAdaptiveUiSize()
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(adaptiveUi.cardRadius),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.30f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
@@ -1047,7 +1042,7 @@ private fun EditSection(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable { onToggle() }
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                    .padding(horizontal = adaptiveUi.cardPadding, vertical = adaptiveUi.contentSpacing),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
@@ -1064,7 +1059,12 @@ private fun EditSection(
             }
             if (expanded) {
                 Column(
-                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 14.dp),
+                    modifier = Modifier.padding(
+                        start = adaptiveUi.cardPadding,
+                        end = adaptiveUi.cardPadding,
+                        top = adaptiveUi.tightSpacing,
+                        bottom = adaptiveUi.cardPadding
+                    ),
                     content = content
                 )
             }
@@ -1085,14 +1085,15 @@ private fun cardCropAspectRatio(template: String): Float = when (template) {
 
 @Composable
 fun ColorSelectButton(label: String, color: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    OutlinedButton(onClick = onClick, modifier = modifier.height(56.dp)) {
+    val adaptiveUi = rememberAdaptiveUiSize()
+    OutlinedButton(onClick = onClick, modifier = modifier.height(adaptiveUi.buttonHeight + adaptiveUi.tightSpacing)) {
         Box(
             modifier = Modifier
-                .size(22.dp)
+                .size(adaptiveUi.iconMedium)
                 .clip(CircleShape)
                 .background(safeDialogColor(color))
         )
-        Spacer(modifier = Modifier.width(8.dp))
+        Spacer(modifier = Modifier.width(adaptiveUi.sectionSpacing))
         Text("$label $color", maxLines = 1)
     }
 }
