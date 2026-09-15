@@ -98,7 +98,7 @@ data class Event(
     @ColumnInfo(name = "card_template")
     val cardTemplate: String = "HERO",
     @ColumnInfo(name = "display_fields")
-    val displayFields: String = "date",
+    val displayFields: String = "date,note,lunar,reminder",
     @ColumnInfo(name = "is_birthday")
     val isBirthday: Boolean = false,
     @ColumnInfo(name = "repeat_yearly")

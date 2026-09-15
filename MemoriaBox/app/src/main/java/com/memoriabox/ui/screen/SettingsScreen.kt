@@ -10,7 +10,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -72,7 +71,6 @@ fun SettingsScreen(
     var showMonthlySummarySettings by remember { mutableStateOf(false) }
     var showUpcomingSettings by remember { mutableStateOf(false) }
     var showHolidaySettings by remember { mutableStateOf(false) }
-    var advancedExpanded by rememberSaveable { mutableStateOf(false) }
     val updateState by UpdateManager.state.collectAsState()
     val adaptiveUi = rememberAdaptiveUiSize()
 
@@ -83,8 +81,9 @@ fun SettingsScreen(
             .padding(top = adaptiveUi.sectionSpacing, bottom = adaptiveUi.screenPadding)
     ) {
         SettingsHeroCard()
-        SettingsSectionTitle("常用", "主题、外观和备份")
+        SettingsSectionTitle("轻松一点", "先选一个舒服的颜色，再整理常用入口")
         ThemeModeCard(currentThemeMode = currentThemeMode, onThemeModeChange = onThemeModeChange)
+        SettingsSectionTitle("常用", "每天会用到的功能放在这里")
         SettingsItem(
             icon = Icons.Default.Palette,
             title = "个性化设置",
@@ -92,139 +91,103 @@ fun SettingsScreen(
             onClick = onNavigateToCustomization
         )
         SettingsItem(
+            icon = Icons.Default.Groups,
+            title = "好友管理",
+            description = "生日按一个月内临近优先排序，全部好友都会保留",
+            onClick = onNavigateToFriends
+        )
+
+        SettingsSectionTitle("记录和数据", "备份、同步、日记和月度总结")
+        
+        SettingsItem(
             icon = Icons.Default.Backup,
             title = "备份设置",
             description = "本地备份、导入导出",
             onClick = onBackupSettingsClick
         )
+        SettingsItem(
+            icon = Icons.Default.Cloud,
+            title = "WebDAV 同步",
+            description = "配置云端同步服务",
+            onClick = onWebDavSettingsClick
+        )
+        SettingsItem(
+            icon = Icons.Default.Edit,
+            title = "日记设置",
+            description = "滚动动画速度、开关",
+            onClick = { showDiarySettings = true }
+        )
+        SettingsItem(
+            icon = Icons.Default.AutoStories,
+            title = "月度总结",
+            description = "开关、自动推送、播放速度",
+            onClick = { showMonthlySummarySettings = true }
+        )
+        
+        SettingsSectionTitle("提醒", "需要跨平台推送时再开启")
 
-        SettingsSectionTitle("提醒", "首页即将到来和通知")
         SettingsItem(
             icon = Icons.Default.NotificationsActive,
             title = "即将到来",
             description = "首页显示、天数范围、颜色和提醒",
             onClick = { showUpcomingSettings = true }
         )
+
         SettingsItem(
-            icon = Icons.Default.Notifications,
-            title = "系统通知",
-            description = "打开系统设置管理通知权限",
-            onClick = {
-                val intent = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                    android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                        putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
-                    }
-                } else {
-                    android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                        data = android.net.Uri.fromParts("package", context.packageName, null)
-                    }
-                }
-                context.startActivity(intent)
-            }
+            icon = Icons.Default.Celebration,
+            title = "节假日提醒",
+            description = "每天上午提醒春节、中秋、国庆等节假日",
+            onClick = { showHolidaySettings = true }
         )
 
-        SettingsSectionTitle("高级", "PushPlus、同步和较少用到的选项")
-        Surface(
+        // PushPlus settings inline
+        Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = adaptiveUi.screenPadding, vertical = adaptiveUi.sectionSpacing / 2f)
-                .clickable { advancedExpanded = !advancedExpanded },
-            shape = MaterialTheme.shapes.large,
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)
+                .padding(horizontal = adaptiveUi.screenPadding, vertical = adaptiveUi.sectionSpacing),
+            shape = MaterialTheme.shapes.extraLarge,
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = adaptiveUi.cardPadding, vertical = adaptiveUi.contentSpacing),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("展开高级设置", style = MaterialTheme.typography.titleSmall)
-                    Text("PushPlus、WebDAV、月度相册、节假日、日记速度", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Column(modifier = Modifier.padding(if (adaptiveUi.compact) 12.dp else 16.dp)) {
+                Text("PushPlus 推送", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("启用 PushPlus")
+                    Switch(
+                        checked = pushPlusEnabled,
+                        onCheckedChange = { 
+                            pushPlusEnabled = it
+                            pushPlusHelper.setPushPlusEnabled(it)
+                        }
+                    )
                 }
-                Icon(
-                    imageVector = if (advancedExpanded) Icons.Default.KeyboardArrowDown else Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                    contentDescription = if (advancedExpanded) "收起" else "展开"
-                )
-            }
-        }
-        if (advancedExpanded) {
-            SettingsItem(
-                icon = Icons.Default.Cloud,
-                title = "WebDAV 同步",
-                description = "配置云端同步服务",
-                onClick = onWebDavSettingsClick
-            )
-            SettingsItem(
-                icon = Icons.Default.Edit,
-                title = "日记设置",
-                description = "滚动动画速度、开关",
-                onClick = { showDiarySettings = true }
-            )
-            SettingsItem(
-                icon = Icons.Default.AutoStories,
-                title = "月度总结",
-                description = "开关、自动推送、播放速度",
-                onClick = { showMonthlySummarySettings = true }
-            )
-            SettingsItem(
-                icon = Icons.Default.Celebration,
-                title = "节假日提醒",
-                description = "每天上午提醒春节、中秋、国庆等节假日",
-                onClick = { showHolidaySettings = true }
-            )
-            SettingsItem(
-                icon = Icons.Default.Groups,
-                title = "好友管理",
-                description = "生日按一个月内临近优先排序",
-                onClick = onNavigateToFriends
-            )
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = adaptiveUi.screenPadding, vertical = adaptiveUi.sectionSpacing),
-                shape = MaterialTheme.shapes.extraLarge,
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-            ) {
-                Column(modifier = Modifier.padding(adaptiveUi.cardPadding)) {
-                    Text("PushPlus 推送", style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.height(adaptiveUi.sectionSpacing))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("启用 PushPlus")
-                        Switch(
-                            checked = pushPlusEnabled,
-                            onCheckedChange = {
-                                pushPlusEnabled = it
-                                pushPlusHelper.setPushPlusEnabled(it)
-                            }
-                        )
-                    }
-                    if (pushPlusEnabled) {
-                        Spacer(Modifier.height(adaptiveUi.sectionSpacing))
-                        OutlinedTextField(
-                            value = pushPlusToken,
-                            onValueChange = { pushPlusToken = it },
-                            label = { Text("Token") },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(Modifier.height(adaptiveUi.sectionSpacing))
-                        Row(horizontalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing)) {
-                            listOf("wechat", "webhook", "mail", "sms").forEach { ch ->
-                                FilterChip(
-                                    selected = pushPlusChannel == ch,
-                                    onClick = { pushPlusChannel = ch },
-                                    label = { Text(ch, maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                                )
-                            }
+                if (pushPlusEnabled) {
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = pushPlusToken,
+                        onValueChange = { pushPlusToken = it },
+                        label = { Text("Token") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf("wechat", "webhook", "mail", "sms").forEach { ch ->
+                            FilterChip(
+                                selected = pushPlusChannel == ch,
+                                onClick = { pushPlusChannel = ch },
+                                label = { Text(ch, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                            )
                         }
                     }
                 }
             }
         }
-
+        
         SettingsSectionTitle("关于", "版本和应用信息")
         
         val updateSummary = when (val state = updateState) {
@@ -255,7 +218,7 @@ fun SettingsScreen(
             onDismissRequest = { showAboutDialog = false },
             title = { Text("关于 念记") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing)) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("版本：${installedVersion.name} (${installedVersion.code})", style = MaterialTheme.typography.bodyMedium)
                     Text("念记 是一个本地优先的日子、纪念日、待办和照片记录工具。", style = MaterialTheme.typography.bodyMedium)
                     Text("数据默认保存在本机，可通过备份和 WebDAV 功能进行迁移或同步。", style = MaterialTheme.typography.bodyMedium)
@@ -302,12 +265,12 @@ fun SettingsHeroCard() {
                         )
                     )
                 )
-                .padding(adaptiveUi.cardPadding),
+                .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(adaptiveUi.cardPadding)
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            NianJiLogoMark(size = adaptiveUi.iconLarge * 1.5f)
-            Column(verticalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing), modifier = Modifier.weight(1f)) {
+            NianJiLogoMark(size = if (adaptiveUi.compact) 48.dp else 56.dp)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
                 Text("我的 念记", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.headlineSmall)
                 Text("数据安全、外观、提醒和常用工具都放在这里。", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
             }
@@ -325,7 +288,7 @@ fun ThemeModeCard(currentThemeMode: AppThemeMode, onThemeModeChange: (AppThemeMo
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.84f)),
         elevation = CardDefaults.cardElevation(defaultElevation = MemoriaDesign.softShadow)
     ) {
-        Column(modifier = Modifier.padding(adaptiveUi.cardPadding), verticalArrangement = Arrangement.spacedBy(adaptiveUi.contentSpacing)) {
+        Column(modifier = Modifier.padding(adaptiveUi.cardPadding), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -348,7 +311,7 @@ fun ThemeModeCard(currentThemeMode: AppThemeMode, onThemeModeChange: (AppThemeMo
                 val modes = AppThemeMode.entries.filter { it.group == group }
                 if (modes.isNotEmpty()) {
                     Text(group.label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing), verticalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing)) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         modes.forEach { mode ->
                             ThemePreviewCard(
                                 mode = mode,
@@ -365,23 +328,22 @@ fun ThemeModeCard(currentThemeMode: AppThemeMode, onThemeModeChange: (AppThemeMo
 
 @Composable
 private fun ThemePreviewCard(mode: AppThemeMode, selected: Boolean, onClick: () -> Unit) {
-    val adaptiveUi = rememberAdaptiveUiSize()
     OutlinedCard(
         onClick = onClick,
-        modifier = Modifier.width(adaptiveUi.filterMaxWidth * 0.79f),
-        shape = RoundedCornerShape(adaptiveUi.cardRadius),
+        modifier = Modifier.width(118.dp),
+        shape = RoundedCornerShape(14.dp),
         border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
         colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = adaptiveUi.contentSpacing, vertical = adaptiveUi.sectionSpacing),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .size(adaptiveUi.iconLarge)
-                    .clip(RoundedCornerShape(adaptiveUi.tightSpacing + 3.dp))
+                    .size(26.dp)
+                    .clip(RoundedCornerShape(9.dp))
                     .background(themePreviewBrush(mode))
             )
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
@@ -408,8 +370,8 @@ fun SettingsSectionTitle(title: String, description: String) {
         modifier = Modifier.padding(
             start = adaptiveUi.screenPadding,
             end = adaptiveUi.screenPadding,
-            top = adaptiveUi.screenPadding * 1.5f,
-            bottom = adaptiveUi.sectionSpacing
+            top = 24.dp,
+            bottom = 8.dp
         )
     ) {
         Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)

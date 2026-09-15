@@ -19,29 +19,18 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
-import com.memoriabox.ui.utils.rememberAdaptiveUiSize
-import com.memoriabox.data.model.DiaryEntry
 import com.memoriabox.data.model.DiaryMediaType
-import com.memoriabox.data.model.Event
 import com.memoriabox.utils.MonthlyPhotoItem
 import com.memoriabox.utils.MonthlySummaryHelper
 import com.memoriabox.utils.MonthlySummaryStatus
 import com.memoriabox.utils.MonthlySummaryUiState
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
-import java.util.Calendar
 import java.util.Locale
 
 @Composable
 fun MonthlySummaryPanel(
     state: MonthlySummaryUiState,
-    boardTotalCount: Int = 0,
-    boardMonthCount: Int = 0,
-    boardTodayCount: Int = 0,
-    nearestEvent: Event? = null,
-    heatEvents: List<Event> = emptyList(),
-    heatDiaries: List<DiaryEntry> = emptyList(),
-    heatMonth: Calendar? = null,
     onDismiss: () -> Unit,
     onMonthChange: (Long) -> Unit,
     onPlayModeChange: (Boolean) -> Unit,
@@ -79,14 +68,13 @@ fun MonthlySummaryPanel(
     }
 
     ImmersiveSummaryDialog(onDismiss = onDismiss, modifier = modifier) {
-        val adaptiveUi = rememberAdaptiveUiSize()
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Brush.verticalGradient(listOf(Color(0xAA101828), Color(0xDD111827))))
         ) {
-            Column(modifier = Modifier.fillMaxSize().padding(adaptiveUi.screenPadding), verticalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing)) {
+            Column(modifier = Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(Icons.Default.AutoStories, contentDescription = null, tint = Color.White)
                     Column(modifier = Modifier.weight(1f)) {
                         Text("月度总结", color = Color.White, style = MaterialTheme.typography.titleLarge)
@@ -95,16 +83,6 @@ fun MonthlySummaryPanel(
                     IconButton(onClick = { onMonthChange(addMonths(state.monthStart, -1)) }) { Icon(Icons.Default.ChevronLeft, contentDescription = "上月", tint = Color.White) }
                     IconButton(onClick = { onMonthChange(addMonths(state.monthStart, 1)) }) { Icon(Icons.Default.ChevronRight, contentDescription = "下月", tint = Color.White) }
                     IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, contentDescription = "关闭", tint = Color.White) }
-                }
-
-                CalendarBoardSummary(
-                    totalCount = boardTotalCount,
-                    monthCount = boardMonthCount,
-                    todayCount = boardTodayCount,
-                    nearestEvent = nearestEvent
-                )
-                heatMonth?.let { month ->
-                    CalendarHeatStrip(events = heatEvents, diaries = heatDiaries, month = month)
                 }
 
                 MonthlySummaryControls(
@@ -204,9 +182,8 @@ fun DailySummaryPanel(
                 .fillMaxSize()
                 .background(Brush.verticalGradient(listOf(Color(0xAA101828), Color(0xDD111827))))
         ) {
-            val adaptiveUi = rememberAdaptiveUiSize()
-            Column(modifier = Modifier.fillMaxSize().padding(adaptiveUi.screenPadding), verticalArrangement = Arrangement.spacedBy(adaptiveUi.contentSpacing)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing)) {
+            Column(modifier = Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(Icons.Default.AutoStories, contentDescription = null, tint = Color.White)
                     Column(modifier = Modifier.weight(1f)) {
                         Text("今日总结", color = Color.White, style = MaterialTheme.typography.titleLarge)
@@ -276,15 +253,14 @@ private fun ImmersiveSummaryDialog(onDismiss: () -> Unit, modifier: Modifier, co
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        val adaptiveUi = rememberAdaptiveUiSize()
-        val shape = if (compact) RoundedCornerShape(0.dp) else RoundedCornerShape(adaptiveUi.cardRadius * 1.75f)
+        val shape = if (compact) RoundedCornerShape(0.dp) else RoundedCornerShape(28.dp)
         val sizeModifier = if (compact) {
             Modifier.fillMaxSize()
         } else {
             Modifier
                 .fillMaxWidth(0.92f)
                 .fillMaxHeight(0.92f)
-                .widthIn(max = adaptiveUi.maxContentWidth)
+                .widthIn(max = 760.dp)
         }
         Surface(shape = shape, color = Color.Transparent, modifier = modifier.then(sizeModifier)) {
             content()
@@ -306,9 +282,8 @@ private fun MonthlySummaryControls(
     onSpeedChange: (Float) -> Unit,
     onTextEnabledChange: (Boolean) -> Unit
 ) {
-    val adaptiveUi = rememberAdaptiveUiSize()
-    Column(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(adaptiveUi.cardRadius)).background(Color.White.copy(alpha = 0.14f)).padding(adaptiveUi.contentSpacing), verticalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing)) {
+    Column(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.White.copy(alpha = 0.14f)).padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             IconButton(onClick = onPlayPause) { Icon(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = "播放暂停", tint = Color.White) }
             IconButton(onClick = onStop) { Icon(Icons.Default.Stop, contentDescription = "停止", tint = Color.White) }
             IconButton(onClick = onPrev, enabled = canMovePrev) { Icon(Icons.Default.SkipPrevious, contentDescription = "上一项", tint = Color.White) }
@@ -325,9 +300,8 @@ private fun MonthlySummaryControls(
 
 @Composable
 private fun SummaryTextCard(text: String) {
-    val adaptiveUi = rememberAdaptiveUiSize()
-    Card(colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.16f)), shape = RoundedCornerShape(adaptiveUi.cardRadius)) {
-        Text(text, modifier = Modifier.padding(adaptiveUi.cardPadding), color = Color.White, style = MaterialTheme.typography.bodyMedium)
+    Card(colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.16f)), shape = RoundedCornerShape(18.dp)) {
+        Text(text, modifier = Modifier.padding(14.dp), color = Color.White, style = MaterialTheme.typography.bodyMedium)
     }
 }
 
@@ -341,9 +315,8 @@ private fun MonthlySummarySlideCard(
     onVideoComplete: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val adaptiveUi = rememberAdaptiveUiSize()
-    Card(modifier = modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.16f)), shape = RoundedCornerShape(adaptiveUi.cardRadius)) {
-        Column(modifier = Modifier.padding(adaptiveUi.cardPadding), verticalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing)) {
+    Card(modifier = modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.16f)), shape = RoundedCornerShape(20.dp)) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(dayText, color = Color.White, style = MaterialTheme.typography.titleMedium)
             if (slide.photos.isEmpty()) {
                 Box(modifier = Modifier.fillMaxWidth().height(160.dp).clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
@@ -403,10 +376,9 @@ private fun MonthlySummaryMediaItem(
 
 @Composable
 private fun MonthlySummaryEmpty(monthText: String, modifier: Modifier = Modifier) {
-    val adaptiveUi = rememberAdaptiveUiSize()
-    Box(modifier = modifier.fillMaxWidth().clip(RoundedCornerShape(adaptiveUi.cardRadius)).background(Color.White.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+    Box(modifier = modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.White.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(Icons.Default.PhotoLibrary, contentDescription = null, tint = Color.White.copy(alpha = 0.82f), modifier = Modifier.size(adaptiveUi.iconLarge * 1.5f))
+            Icon(Icons.Default.PhotoLibrary, contentDescription = null, tint = Color.White.copy(alpha = 0.82f), modifier = Modifier.size(48.dp))
             Text("$monthText 暂无日记和照片记录", color = Color.White)
         }
     }
