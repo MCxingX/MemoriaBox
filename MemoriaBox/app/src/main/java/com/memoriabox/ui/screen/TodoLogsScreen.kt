@@ -1,6 +1,8 @@
 package com.memoriabox.ui.screen
 
 import android.app.Application
+import android.content.Context
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.filled.*
@@ -9,10 +11,16 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import com.memoriabox.data.model.*
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
+import androidx.navigation.compose.*
+import com.memoriabox.ui.navigation.Screen
 import com.memoriabox.ui.screen.components.*
+import com.memoriabox.data.model.*
 import com.memoriabox.utils.AppSettings
 import com.memoriabox.viewmodel.*
+import java.util.Calendar
+import java.util.Date
 
 @Composable
 fun ScreenBgWrapper(context: android.content.Context, page: String, content: @Composable () -> Unit) {
@@ -22,6 +30,7 @@ fun ScreenBgWrapper(context: android.content.Context, page: String, content: @Co
             "CALENDAR" -> AppSettings.getCalendarBgUri(context)
             "TODO" -> AppSettings.getTodoBgUri(context)
             "SETTINGS" -> AppSettings.getSettingsBgUri(context)
+            "LOGS" -> AppSettings.getSettingsBgUri(context)
             else -> null
         }
     }
@@ -77,3 +86,14 @@ fun TodoScreen(application: Application) {
         )
     }
 }
+
+@Composable
+fun LogsScreen(application: Application) {
+    val viewModel = remember { createLogViewModel(application) }
+    val logs by viewModel.logs.collectAsState(initial = emptyList())
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        LogsList(logs = logs)
+    }
+}
+
