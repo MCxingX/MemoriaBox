@@ -75,7 +75,8 @@ fun SettingsItem(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     title: String,
     description: String,
-    onClick: (() -> Unit)? = null
+    onClick: (() -> Unit)? = null,
+    trailingContent: (@Composable () -> Unit)? = null
 ) {
     val adaptiveUi = rememberAdaptiveUiSize()
     val gradient = Brush.linearGradient(
@@ -112,7 +113,9 @@ fun SettingsItem(
                 Text(title, style = MaterialTheme.typography.titleMedium)
                 Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            if (onClick != null) {
+            if (trailingContent != null) {
+                trailingContent()
+            } else if (onClick != null) {
                 Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.outline)
             }
         }
@@ -601,7 +604,7 @@ private fun MonthlyMediaStrip(title: String, items: List<String>, isVideo: Boole
                         } else {
                             AsyncImage(model = uri, contentDescription = "照片", contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
                         }
-                        IconButton(onClick = { onRemove(uri) }, modifier = Modifier.align(Alignment.TopEnd).size(adaptiveUi.chipHeight)) {
+                        IconButton(onClick = { onRemove(uri) }, modifier = Modifier.align(Alignment.TopEnd).size(adaptiveUi.buttonHeight)) {
                             Icon(Icons.Default.Close, contentDescription = "移除", tint = if (isVideo) MaterialTheme.colorScheme.primary else Color.White, modifier = Modifier.size(adaptiveUi.iconSmall))
                         }
                     }

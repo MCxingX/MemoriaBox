@@ -199,11 +199,13 @@ fun SettingsScreen(
             is UpdateState.Error -> state.message
             UpdateState.Idle -> "检查官方 GitHub Release 更新"
         }
+        val isBusy = updateState is UpdateState.Checking || updateState is UpdateState.Downloading
         SettingsItem(
             icon = Icons.Default.SystemUpdate,
             title = "检查更新",
             description = updateSummary,
-            onClick = onCheckUpdate
+            onClick = { if (!isBusy) onCheckUpdate() },
+            trailingContent = if (isBusy) { { CircularProgressIndicator(modifier = Modifier.size(adaptiveUi.iconSmall), strokeWidth = 2.dp) } } else null
         )
         SettingsItem(
             icon = Icons.Default.Info,

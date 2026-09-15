@@ -413,6 +413,8 @@ fun EventDialog(
     var reminderExpanded by remember {
         mutableStateOf(existingEvent?.reminderEnabled ?: defaultReminderEnabled)
     }
+    var showDiscardConfirm by remember { mutableStateOf(false) }
+    var showRemoveBgConfirm by remember { mutableStateOf(false) }
 
     val saveEvent: () -> Unit = {
         val event = Event(
@@ -459,7 +461,7 @@ fun EventDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = true, dismissOnClickOutside = false)
     ) {
-        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+        Surface(modifier = Modifier.fillMaxSize().navigationBarsPadding().imePadding(), color = MaterialTheme.colorScheme.surface) {
             Column(modifier = Modifier.fillMaxSize()) {
                 Row(
                     modifier = Modifier
@@ -467,7 +469,7 @@ fun EventDialog(
                         .padding(start = 4.dp, end = 8.dp, top = 8.dp, bottom = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = onDismiss) {
+                    IconButton(onClick = { showDiscardConfirm = true }) {
                         Icon(Icons.Default.Close, contentDescription = "关闭")
                     }
                     Text(
@@ -700,11 +702,7 @@ fun EventDialog(
 
                 if (backgroundUri != null) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        TextButton(onClick = {
-                            ImageImportUtils.removeEditState(context, backgroundUri)
-                            backgroundUri = null
-                            backgroundRatio = null
-                        }) {
+                        TextButton(onClick = { showRemoveBgConfirm = true }) {
                             Text("移除背景", style = MaterialTheme.typography.labelMedium)
                         }
                     }
@@ -830,7 +828,8 @@ fun EventDialog(
                                 onValueChange = { repeatInterval = it.toIntOrNull()?.coerceIn(1, 365) ?: 1 },
                                 modifier = Modifier.width(88.dp),
                                 singleLine = true,
-                                textStyle = MaterialTheme.typography.bodySmall
+                                textStyle = MaterialTheme.typography.bodySmall,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                             )
                             Text(
                                 when (repeatMode) {
@@ -851,7 +850,8 @@ fun EventDialog(
                                 label = { Text("重复次数") },
                                 placeholder = { Text("留空为不限") },
                                 modifier = Modifier.weight(1f),
-                                singleLine = true
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                             )
                             OutlinedButton(
                                 onClick = { showRepeatEndPicker = true },
@@ -892,7 +892,8 @@ fun EventDialog(
                                 },
                                 modifier = Modifier.width(88.dp),
                                 singleLine = true,
-                                textStyle = MaterialTheme.typography.bodySmall
+                                textStyle = MaterialTheme.typography.bodySmall,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                             )
                             Text("天提醒", style = MaterialTheme.typography.bodySmall)
                         }
@@ -903,7 +904,8 @@ fun EventDialog(
                             label = { Text("多提醒点") },
                             placeholder = { Text("例如 0,1,3,7") },
                             modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -971,6 +973,50 @@ fun EventDialog(
                 }
             }
         }
+    }
+
+    if (showDiscardConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDiscardConfirm = false },
+            title = { Text("放弃修改?") },
+            text = { Text("确定要放弃已编辑的内容吗？") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDiscardConfirm = false
+                    onDismiss()
+                }) {
+                    Text("放弃")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDiscardConfirm = false }) {
+                    Text("继续编辑")
+                }
+            }
+        )
+    }
+
+    if (showRemoveBgConfirm) {
+        AlertDialog(
+            onDismissRequest = { showRemoveBgConfirm = false },
+            title = { Text("移除背景?") },
+            text = { Text("确定要移除当前背景图吗？") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showRemoveBgConfirm = false
+                    backgroundUri?.let { ImageImportUtils.removeEditState(context, it) }
+                    backgroundUri = null
+                    backgroundRatio = null
+                }) {
+                    Text("移除")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRemoveBgConfirm = false }) {
+                    Text("取消")
+                }
+            }
+        )
     }
 
     if (showDatePicker) {
@@ -1381,7 +1427,7 @@ fun DatePickerDialog(
                                     Box(
                                         modifier = Modifier
                                             .weight(1f)
-                                            .height(44.dp)
+                                            .height(48.dp)
                                             .padding(2.dp)
                                             .clip(RoundedCornerShape(12.dp))
                                             .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent)
@@ -1395,7 +1441,7 @@ fun DatePickerDialog(
                                         )
                                     }
                                 } else {
-                                    Spacer(modifier = Modifier.weight(1f).height(44.dp))
+                                    Spacer(modifier = Modifier.weight(1f).height(48.dp))
                                 }
                             }
                         }

@@ -108,7 +108,18 @@ fun MonthlySummaryPanel(
 
                 when (state.summaryStatus) {
                     MonthlySummaryStatus.LOADING -> LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    MonthlySummaryStatus.ERROR -> Text("月度总结加载失败，请稍后重试。", color = Color.White)
+                    MonthlySummaryStatus.ERROR -> Column(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text("月度总结加载失败，请稍后重试。", color = Color.White)
+                        FilledTonalButton(onClick = { onMonthChange(state.monthStart) }) {
+                            Icon(Icons.Default.Refresh, contentDescription = null)
+                            Spacer(Modifier.width(4.dp))
+                            Text("重试")
+                        }
+                    }
                     MonthlySummaryStatus.EMPTY -> MonthlySummaryEmpty(monthFormat.format(state.monthStart), modifier = Modifier.weight(1f))
                     MonthlySummaryStatus.READY -> {
                         if (playing && state.slides.isNotEmpty()) {
@@ -215,7 +226,18 @@ fun DailySummaryPanel(
 
                 when (state.summaryStatus) {
                     MonthlySummaryStatus.LOADING -> LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    MonthlySummaryStatus.ERROR -> Text("今日总结加载失败，请稍后重试。", color = Color.White)
+                    MonthlySummaryStatus.ERROR -> Column(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text("今日总结加载失败，请稍后重试。", color = Color.White)
+                        FilledTonalButton(onClick = onDismiss) {
+                            Icon(Icons.Default.Refresh, contentDescription = null)
+                            Spacer(Modifier.width(4.dp))
+                            Text("重试")
+                        }
+                    }
                     MonthlySummaryStatus.EMPTY -> MonthlySummaryEmpty(slideDayFormat.format(state.monthStart), modifier = Modifier.weight(1f))
                     MonthlySummaryStatus.READY -> {
                         if (playing && state.slides.isNotEmpty()) {
@@ -262,7 +284,7 @@ private fun ImmersiveSummaryDialog(onDismiss: () -> Unit, modifier: Modifier, co
                 .fillMaxHeight(0.92f)
                 .widthIn(max = 760.dp)
         }
-        Surface(shape = shape, color = Color.Transparent, modifier = modifier.then(sizeModifier)) {
+        Surface(shape = shape, color = Color.Transparent, modifier = modifier.then(sizeModifier).imePadding().navigationBarsPadding()) {
             content()
         }
     }

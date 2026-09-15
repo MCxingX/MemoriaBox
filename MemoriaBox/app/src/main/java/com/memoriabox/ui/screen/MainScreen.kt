@@ -134,6 +134,13 @@ fun MainScreen(
         }
     }
 
+    val currentBackStackEntry by navController.currentBackStackEntryAsState()
+    LaunchedEffect(currentBackStackEntry?.destination?.route) {
+        val route = currentBackStackEntry?.destination?.route
+        val tabIndices = bottomNavItems.mapIndexed { i, item -> item.route to i }.toMap()
+        tabIndices[route]?.let { if (selectedTab != it) selectedTab = it }
+    }
+
     LaunchedEffect(initialMonthlySummaryMonth) {
         initialMonthlySummaryMonth?.let { targetMonth ->
             if (AppSettings.getMonthlySummaryEnabled(context)) {
@@ -190,7 +197,7 @@ fun MainScreen(
                             }
                         }
                     },
-                    label = { Text("", maxLines = 1) }
+                    label = { Text("添加", maxLines = 1) }
                 )
                 bottomNavItems.drop(2).forEachIndexed { offset, item ->
                     val index = offset + 2
@@ -237,6 +244,7 @@ fun MainScreen(
                 var addDateFromCalendar by remember { mutableStateOf<Long?>(null) }
                 var selectedCalendarEvent by remember { mutableStateOf<Event?>(null) }
                 var editCalendarEvent by remember { mutableStateOf<Event?>(null) }
+                var calendarEventForDelete by remember { mutableStateOf<Event?>(null) }
                 var showSummaryOverride by remember { mutableStateOf(false) }
                 val calendarContext = androidx.compose.ui.platform.LocalContext.current
                 val monthlySummaryEnabled = remember(settingsVersion) { AppSettings.getMonthlySummaryEnabled(calendarContext) }
@@ -341,12 +349,28 @@ fun MainScreen(
                             selectedCalendarEvent = null
                         },
                         onDelete = {
-                            mainViewModel.deleteQuickEvent(event)
+                            calendarEventForDelete = event
                             selectedCalendarEvent = null
                         },
                         onOpenCategory = {
                             selectedCalendarEvent = null
                             navController.navigate(Screen.BoxDetail.createRoute(event.boxId))
+                        }
+                    )
+                }
+                calendarEventForDelete?.let { event ->
+                    AlertDialog(
+                        onDismissRequest = { calendarEventForDelete = null },
+                        title = { Text("删除日子") },
+                        text = { Text("删除「${event.name}」后无法撤销，确认删除？") },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                mainViewModel.deleteQuickEvent(event)
+                                calendarEventForDelete = null
+                            }) { Text("删除", color = MaterialTheme.colorScheme.error) }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { calendarEventForDelete = null }) { Text("取消") }
                         }
                     )
                 }

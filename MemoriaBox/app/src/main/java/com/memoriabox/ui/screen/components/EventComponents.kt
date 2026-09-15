@@ -575,6 +575,7 @@ fun CalendarViewScreen(
     var selectedDiaryForView by remember { mutableStateOf<DiaryEntry?>(null) }
     var editingDiary by remember { mutableStateOf<DiaryEntry?>(null) }
     var editingDiaryDate by remember { mutableStateOf<Long?>(null) }
+    var diaryForDelete by remember { mutableStateOf<DiaryEntry?>(null) }
     var monthSwipeOffset by remember { mutableFloatStateOf(0f) }
     val animatedMonthSwipeOffset by animateFloatAsState(monthSwipeOffset, label = "calendarMonthSwipe")
 
@@ -742,7 +743,7 @@ fun CalendarViewScreen(
                 editingDiary = targetDiary
             },
             onDeleteDiary = { targetDiary ->
-                onDeleteDiary(targetDiary)
+                diaryForDelete = targetDiary
             }
         )
     }
@@ -758,7 +759,7 @@ fun CalendarViewScreen(
             },
             onDelete = {
                 selectedDiaryForView = null
-                onDeleteDiary(diary)
+                diaryForDelete = diary
             }
         )
     }
@@ -812,6 +813,23 @@ fun CalendarViewScreen(
             onPlayModeChange = onSummaryPlayModeChange,
             onSpeedChange = onSummarySpeedChange,
             onTextEnabledChange = onSummaryTextEnabledChange
+        )
+    }
+
+    diaryForDelete?.let { diary ->
+        AlertDialog(
+            onDismissRequest = { diaryForDelete = null },
+            title = { Text("删除日记") },
+            text = { Text("删除「${diary.content.take(20)}」后无法撤销，确认删除？") },
+            confirmButton = {
+                TextButton(onClick = {
+                    onDeleteDiary(diary)
+                    diaryForDelete = null
+                }) { Text("删除", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { diaryForDelete = null }) { Text("取消") }
+            }
         )
     }
 }

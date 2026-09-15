@@ -84,7 +84,7 @@ fun BoxesScreen(
     Box(modifier = Modifier.fillMaxSize()) {
         if (!homeBgUri.isNullOrBlank()) {
             AsyncImage(model = homeBgUri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
-            Box(modifier = Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.32f)))
+            Box(modifier = Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.45f)))
         } else {
             Box(
                 modifier = Modifier.matchParentSize().background(
