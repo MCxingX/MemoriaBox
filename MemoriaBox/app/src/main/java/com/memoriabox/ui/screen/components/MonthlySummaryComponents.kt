@@ -32,6 +32,8 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
+private val summaryScrimBrush = Brush.verticalGradient(listOf(Color(0xAA101828), Color(0xDD111827)))
+
 @Composable
 fun MonthlySummaryPanel(
     state: MonthlySummaryUiState,
@@ -83,7 +85,7 @@ fun MonthlySummaryPanel(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Brush.verticalGradient(listOf(Color(0xAA101828), Color(0xDD111827))))
+                .background(summaryScrimBrush)
         ) {
             Column(modifier = Modifier.fillMaxSize().padding(adaptiveUi.screenPadding), verticalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing)) {
@@ -144,7 +146,7 @@ fun MonthlySummaryPanel(
                                 modifier = Modifier.weight(1f)
                             )
                         } else {
-                            LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(adaptiveUi.contentSpacing)) {
                                 if (state.isSummaryEnabled) {
                                     item { SummaryTextCard(state.summaryText) }
                                 }
@@ -202,7 +204,7 @@ fun DailySummaryPanel(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Brush.verticalGradient(listOf(Color(0xAA101828), Color(0xDD111827))))
+                .background(summaryScrimBrush)
         ) {
             val adaptiveUi = rememberAdaptiveUiSize()
             Column(modifier = Modifier.fillMaxSize().padding(adaptiveUi.screenPadding), verticalArrangement = Arrangement.spacedBy(adaptiveUi.contentSpacing)) {
@@ -252,7 +254,7 @@ fun DailySummaryPanel(
                                 modifier = Modifier.weight(1f)
                             )
                         } else {
-                            LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(adaptiveUi.contentSpacing)) {
                                 if (state.isSummaryEnabled) {
                                     item { SummaryTextCard(state.summaryText) }
                                 }
@@ -346,9 +348,9 @@ private fun MonthlySummarySlideCard(
         Column(modifier = Modifier.padding(adaptiveUi.cardPadding), verticalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing)) {
             Text(dayText, color = Color.White, style = MaterialTheme.typography.titleMedium)
             if (slide.photos.isEmpty()) {
-                Box(modifier = Modifier.fillMaxWidth().height(160.dp).clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+                Box(modifier = Modifier.fillMaxWidth().height(adaptiveUi.homeRowMinHeight * 2f).clip(RoundedCornerShape(adaptiveUi.cardRadius)).background(Color.White.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Default.PhotoLibrary, contentDescription = null, tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(42.dp))
+                        Icon(Icons.Default.PhotoLibrary, contentDescription = null, tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(adaptiveUi.iconLarge * 1.3f))
                         Text("文字日记", color = Color.White.copy(alpha = 0.85f))
                     }
                 }

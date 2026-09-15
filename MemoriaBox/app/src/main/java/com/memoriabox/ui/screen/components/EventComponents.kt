@@ -173,6 +173,15 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
         }
     }
 
+    val fallbackBrush = remember(event.gradientStart, event.gradientEnd) {
+        Brush.linearGradient(
+            listOf(
+                ColorUtils.hexToColor(event.gradientStart),
+                ColorUtils.hexToColor(event.gradientEnd),
+            )
+        )
+    }
+
     val cardModifier = Modifier
         .fillMaxWidth()
         .then(
@@ -259,14 +268,7 @@ fun EnhancedEventCard(event: Event, onClick: () -> Unit, onLongPress: () -> Unit
                 Box(
                     modifier = Modifier
                         .matchParentSize()
-                        .background(
-                            Brush.linearGradient(
-                                listOf(
-                                    ColorUtils.hexToColor(event.gradientStart),
-                                    ColorUtils.hexToColor(event.gradientEnd),
-                                )
-                            )
-                        )
+                        .background(fallbackBrush)
                 )
             }
 
@@ -547,7 +549,7 @@ fun CalendarViewScreen(
     LaunchedEffect(initialShowSummary) {
         if (initialShowSummary) showMonthlySummary = true
     }
-    val monthFormat = SimpleDateFormat("yyyy年MM月", Locale.getDefault())
+    val monthFormat = remember { SimpleDateFormat("yyyy年MM月", Locale.getDefault()) }
     val cal = remember(currentMonthYear) {
         Calendar.getInstance().apply {
             val parts = currentMonthYear.split("-").map { it.toInt() }
@@ -579,6 +581,9 @@ fun CalendarViewScreen(
         diaries.groupBy { startOfDayMillis(it.dateStart) }
     }
 
+    val monthHeaderBrush = remember(themeTokens.calendarSelected, themeTokens.calendarToday, themeTokens.anniversaryMarker) {
+        Brush.linearGradient(listOf(themeTokens.calendarSelected, themeTokens.calendarToday, themeTokens.anniversaryMarker))
+    }
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -634,7 +639,7 @@ fun CalendarViewScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Brush.linearGradient(listOf(themeTokens.calendarSelected, themeTokens.calendarToday, themeTokens.anniversaryMarker)))
+                    .background(monthHeaderBrush)
                     .padding(horizontal = adaptiveUi.cardPadding, vertical = adaptiveUi.sectionSpacing),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
@@ -679,13 +684,10 @@ fun CalendarViewScreen(
         }
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val horizontalPadding = if (adaptiveUi.compact) adaptiveUi.sectionSpacing else adaptiveUi.screenPadding
-            val minCell = if (adaptiveUi.compact) 44.dp else 52.dp
-            val maxCell = if (adaptiveUi.roomy) 88.dp else 72.dp
-            val fallbackCell = if (adaptiveUi.compact) 44.dp else 52.dp
-            val widthCell = if (maxWidth.value.isFinite() && maxWidth > 0.dp) (maxWidth - horizontalPadding * 2) / 7 else fallbackCell
+            val widthCell = if (maxWidth.value.isFinite() && maxWidth > 0.dp) (maxWidth - horizontalPadding * 2) / 7 else adaptiveUi.calendarCellMin
             val fontScale = LocalDensity.current.fontScale
             val cellSize = (widthCell * (1f + (fontScale - 1f).coerceAtLeast(0f) * 0.35f))
-                .coerceIn(minCell, maxCell)
+                .coerceIn(adaptiveUi.calendarCellMin, adaptiveUi.calendarCellMax)
             CalendarGrid(
                 currentMonth = cal,
                 events = events,
@@ -817,76 +819,6 @@ fun CalendarViewScreen(
             onSpeedChange = onSummarySpeedChange,
             onTextEnabledChange = onSummaryTextEnabledChange
         )
-    }
-}
-
-@Composable
-private fun MonthlyMediaFloatingButton(
-    hasMedia: Boolean,
-    mediaCount: Int,
-    month: Int,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    val gradient = if (hasMedia) {
-        Brush.linearGradient(listOf(Color(0xFFFFB86B), Color(0xFFFF6B9A), Color(0xFF7C5CFF)))
-    } else {
-        Brush.linearGradient(listOf(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.outline.copy(alpha = 0.54f)))
-    }
-    Box(
-        modifier = modifier
-            .size(64.dp)
-            .shadow(10.dp, RoundedCornerShape(22.dp))
-            .clip(RoundedCornerShape(22.dp))
-            .background(gradient)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .background(Color.White.copy(alpha = if (hasMedia) 0.12f else 0.28f))
-        )
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Icon(
-                if (hasMedia) Icons.Default.Collections else Icons.Default.Inventory2,
-                contentDescription = "${month}月素材",
-                tint = if (hasMedia) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(25.dp)
-            )
-            Text(
-                "${month}月",
-                style = MaterialTheme.typography.labelSmall,
-                color = if (hasMedia) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        if (hasMedia) {
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(5.dp),
-                shape = RoundedCornerShape(999.dp),
-                color = Color(0xFFFFF4C2),
-                shadowElevation = 2.dp
-            ) {
-                Text(
-                    text = mediaCount.coerceAtMost(99).toString(),
-                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFF7A3B00),
-                    maxLines = 1
-                )
-            }
-        } else {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(8.dp)
-                    .size(9.dp)
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(MaterialTheme.colorScheme.outline)
-            )
-        }
     }
 }
 
@@ -1051,6 +983,10 @@ internal fun CalendarBoardSummary(
     nearestEvent: Event?
 ) {
     val adaptiveUi = rememberAdaptiveUiSize()
+    val dayFormat = remember { SimpleDateFormat("M月d日", Locale.getDefault()) }
+    val nearestEventLabel = remember(nearestEvent?.id, nearestEvent?.name, nearestEvent?.date) {
+        nearestEvent?.let { "最近日子：${it.name} · ${dayFormat.format(Date(it.date))}" } ?: "最近日子：暂无"
+    }
     Card(
         modifier = Modifier.fillMaxWidth().padding(vertical = adaptiveUi.sectionSpacing / 2f),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -1063,7 +999,7 @@ internal fun CalendarBoardSummary(
                 CalendarBoardMetric("今天", todayCount.toString(), Modifier.weight(1f))
             }
             Text(
-                nearestEvent?.let { "最近日子：${it.name} · ${SimpleDateFormat("M月d日", Locale.getDefault()).format(Date(it.date))}" } ?: "最近日子：暂无",
+                text = nearestEventLabel,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1
@@ -1093,47 +1029,36 @@ private enum class CalendarDisplayMode(val label: String) {
 
 @Composable
 internal fun CalendarHeatStrip(events: List<Event>, diaries: List<DiaryEntry>, month: Calendar) {
+    val adaptiveUi = rememberAdaptiveUiSize()
     val tokens = LocalMemoriaThemeTokens.current
-    val daysInMonth = month.getActualMaximum(Calendar.DAY_OF_MONTH)
+    val monthKey = month.get(Calendar.YEAR) * 100 + month.get(Calendar.MONTH)
+    val heatCounts = remember(events, diaries, monthKey) {
+        val base = (month.clone() as Calendar).apply {
+            set(Calendar.DAY_OF_MONTH, 1)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val days = base.getActualMaximum(Calendar.DAY_OF_MONTH)
+        val dayStarts = diaries.map { startOfDayMillis(it.dateStart) }
+        (1..days).map { day ->
+            val dayCal = (base.clone() as Calendar).apply { set(Calendar.DAY_OF_MONTH, day) }
+            val dayStart = dayCal.timeInMillis
+            events.count { occursOnDay(it, dayCal) } + dayStarts.count { it == dayStart }
+        }
+    }
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(2.dp)
+        modifier = Modifier.fillMaxWidth().padding(vertical = adaptiveUi.tightSpacing),
+        horizontalArrangement = Arrangement.spacedBy(adaptiveUi.tightSpacing / 2f)
     ) {
-        (1..daysInMonth).forEach { day ->
-            val dayCal = (month.clone() as Calendar).apply { set(Calendar.DAY_OF_MONTH, day) }
-            val count = events.count { occursOnDay(it, dayCal) } + diaries.count { startOfDayMillis(it.dateStart) == startOfDayMillis(dayCal.timeInMillis) }
+        heatCounts.forEach { count ->
             val color = when {
                 count >= 3 -> tokens.heatHigh
                 count > 0 -> tokens.heatLow
                 else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
             }
-            Box(modifier = Modifier.weight(1f).height(6.dp).clip(RoundedCornerShape(99.dp)).background(color))
-        }
-    }
-}
-
-@Composable
-private fun AnniversaryStoryStrip(events: List<Event>, onEventClick: (Event) -> Unit) {
-    val storyEvents = remember(events) {
-        events.filter { it.type == EventType.ANNIVERSARY || it.type == EventType.BIRTHDAY }.take(3)
-    }
-    if (storyEvents.isEmpty()) return
-    Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        storyEvents.forEach { event ->
-            Surface(
-                modifier = Modifier.width(220.dp).clickable { onEventClick(event) },
-                shape = MaterialTheme.shapes.large,
-                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.72f)
-            ) {
-                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(if (event.type == EventType.BIRTHDAY) "生日故事" else "纪念日故事", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                    Text(event.name, style = MaterialTheme.typography.titleSmall, maxLines = 1)
-                    Text("${calculateDays(event)} 天 · 点开查看详情", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
+            Box(modifier = Modifier.weight(1f).height(adaptiveUi.heatStripHeight).clip(RoundedCornerShape(99.dp)).background(color))
         }
     }
 }
@@ -1194,6 +1119,13 @@ private fun SelectedDaySummaryCard(
     }
 }
 
+private data class CalendarCellCache(
+    val dayStartMillis: Long,
+    val events: List<Event>,
+    val lunarDayLabel: String,
+    val holidayLabel: String?
+)
+
 @Composable
 fun CalendarGrid(
     currentMonth: Calendar,
@@ -1203,6 +1135,7 @@ fun CalendarGrid(
     diaryMap: Map<Long, List<DiaryEntry>> = emptyMap(),
     onDayClick: (Calendar, List<Event>) -> Unit = { _, _ -> }
 ) {
+    val adaptiveUi = rememberAdaptiveUiSize()
     val daysOfWeek = listOf("一", "二", "三", "四", "五", "六", "日")
     val calendar = currentMonth.clone() as Calendar
     calendar.set(Calendar.DAY_OF_MONTH, 1)
@@ -1212,16 +1145,41 @@ fun CalendarGrid(
     val todayDay = today.get(Calendar.DAY_OF_MONTH)
     val todayMonth = today.get(Calendar.MONTH)
     val todayYear = today.get(Calendar.YEAR)
+    val monthKey = currentMonth.get(Calendar.YEAR) * 100 + currentMonth.get(Calendar.MONTH)
+    val cellCache = remember(events, monthKey) {
+        val base = (currentMonth.clone() as Calendar).apply {
+            set(Calendar.DAY_OF_MONTH, 1)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val total = base.getActualMaximum(Calendar.DAY_OF_MONTH)
+        HashMap<Int, CalendarCellCache>(total).apply {
+            for (day in 1..total) {
+                val dayCal = (base.clone() as Calendar).apply { set(Calendar.DAY_OF_MONTH, day) }
+                put(
+                    day,
+                    CalendarCellCache(
+                        dayStartMillis = dayCal.timeInMillis,
+                        events = events.filter { occursOnDay(it, dayCal) },
+                        lunarDayLabel = LunarDateUtils.dayLabelForGregorian(dayCal.timeInMillis),
+                        holidayLabel = HolidayUtils.holidayForDay(dayCal.timeInMillis)
+                    )
+                )
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
             .padding(horizontal = horizontalPadding)
             .verticalScroll(rememberScrollState())
     ) {
-        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+        Row(modifier = Modifier.fillMaxWidth().padding(vertical = adaptiveUi.tightSpacing), horizontalArrangement = Arrangement.SpaceEvenly) {
             daysOfWeek.forEach { day ->
-                Box(modifier = Modifier.weight(1f).padding(horizontal = 2.dp), contentAlignment = Alignment.Center) {
-                    Text(text = day, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(vertical = 5.dp))
+                Box(modifier = Modifier.weight(1f).padding(horizontal = adaptiveUi.tightSpacing / 2f), contentAlignment = Alignment.Center) {
+                    Text(text = day, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(vertical = adaptiveUi.tightSpacing))
                 }
             }
         }
@@ -1236,22 +1194,16 @@ fun CalendarGrid(
                     val cellIndex = row * 7 + col
                     val dayNumber = cellIndex - daysToFirst + 1
                     if (dayNumber in 1..daysInMonth) {
-                        val dayCal = calendar.clone() as Calendar
-                        dayCal.set(Calendar.DAY_OF_MONTH, dayNumber)
-                        dayCal.set(Calendar.HOUR_OF_DAY, 0)
-                        dayCal.set(Calendar.MINUTE, 0)
-                        dayCal.set(Calendar.SECOND, 0)
-                        dayCal.set(Calendar.MILLISECOND, 0)
+                        val cache = cellCache[dayNumber]
+                        val dayCal = (calendar.clone() as Calendar).apply { set(Calendar.DAY_OF_MONTH, dayNumber) }
                         val isToday = dayNumber == todayDay && currentMonth.get(Calendar.MONTH) == todayMonth && currentMonth.get(Calendar.YEAR) == todayYear
 
-                        val dayEvents = events.filter { event -> occursOnDay(event, dayCal) }
-                        val dayDiaries = diaryMap[startOfDayMillis(dayCal.timeInMillis)] ?: emptyList()
-                        val lunarDayLabel = LunarDateUtils.dayLabelForGregorian(dayCal.timeInMillis)
-                        val holidayLabel = HolidayUtils.holidayForDay(dayCal.timeInMillis)
+                        val dayEvents = cache?.events ?: emptyList()
+                        val dayDiaries = diaryMap[cache?.dayStartMillis ?: dayCal.timeInMillis] ?: emptyList()
                         CalendarDayCell(
                             day = dayNumber,
-                            lunarDayLabel = lunarDayLabel,
-                            holidayLabel = holidayLabel,
+                            lunarDayLabel = cache?.lunarDayLabel ?: "",
+                            holidayLabel = cache?.holidayLabel,
                             isToday = isToday,
                             events = dayEvents,
                             diaries = dayDiaries,
@@ -1261,75 +1213,6 @@ fun CalendarGrid(
                     } else {
                         Box(modifier = Modifier.weight(1f).height(cellSize))
                     }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CalendarWeekView(
-    events: List<Event>,
-    diaryMap: Map<Long, List<DiaryEntry>>,
-    cellSize: androidx.compose.ui.unit.Dp,
-    horizontalPadding: androidx.compose.ui.unit.Dp,
-    onDayClick: (Calendar, List<Event>) -> Unit
-) {
-    val weekStart = remember { Calendar.getInstance() }.apply {
-        val diff = (get(Calendar.DAY_OF_WEEK) - Calendar.MONDAY + 7) % 7
-        add(Calendar.DAY_OF_MONTH, -diff)
-    }
-    Column(modifier = Modifier.padding(horizontal = horizontalPadding).verticalScroll(rememberScrollState())) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-            (0 until 7).forEach { offset ->
-                val dayCal = (weekStart.clone() as Calendar).apply { add(Calendar.DAY_OF_MONTH, offset) }
-                val dayEvents = events.filter { occursOnDay(it, dayCal) }
-                val dayDiaries = diaryMap[startOfDayMillis(dayCal.timeInMillis)] ?: emptyList()
-                CalendarDayCell(
-                    day = dayCal.get(Calendar.DAY_OF_MONTH),
-                    lunarDayLabel = LunarDateUtils.dayLabelForGregorian(dayCal.timeInMillis),
-                    holidayLabel = HolidayUtils.holidayForDay(dayCal.timeInMillis),
-                    isToday = startOfDayMillis(dayCal.timeInMillis) == startOfDayMillis(System.currentTimeMillis()),
-                    events = dayEvents,
-                    diaries = dayDiaries,
-                    modifier = Modifier.weight(1f).height(cellSize),
-                    onClick = { onDayClick(dayCal, dayEvents) }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun CalendarAgendaView(
-    events: List<Event>,
-    diaries: List<DiaryEntry>,
-    horizontalPadding: androidx.compose.ui.unit.Dp,
-    onEventClick: (Event) -> Unit,
-    onDiaryClick: (DiaryEntry) -> Unit
-) {
-    val agendaEvents = remember(events) { events.sortedBy { nextEventDistanceMillis(it) }.take(80) }
-    Column(modifier = Modifier.padding(horizontal = horizontalPadding).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (agendaEvents.isEmpty() && diaries.isEmpty()) {
-            Text("暂无议程，点底部中间颜文字记录一个日子。", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        agendaEvents.forEach { event ->
-            Surface(modifier = Modifier.fillMaxWidth().clickable { onEventClick(event) }, shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f)) {
-                Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(if (event.type == EventType.TODO) Icons.Default.CheckCircle else Icons.Default.Event, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                    Spacer(Modifier.width(10.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(event.name, style = MaterialTheme.typography.titleSmall, maxLines = 1)
-                        Text("${eventTypeText(event.type)} · ${formatDate(event.date)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            }
-        }
-        diaries.take(20).forEach { diary ->
-            Surface(modifier = Modifier.fillMaxWidth().clickable { onDiaryClick(diary) }, shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.38f)) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text("日记 · ${formatDate(diary.dateStart)}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                    Text(diary.content.ifBlank { "无文字内容" }, style = MaterialTheme.typography.bodySmall, maxLines = 2, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -1373,6 +1256,13 @@ fun CalendarDayCell(
     onClick: () -> Unit = {}
 ) {
     val tokens = LocalMemoriaThemeTokens.current
+    val todayCellBrush = remember(tokens.calendarToday, tokens.calendarSelected) {
+        Brush.linearGradient(listOf(tokens.calendarToday.copy(alpha = 0.24f), tokens.calendarSelected.copy(alpha = 0.16f)))
+    }
+    val surfaceVariantColor = MaterialTheme.colorScheme.surfaceVariant
+    val plainCellBrush = remember(tokens.calendarCard, surfaceVariantColor) {
+        Brush.linearGradient(listOf(tokens.calendarCard, surfaceVariantColor.copy(alpha = 0.52f)))
+    }
     val hasTodo = events.any { it.type == EventType.TODO }
     val hasBirthday = events.any { it.type == EventType.BIRTHDAY }
     val hasAnniversary = events.any { it.type == EventType.ANNIVERSARY || it.type == EventType.ELAPSED || it.type == EventType.COUNTDOWN }
@@ -1381,10 +1271,7 @@ fun CalendarDayCell(
             .padding(2.dp)
             .clip(RoundedCornerShape(18.dp))
             .clickable(onClick = onClick)
-            .background(
-                if (isToday) Brush.linearGradient(listOf(tokens.calendarToday.copy(alpha = 0.24f), tokens.calendarSelected.copy(alpha = 0.16f)))
-                else Brush.linearGradient(listOf(tokens.calendarCard, MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.52f)))
-            )
+            .background(if (isToday) todayCellBrush else plainCellBrush)
             .padding(horizontal = 2.dp, vertical = 4.dp),
     ) {
         Column(
@@ -1467,9 +1354,10 @@ private fun CalendarDayDetailDialog(
     onEditDiary: (DiaryEntry) -> Unit,
     onDeleteDiary: (DiaryEntry) -> Unit
 ) {
+    val titleFormat = remember { SimpleDateFormat("yyyy年M月d日", Locale.getDefault()) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(SimpleDateFormat("yyyy年M月d日", Locale.getDefault()).format(Date(date))) },
+        title = { Text(titleFormat.format(Date(date))) },
         text = {
             Box(modifier = Modifier.fillMaxWidth().heightIn(min = 220.dp, max = 420.dp)) {
                 Column(
@@ -1609,26 +1497,6 @@ private fun CalendarDayDetailDialog(
             TextButton(onClick = onDismiss) { Text("关闭") }
         }
     )
-}
-
-@Composable
-fun LogFilterBar(
-    onFilterChange: (String) -> Unit
-) {
-    var selectedFilter by remember { mutableStateOf("全部") }
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        listOf("全部", "BOX", "EVENT", "BACKUP").forEach { filter ->
-            FilterChip(
-                selected = selectedFilter == filter,
-                onClick = { selectedFilter = filter; onFilterChange(if (filter == "全部") "" else filter) },
-                label = { Text(filter) },
-                modifier = Modifier.weight(1f)
-            )
-        }
-    }
 }
 
 fun calculateDays(event: Event): Long = calculateDays(

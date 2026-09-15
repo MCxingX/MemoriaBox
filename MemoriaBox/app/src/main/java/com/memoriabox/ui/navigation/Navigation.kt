@@ -6,7 +6,6 @@ import androidx.compose.material.icons.filled.*
 sealed class Screen(val route: String) {
     object Boxes : Screen("boxes")
     object Calendar : Screen("calendar")
-    object Logs : Screen("logs")
     object Settings : Screen("settings")
     object BoxDetail : Screen("box_detail/{boxId}") {
         fun createRoute(boxId: String) = "box_detail/$boxId"
@@ -14,14 +13,8 @@ sealed class Screen(val route: String) {
     object BackupSettings : Screen("backup_settings")
     object WebDavSettings : Screen("webdav_settings")
     object Todo : Screen("todo")
-    object Export : Screen("export")
-    object Timeline : Screen("timeline")
-    object SyncStatus : Screen("sync_status")
     object CustomizationSettings : Screen("customization_settings")
     object Friends : Screen("friends")
-    object EchoTime : Screen("echo_time")
-    object Mood : Screen("mood")
-    object Labels : Screen("labels")
     object FriendDetail : Screen("friend_detail/{friendId}") {
         fun createRoute(friendId: String) = "friend_detail/$friendId"
     }
