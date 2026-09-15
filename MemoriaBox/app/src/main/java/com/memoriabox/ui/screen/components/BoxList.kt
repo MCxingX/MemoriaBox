@@ -300,32 +300,3 @@ private fun TodoCard(
         )
     }
 }
-
-@Composable
-fun LogsList(logs: List<LogEntry>) {
-    LazyColumn {
-        items(logs, key = { it.id }) { log ->
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp)
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(log.operation, style = MaterialTheme.typography.titleSmall)
-                    Text(
-                        "${log.targetName} - ${log.result}",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    log.extra?.let { extra ->
-                        Text(extra, style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            }
-        }
-    }
-}
-
-fun formatTimestamp(timestamp: Long): String {
-    val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
-    return sdf.format(Date(timestamp))
-}

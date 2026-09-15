@@ -559,22 +559,6 @@ private fun friendNextBirthdayDistance(friend: Friend): Int {
     return com.memoriabox.utils.AnnualDateUtils.daysUntil(birthday).toInt()
 }
 
-@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-class LogViewModel(
-    application: Application,
-    private val logRepository: LogRepository
-) : AndroidViewModel(application) {
-
-    private val _filter = MutableStateFlow("")
-
-    val logs = _filter.flatMapLatest { filter ->
-        if (filter.isEmpty()) logRepository.getRecentLogs(200)
-        else logRepository.getLogsByOperation(filter)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    fun setFilter(f: String) { _filter.value = f }
-}
-
 class BackupViewModel(
     application: Application,
     private val logRepository: LogRepository,
@@ -754,11 +738,6 @@ fun createFriendViewModel(application: Application): FriendViewModel {
     return FriendViewModel(application, FriendRepository(app.database.friendDao()), app.backupManager)
 }
 
-fun createLogViewModel(application: Application): LogViewModel {
-    val app = application as com.memoriabox.MemoriaApp
-    return LogViewModel(application, LogRepository(app.database.logDao()))
-}
-
 fun createBackupViewModel(application: Application): BackupViewModel {
     val app = application as com.memoriabox.MemoriaApp
     return BackupViewModel(application, LogRepository(app.database.logDao()), app.backupManager)
@@ -836,6 +815,7 @@ class EchoTimeViewModel(
         media.filter { it.mediaType == DiaryMediaType.IMAGE }
 }
 
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class FriendDetailViewModel(
     application: Application,
     private val friendRepository: FriendRepository,
