@@ -12,10 +12,17 @@ data class AdaptiveUiSize(
     val roomy: Boolean,
     val screenPadding: Dp,
     val sectionSpacing: Dp,
+    val tightSpacing: Dp,
+    val contentSpacing: Dp,
     val topBarHeight: Dp,
     val buttonHeight: Dp,
+    val chipHeight: Dp,
     val cardRadius: Dp,
     val cardPadding: Dp,
+    val iconSmall: Dp,
+    val logoMarkSize: Dp,
+    val filterMinWidth: Dp,
+    val filterMaxWidth: Dp,
     val listItemMinHeight: Dp,
     val maxContentWidth: Dp
 )
@@ -47,17 +54,49 @@ fun rememberAdaptiveUiSize(): AdaptiveUiSize {
                 roomy -> 12.dp
                 else -> 10.dp
             },
+            tightSpacing = when {
+                compact -> 4.dp
+                roomy -> 6.dp
+                else -> 4.dp
+            },
+            contentSpacing = when {
+                compact -> 6.dp
+                tablet -> 10.dp
+                roomy -> 8.dp
+                else -> 8.dp
+            },
             topBarHeight = when {
                 compact -> 48.dp
                 roomy -> 56.dp
                 else -> 48.dp
             },
             buttonHeight = 48.dp,
+            chipHeight = when {
+                compact -> 36.dp
+                else -> 40.dp
+            },
             cardRadius = 16.dp,
             cardPadding = when {
                 compact -> 12.dp
                 tablet -> 18.dp
                 else -> 14.dp
+            },
+            iconSmall = when {
+                compact -> 18.dp
+                else -> 20.dp
+            },
+            logoMarkSize = when {
+                compact -> 28.dp
+                else -> 32.dp
+            },
+            filterMinWidth = when {
+                compact -> 88.dp
+                else -> 96.dp
+            },
+            filterMaxWidth = when {
+                compact -> 130.dp
+                roomy -> 150.dp
+                else -> 140.dp
             },
             listItemMinHeight = if (compact) 92.dp else 104.dp,
             maxContentWidth = if (tablet) 760.dp else 640.dp

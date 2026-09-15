@@ -627,16 +627,10 @@ fun CalendarViewScreen(
                 }
             }
         )
-        CalendarBoardSummary(
-            totalCount = events.size,
-            monthCount = monthEvents.size,
-            todayCount = events.count { occursOnDay(it, today) },
-            nearestEvent = nearestEvent
-        )
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = adaptiveUi.screenPadding, vertical = adaptiveUi.sectionSpacing),
+                .padding(horizontal = adaptiveUi.screenPadding, vertical = adaptiveUi.sectionSpacing / 2f),
             shape = MaterialTheme.shapes.extraLarge,
             colors = CardDefaults.cardColors(containerColor = themeTokens.calendarCard)
         ) {
@@ -644,7 +638,7 @@ fun CalendarViewScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Brush.linearGradient(listOf(themeTokens.calendarSelected, themeTokens.calendarToday, themeTokens.anniversaryMarker)))
-                    .padding(horizontal = 16.dp, vertical = 16.dp),
+                    .padding(horizontal = adaptiveUi.cardPadding, vertical = adaptiveUi.contentSpacing),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -655,26 +649,30 @@ fun CalendarViewScreen(
                 }) { Icon(Icons.Default.ChevronLeft, contentDescription = "上月", tint = Color.White) }
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable { showMonthPicker = true }) {
                     Text(text = monthFormat.format(cal.time), style = MaterialTheme.typography.titleLarge, color = Color.White, maxLines = 1)
-                    Text("看板/月历一体查看事件分布，本月 ${monthEvents.size} 个日子", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.82f))
+                    Text("全部${events.size} · 本月${monthEvents.size} · 今天${events.count { occursOnDay(it, today) }}", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.82f), maxLines = 1)
                 }
-                IconButton(onClick = {
-                    val updated = cal.clone() as Calendar
-                    updated.add(Calendar.MONTH, 1)
-                    currentMonthYear = "${updated.get(Calendar.YEAR)}-${updated.get(Calendar.MONTH) + 1}"
-                }) { Icon(Icons.Default.ChevronRight, contentDescription = "下月", tint = Color.White) }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = {
+                        val now = Calendar.getInstance()
+                        currentMonthYear = "${now.get(Calendar.YEAR)}-${now.get(Calendar.MONTH) + 1}"
+                        selectedDay = startOfDayMillis(now.timeInMillis) to events.filter { occursOnDay(it, now) }
+                    }) { Text("今天", color = Color.White) }
+                    IconButton(onClick = {
+                        val updated = cal.clone() as Calendar
+                        updated.add(Calendar.MONTH, 1)
+                        currentMonthYear = "${updated.get(Calendar.YEAR)}-${updated.get(Calendar.MONTH) + 1}"
+                    }) { Icon(Icons.Default.ChevronRight, contentDescription = "下月", tint = Color.White) }
+                }
             }
         }
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = adaptiveUi.screenPadding),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Spacer(Modifier.weight(1f))
-            TextButton(onClick = {
-                val now = Calendar.getInstance()
-                currentMonthYear = "${now.get(Calendar.YEAR)}-${now.get(Calendar.MONTH) + 1}"
-                selectedDay = startOfDayMillis(now.timeInMillis) to events.filter { occursOnDay(it, now) }
-            }) { Text("今天") }
+        nearestEvent?.let {
+            Text(
+                "最近日子：${it.name} · ${SimpleDateFormat("M月d日", Locale.getDefault()).format(Date(it.date))}",
+                modifier = Modifier.padding(horizontal = adaptiveUi.screenPadding),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
+            )
         }
         CalendarHeatStrip(events = monthEvents, diaries = diaries, month = cal)
         selectedDay?.let { (date, dayEvents) ->
@@ -1050,12 +1048,12 @@ private fun CalendarBoardSummary(
 ) {
     val adaptiveUi = rememberAdaptiveUiSize()
     Card(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = adaptiveUi.screenPadding, vertical = adaptiveUi.sectionSpacing),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = adaptiveUi.screenPadding, vertical = adaptiveUi.sectionSpacing / 2f),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(modifier = Modifier.padding(if (adaptiveUi.compact) 10.dp else 14.dp), verticalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(modifier = Modifier.padding(adaptiveUi.cardPadding), verticalArrangement = Arrangement.spacedBy(adaptiveUi.contentSpacing)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(adaptiveUi.tightSpacing)) {
                 CalendarBoardMetric("全部", totalCount.toString(), Modifier.weight(1f))
                 CalendarBoardMetric("本月", monthCount.toString(), Modifier.weight(1f))
                 CalendarBoardMetric("今天", todayCount.toString(), Modifier.weight(1f))
@@ -1072,12 +1070,13 @@ private fun CalendarBoardSummary(
 
 @Composable
 private fun CalendarBoardMetric(label: String, value: String, modifier: Modifier = Modifier) {
+    val adaptiveUi = rememberAdaptiveUiSize()
     Surface(
         modifier = modifier,
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.62f)
     ) {
-        Column(modifier = Modifier.padding(vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(modifier = Modifier.padding(vertical = adaptiveUi.contentSpacing), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(value, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
             Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -1091,9 +1090,10 @@ private enum class CalendarDisplayMode(val label: String) {
 @Composable
 private fun CalendarHeatStrip(events: List<Event>, diaries: List<DiaryEntry>, month: Calendar) {
     val tokens = LocalMemoriaThemeTokens.current
+    val adaptiveUi = rememberAdaptiveUiSize()
     val daysInMonth = month.getActualMaximum(Calendar.DAY_OF_MONTH)
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = adaptiveUi.screenPadding, vertical = adaptiveUi.tightSpacing),
         horizontalArrangement = Arrangement.spacedBy(2.dp)
     ) {
         (1..daysInMonth).forEach { day ->
@@ -1145,12 +1145,13 @@ private fun SelectedDaySummaryCard(
     onPlayDaySummary: () -> Unit,
     onOpenDetail: () -> Unit
 ) {
+    val adaptiveUi = rememberAdaptiveUiSize()
     Surface(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = adaptiveUi.screenPadding, vertical = adaptiveUi.tightSpacing),
         shape = MaterialTheme.shapes.extraLarge,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f)
     ) {
-        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(modifier = Modifier.padding(adaptiveUi.cardPadding), verticalArrangement = Arrangement.spacedBy(adaptiveUi.contentSpacing)) {
             val holidayLabel = HolidayUtils.holidayForDay(date)
             if (holidayLabel != null) {
                 Text(
@@ -1173,20 +1174,16 @@ private fun SelectedDaySummaryCard(
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(adaptiveUi.tightSpacing)
             ) {
                 TextButton(onClick = { onAddEvent(date) }) { Text("新增日子") }
                 TextButton(onClick = onWriteDiary) { Text("写日记") }
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
+                Spacer(Modifier.weight(1f))
                 TextButton(onClick = onOpenDetail) { Text("查看详情") }
                 if (diaries.isNotEmpty()) {
                     TextButton(onClick = onPlayDaySummary) {
-                        Icon(Icons.Default.AutoStories, contentDescription = "今日总结", modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(4.dp))
+                        Icon(Icons.Default.AutoStories, contentDescription = "今日总结", modifier = Modifier.size(adaptiveUi.iconSmall))
+                        Spacer(Modifier.width(adaptiveUi.tightSpacing))
                         Text("今日总结")
                     }
                 }
@@ -1204,6 +1201,7 @@ fun CalendarGrid(
     diaryMap: Map<Long, List<DiaryEntry>> = emptyMap(),
     onDayClick: (Calendar, List<Event>) -> Unit = { _, _ -> }
 ) {
+    val adaptiveUi = rememberAdaptiveUiSize()
     val daysOfWeek = listOf("一", "二", "三", "四", "五", "六", "日")
     val calendar = currentMonth.clone() as Calendar
     calendar.set(Calendar.DAY_OF_MONTH, 1)
@@ -1219,10 +1217,10 @@ fun CalendarGrid(
             .padding(horizontal = horizontalPadding)
             .verticalScroll(rememberScrollState())
     ) {
-        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+        Row(modifier = Modifier.fillMaxWidth().padding(vertical = adaptiveUi.tightSpacing), horizontalArrangement = Arrangement.SpaceEvenly) {
             daysOfWeek.forEach { day ->
                 Box(modifier = Modifier.weight(1f).padding(horizontal = 2.dp), contentAlignment = Alignment.Center) {
-                    Text(text = day, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(vertical = 5.dp))
+                    Text(text = day, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(vertical = adaptiveUi.tightSpacing))
                 }
             }
         }

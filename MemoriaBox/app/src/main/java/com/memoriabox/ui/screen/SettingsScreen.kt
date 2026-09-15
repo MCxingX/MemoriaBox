@@ -149,9 +149,9 @@ fun SettingsScreen(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
-            Column(modifier = Modifier.padding(if (adaptiveUi.compact) 12.dp else 16.dp)) {
+            Column(modifier = Modifier.padding(adaptiveUi.cardPadding)) {
                 Text("PushPlus 推送", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(adaptiveUi.contentSpacing))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -167,15 +167,15 @@ fun SettingsScreen(
                     )
                 }
                 if (pushPlusEnabled) {
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(adaptiveUi.contentSpacing))
                     OutlinedTextField(
                         value = pushPlusToken,
                         onValueChange = { pushPlusToken = it },
                         label = { Text("Token") },
                         modifier = Modifier.fillMaxWidth()
                     )
-                    Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Spacer(Modifier.height(adaptiveUi.contentSpacing))
+                    Row(horizontalArrangement = Arrangement.spacedBy(adaptiveUi.contentSpacing)) {
                         listOf("wechat", "webhook", "mail", "sms").forEach { ch ->
                             FilterChip(
                                 selected = pushPlusChannel == ch,
@@ -218,7 +218,7 @@ fun SettingsScreen(
             onDismissRequest = { showAboutDialog = false },
             title = { Text("关于 念记") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(adaptiveUi.contentSpacing)) {
                     Text("版本：${installedVersion.name} (${installedVersion.code})", style = MaterialTheme.typography.bodyMedium)
                     Text("念记 是一个本地优先的日子、纪念日、待办和照片记录工具。", style = MaterialTheme.typography.bodyMedium)
                     Text("数据默认保存在本机，可通过备份和 WebDAV 功能进行迁移或同步。", style = MaterialTheme.typography.bodyMedium)
@@ -265,12 +265,12 @@ fun SettingsHeroCard() {
                         )
                     )
                 )
-                .padding(16.dp),
+                .padding(adaptiveUi.cardPadding),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalArrangement = Arrangement.spacedBy(adaptiveUi.cardPadding)
         ) {
             NianJiLogoMark(size = if (adaptiveUi.compact) 48.dp else 56.dp)
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
+            Column(verticalArrangement = Arrangement.spacedBy(adaptiveUi.contentSpacing), modifier = Modifier.weight(1f)) {
                 Text("我的 念记", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.headlineSmall)
                 Text("数据安全、外观、提醒和常用工具都放在这里。", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
             }
@@ -288,7 +288,7 @@ fun ThemeModeCard(currentThemeMode: AppThemeMode, onThemeModeChange: (AppThemeMo
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.84f)),
         elevation = CardDefaults.cardElevation(defaultElevation = MemoriaDesign.softShadow)
     ) {
-        Column(modifier = Modifier.padding(adaptiveUi.cardPadding), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(modifier = Modifier.padding(adaptiveUi.cardPadding), verticalArrangement = Arrangement.spacedBy(adaptiveUi.contentSpacing)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -311,7 +311,7 @@ fun ThemeModeCard(currentThemeMode: AppThemeMode, onThemeModeChange: (AppThemeMo
                 val modes = AppThemeMode.entries.filter { it.group == group }
                 if (modes.isNotEmpty()) {
                     Text(group.label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(adaptiveUi.contentSpacing), verticalArrangement = Arrangement.spacedBy(adaptiveUi.contentSpacing)) {
                         modes.forEach { mode ->
                             ThemePreviewCard(
                                 mode = mode,
@@ -328,17 +328,18 @@ fun ThemeModeCard(currentThemeMode: AppThemeMode, onThemeModeChange: (AppThemeMo
 
 @Composable
 private fun ThemePreviewCard(mode: AppThemeMode, selected: Boolean, onClick: () -> Unit) {
+    val adaptiveUi = rememberAdaptiveUiSize()
     OutlinedCard(
         onClick = onClick,
         modifier = Modifier.width(118.dp),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(adaptiveUi.cardRadius),
         border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
         colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
+            modifier = Modifier.padding(horizontal = adaptiveUi.cardPadding, vertical = adaptiveUi.contentSpacing),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(adaptiveUi.contentSpacing)
         ) {
             Box(
                 modifier = Modifier
@@ -371,7 +372,7 @@ fun SettingsSectionTitle(title: String, description: String) {
             start = adaptiveUi.screenPadding,
             end = adaptiveUi.screenPadding,
             top = 24.dp,
-            bottom = 8.dp
+            bottom = adaptiveUi.contentSpacing
         )
     ) {
         Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)

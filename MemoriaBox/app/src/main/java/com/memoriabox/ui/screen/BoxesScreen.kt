@@ -105,9 +105,9 @@ fun BoxesScreen(
                     title = {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(adaptiveUi.tightSpacing)
                         ) {
-                            NianJiLogoMark(size = 32.dp)
+                            NianJiLogoMark(size = adaptiveUi.logoMarkSize)
                             Text("今天", style = MaterialTheme.typography.titleMedium)
                         }
                     },
@@ -115,7 +115,7 @@ fun BoxesScreen(
                     actions = {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(adaptiveUi.tightSpacing)
                         ) {
                             HomeBoxFilter(
                                 boxes = boxes,
@@ -376,10 +376,8 @@ fun HomeDashboard(
                 .align(Alignment.TopCenter)
                 .padding(horizontal = adaptiveUi.screenPadding, vertical = adaptiveUi.sectionSpacing)
         ) {
-        TodayHeader(adaptiveUi = adaptiveUi)
+        HomeDateQuoteCard(adaptiveUi = adaptiveUi)
         Spacer(Modifier.height(adaptiveUi.sectionSpacing))
-        HomeHeroCard(adaptiveUi = adaptiveUi)
-        Spacer(Modifier.height(adaptiveUi.sectionSpacing + 8.dp))
         CategoryFoldersTab(
             boxes = boxes,
             onBoxClick = onBoxClick,
@@ -400,7 +398,7 @@ fun HomeDashboard(
 }
 
 @Composable
-private fun TodayHeader(adaptiveUi: AdaptiveUiSize) {
+private fun HomeDateQuoteCard(adaptiveUi: AdaptiveUiSize) {
     var now by remember { mutableStateOf(Date()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -413,57 +411,40 @@ private fun TodayHeader(adaptiveUi: AdaptiveUiSize) {
     val dateText = remember(now) { SimpleDateFormat("M月d日 EEEE", Locale.getDefault()).format(now) }
     val lunarText = remember(now) { LunarDateUtils.dayLabelForGregorian(now.time) }
     val holidayText = remember(now) { HolidayUtils.holidayForDay(now.time) }
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(adaptiveUi.cardRadius),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
-        tonalElevation = 1.dp
-    ) {
-        Text(
-            text = if (holidayText != null) "$dateText · $lunarText · $holidayText" else "$dateText · $lunarText",
-            modifier = Modifier.padding(adaptiveUi.cardPadding),
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (holidayText != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
-}
-
-@Composable
-fun HomeHeroCard(adaptiveUi: AdaptiveUiSize) {
     val context = LocalContext.current
     val settingsVersion = AppSettings.settingsVersion
     val useCustom = remember(settingsVersion) { AppSettings.getUseCustomQuote(context) }
     val customQuotes = remember(settingsVersion) { AppSettings.getCustomDailyQuotes(context) }
-    val dailyQuote = if (useCustom && customQuotes.isNotEmpty()) {
-        val dayOfYear = Calendar.getInstance().get(Calendar.DAY_OF_YEAR)
-        customQuotes[dayOfYear % customQuotes.size]
-    } else {
-        val quotes = listOf(
-            "把今天第一束光，放进值得纪念的小盒子。",
-            "慢慢走，也能抵达很多闪闪发亮的时刻。",
-            "重要的日子会来，温柔的准备也会来。",
-            "给平凡的一天加一点甜，再记下一点心动。",
-            "每一次认真记录，都是给未来留一枚彩蛋。",
-            "愿望有了日期，就开始悄悄靠近现实。",
-            "今晚也把在意的人和事，轻轻放在心上。",
-            "把小事过好，日子就会自己亮起来。",
-            "期待会让时间变软，等待也变得有形状。",
-            "一起经过的日子，会在记忆里慢慢靠岸。",
-            "先照顾好自己，再拥抱今天安排的小惊喜。",
-            "有些想念需要提醒，有些喜欢值得准时送达。",
-            "把复杂收起来，留一条清清楚楚的今天。",
-            "梦里有方向，醒来也能把日子过得稳稳当当。",
-            "重要的时刻已经排好队，等你一一遇见。",
-            "喜欢要记录，快乐要保鲜，今天也要认真生活。",
-            "天气会变，值得期待的事情一直在路上。",
-            "把一点耐心留给自己，把一点期待留给明天。",
-            "一个提醒，一次准备，一份靠近未来的安心。",
-            "今天也去发现一件轻轻发光的小事。"
-        )
-        val dayOfYear = Calendar.getInstance().get(Calendar.DAY_OF_YEAR)
-        quotes[dayOfYear % quotes.size]
+    val dailyQuote = remember(useCustom, customQuotes, settingsVersion) {
+        if (useCustom && customQuotes.isNotEmpty()) {
+            val dayOfYear = Calendar.getInstance().get(Calendar.DAY_OF_YEAR)
+            customQuotes[dayOfYear % customQuotes.size]
+        } else {
+            val quotes = listOf(
+                "把今天第一束光，放进值得纪念的小盒子。",
+                "慢慢走，也能抵达很多闪闪发亮的时刻。",
+                "重要的日子会来，温柔的准备也会来。",
+                "给平凡的一天加一点甜，再记下一点心动。",
+                "每一次认真记录，都是给未来留一枚彩蛋。",
+                "愿望有了日期，就开始悄悄靠近现实。",
+                "今晚也把在意的人和事，轻轻放在心上。",
+                "把小事过好，日子就会自己亮起来。",
+                "期待会让时间变软，等待也变得有形状。",
+                "一起经过的日子，会在记忆里慢慢靠岸。",
+                "先照顾好自己，再拥抱今天安排的小惊喜。",
+                "有些想念需要提醒，有些喜欢值得准时送达。",
+                "把复杂收起来，留一条清清楚楚的今天。",
+                "梦里有方向，醒来也能把日子过得稳稳当当。",
+                "重要的时刻已经排好队，等你一一遇见。",
+                "喜欢要记录，快乐要保鲜，今天也要认真生活。",
+                "天气会变，值得期待的事情一直在路上。",
+                "把一点耐心留给自己，把一点期待留给明天。",
+                "一个提醒，一次准备，一份靠近未来的安心。",
+                "今天也去发现一件轻轻发光的小事。"
+            )
+            val dayOfYear = Calendar.getInstance().get(Calendar.DAY_OF_YEAR)
+            quotes[dayOfYear % quotes.size]
+        }
     }
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -487,19 +468,22 @@ fun HomeHeroCard(adaptiveUi: AdaptiveUiSize) {
         ) {
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                verticalArrangement = Arrangement.spacedBy(adaptiveUi.contentSpacing)
             ) {
                 Text(
-                    text = "每天一言",
-                    color = Color.White.copy(alpha = 0.85f),
-                    style = MaterialTheme.typography.labelMedium
+                    text = if (holidayText != null) "$dateText · $lunarText · $holidayText" else "$dateText · $lunarText",
+                    color = Color.White.copy(alpha = 0.9f),
+                    style = MaterialTheme.typography.labelMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = dailyQuote,
                     modifier = Modifier.fillMaxWidth(),
                     color = Color.White,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 2
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
@@ -514,20 +498,21 @@ fun HomeBoxFilter(
     onCreateBox: () -> Unit,
     onDeleteBox: (com.memoriabox.data.model.Box) -> Unit = {}
 ) {
+    val adaptiveUi = rememberAdaptiveUiSize()
     var expanded by remember { mutableStateOf(false) }
     Box {
         OutlinedButton(
             onClick = { expanded = true },
             modifier = Modifier
-                .height(40.dp)
-                .widthIn(min = 96.dp, max = 150.dp)
+                .height(adaptiveUi.chipHeight)
+                .widthIn(min = adaptiveUi.filterMinWidth, max = adaptiveUi.filterMaxWidth)
         ) {
             Text(
                 selectedBoxId?.let { id -> boxes.firstOrNull { it.id == id }?.name } ?: "全部分组",
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Spacer(Modifier.width(4.dp))
+            Spacer(Modifier.width(adaptiveUi.tightSpacing))
             Icon(Icons.Default.ArrowDropDown, contentDescription = null)
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -549,7 +534,7 @@ fun HomeBoxFilter(
                             if (box.id != "default_1") {
                                 Box(
                                     modifier = Modifier
-                                        .size(44.dp)
+                                        .size(adaptiveUi.buttonHeight)
                                         .clip(MaterialTheme.shapes.small)
                                         .clickable {
                                             onDeleteBox(box)
@@ -561,7 +546,7 @@ fun HomeBoxFilter(
                                         Icons.Default.DeleteOutline,
                                         contentDescription = "删除分类",
                                         tint = MaterialTheme.colorScheme.error,
-                                        modifier = Modifier.size(20.dp)
+                                        modifier = Modifier.size(adaptiveUi.iconSmall)
                                     )
                                 }
                             }
@@ -629,15 +614,16 @@ fun AllEventsTab(
 
 @Composable
 fun EmptyUpcomingEventHint(upcomingDays: Int) {
+    val adaptiveUi = rememberAdaptiveUiSize()
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(adaptiveUi.cardPadding)) {
             Text("近期很轻松", style = MaterialTheme.typography.titleSmall)
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(adaptiveUi.contentSpacing))
             Text("${upcomingDays} 天内没有需要特别留意的日子。", style = MaterialTheme.typography.bodyMedium)
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(adaptiveUi.contentSpacing))
             Text("所有日子都会显示，临近的排前面，较远或已过的排后面。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
@@ -649,6 +635,7 @@ fun CategoryFoldersTab(
     onBoxClick: (String) -> Unit,
     onCreateBox: () -> Unit
 ) {
+    val adaptiveUi = rememberAdaptiveUiSize()
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -657,7 +644,7 @@ fun CategoryFoldersTab(
         Text("我的分类", style = MaterialTheme.typography.titleMedium)
         TextButton(onClick = onCreateBox) { Text("新建分类") }
     }
-    Spacer(Modifier.height(8.dp))
+    Spacer(Modifier.height(adaptiveUi.contentSpacing))
     if (boxes.isEmpty()) {
         Text("还没有分类，新增日子会自动保存到默认分类。", style = MaterialTheme.typography.bodyMedium)
     } else {
@@ -679,6 +666,7 @@ fun HomeShortcutCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val adaptiveUi = rememberAdaptiveUiSize()
     Card(
         modifier = modifier.clickable(onClick = onClick),
         shape = MaterialTheme.shapes.large,
@@ -686,9 +674,9 @@ fun HomeShortcutCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(adaptiveUi.cardPadding),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(adaptiveUi.contentSpacing)
         ) {
             Surface(
                 shape = MaterialTheme.shapes.medium,
@@ -698,7 +686,7 @@ fun HomeShortcutCard(
                     shape = MaterialTheme.shapes.medium
                 )
             ) {
-                Icon(icon, contentDescription = null, modifier = Modifier.padding(8.dp).size(20.dp), tint = Color.White)
+                Icon(icon, contentDescription = null, modifier = Modifier.padding(adaptiveUi.contentSpacing).size(adaptiveUi.iconSmall), tint = Color.White)
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.titleSmall, maxLines = 1)
@@ -710,13 +698,14 @@ fun HomeShortcutCard(
 
 @Composable
 fun EmptyEventListHint() {
+    val adaptiveUi = rememberAdaptiveUiSize()
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(adaptiveUi.cardPadding)) {
             Text("这里还很清爽", style = MaterialTheme.typography.titleSmall)
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(adaptiveUi.contentSpacing))
             Text("点底部中间按钮，先记录一个真正重要的日子。", style = MaterialTheme.typography.bodyMedium)
         }
     }
