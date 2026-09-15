@@ -84,17 +84,21 @@ fun BoxesScreen(
         }
     }
 
-    val primaryContainerColor = MaterialTheme.colorScheme.primaryContainer
-    val backgroundColor = MaterialTheme.colorScheme.background
-    val homeBackgroundBrush = remember(primaryContainerColor, backgroundColor) {
-        Brush.verticalGradient(listOf(primaryContainerColor.copy(alpha = 0.35f), backgroundColor))
-    }
     Box(modifier = Modifier.fillMaxSize()) {
         if (!homeBgUri.isNullOrBlank()) {
             AsyncImage(model = homeBgUri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
             Box(modifier = Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.32f)))
         } else {
-            Box(modifier = Modifier.matchParentSize().background(homeBackgroundBrush))
+            Box(
+                modifier = Modifier.matchParentSize().background(
+                    Brush.verticalGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+                            MaterialTheme.colorScheme.background
+                        )
+                    )
+                )
+            )
         }
 
         Scaffold(
@@ -350,7 +354,7 @@ fun HomeDashboard(
         } else {
             events.sortedWith(
                 compareByDescending<Event> { it.isPinned }
-                    .thenBy { kotlin.math.abs(it.date - now) }
+                    .thenBy { kotlin.math.abs(it.date - System.currentTimeMillis()) }
             )
         }
     }
@@ -461,6 +465,82 @@ private fun rememberDailyQuote(): String {
 }
 
 @Composable
+fun HomeHeroCard(adaptiveUi: AdaptiveUiSize) {
+    val context = LocalContext.current
+    val settingsVersion = AppSettings.settingsVersion
+    val useCustom = remember(settingsVersion) { AppSettings.getUseCustomQuote(context) }
+    val customQuotes = remember(settingsVersion) { AppSettings.getCustomDailyQuotes(context) }
+    val dailyQuote = if (useCustom && customQuotes.isNotEmpty()) {
+        val dayOfYear = Calendar.getInstance().get(Calendar.DAY_OF_YEAR)
+        customQuotes[dayOfYear % customQuotes.size]
+    } else {
+        val quotes = listOf(
+            "把今天第一束光，放进值得纪念的小盒子。",
+            "慢慢走，也能抵达很多闪闪发亮的时刻。",
+            "重要的日子会来，温柔的准备也会来。",
+            "给平凡的一天加一点甜，再记下一点心动。",
+            "每一次认真记录，都是给未来留一枚彩蛋。",
+            "愿望有了日期，就开始悄悄靠近现实。",
+            "今晚也把在意的人和事，轻轻放在心上。",
+            "把小事过好，日子就会自己亮起来。",
+            "期待会让时间变软，等待也变得有形状。",
+            "一起经过的日子，会在记忆里慢慢靠岸。",
+            "先照顾好自己，再拥抱今天安排的小惊喜。",
+            "有些想念需要提醒，有些喜欢值得准时送达。",
+            "把复杂收起来，留一条清清楚楚的今天。",
+            "梦里有方向，醒来也能把日子过得稳稳当当。",
+            "重要的时刻已经排好队，等你一一遇见。",
+            "喜欢要记录，快乐要保鲜，今天也要认真生活。",
+            "天气会变，值得期待的事情一直在路上。",
+            "把一点耐心留给自己，把一点期待留给明天。",
+            "一个提醒，一次准备，一份靠近未来的安心。",
+            "今天也去发现一件轻轻发光的小事。"
+        )
+        val dayOfYear = Calendar.getInstance().get(Calendar.DAY_OF_YEAR)
+        quotes[dayOfYear % quotes.size]
+    }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(adaptiveUi.cardRadius),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (adaptiveUi.compact) 2.dp else 4.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.primary,
+                            MaterialTheme.colorScheme.secondary,
+                            MaterialTheme.colorScheme.tertiary
+                        )
+                    )
+                )
+                .padding(adaptiveUi.cardPadding)
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(adaptiveUi.tightSpacing)
+            ) {
+                Text(
+                    text = "每天一言",
+                    color = Color.White.copy(alpha = 0.85f),
+                    style = MaterialTheme.typography.labelMedium
+                )
+                Text(
+                    text = dailyQuote,
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 2
+                )
+            }
+        }
+    }
+}
+
+@Composable
 fun HomeBoxFilter(
     boxes: List<com.memoriabox.data.model.Box>,
     selectedBoxId: String?,
@@ -551,8 +631,8 @@ fun AllEventsTab(
     onEventLongClick: (Event) -> Unit,
     adaptiveUi: AdaptiveUiSize
 ) {
-    val pinnedEvents = remember(events) { events.filter { it.isPinned } }
-    val normalEvents = remember(events) { events.filter { !it.isPinned } }
+    val pinnedEvents = events.filter { it.isPinned }
+    val normalEvents = events.filter { !it.isPinned }
     val eventSpacing = adaptiveUi.sectionSpacing
     
     if (events.isEmpty()) {
@@ -622,7 +702,7 @@ fun HomeEventRow(
                 )
             }
             Spacer(Modifier.width(adaptiveUi.contentSpacing))
-            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(adaptiveUi.tightSpacing / 2f)) {
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     days.toString(),
                     style = MaterialTheme.typography.headlineSmall,
@@ -681,6 +761,44 @@ fun CategoryFoldersTab(
                         Text(box.icon.takeIf { it.isNotBlank() && !it.startsWith("content://") && !it.startsWith("file://") } ?: "•")
                     }
                 )
+            }
+        }
+    }
+}
+
+@Composable
+fun HomeShortcutCard(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    description: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val adaptiveUi = rememberAdaptiveUiSize()
+    Card(
+        modifier = modifier.clickable(onClick = onClick),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(adaptiveUi.cardPadding),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing)
+        ) {
+            Surface(
+                shape = MaterialTheme.shapes.medium,
+                color = Color.Transparent,
+                modifier = Modifier.background(
+                    Brush.linearGradient(listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary)),
+                    shape = MaterialTheme.shapes.medium
+                )
+            ) {
+                Icon(icon, contentDescription = null, modifier = Modifier.padding(adaptiveUi.sectionSpacing).size(adaptiveUi.iconSmall), tint = Color.White)
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleSmall, maxLines = 1)
+                Text(description, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
             }
         }
     }
@@ -751,4 +869,13 @@ private fun startCalendar(timeMillis: Long): Calendar = Calendar.getInstance().a
     set(Calendar.MINUTE, 0)
     set(Calendar.SECOND, 0)
     set(Calendar.MILLISECOND, 0)
+}
+
+private fun upcomingDisplayDate(event: Event): String {
+    val date = if (event.repeatYearly || event.type == EventType.BIRTHDAY || event.type == EventType.ANNIVERSARY) {
+        nextOccurrenceMillis(event, System.currentTimeMillis())
+    } else {
+        event.date
+    }
+    return SimpleDateFormat("M月d日", Locale.getDefault()).format(Date(date))
 }

@@ -27,9 +27,49 @@ import coil.compose.AsyncImage
 import com.memoriabox.ui.utils.rememberAdaptiveUiSize
 import com.memoriabox.utils.AppSettings
 import com.memoriabox.utils.ImageImportUtils
+import com.memoriabox.utils.installedAppVersion
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
+@Composable
+fun SettingsList(
+    onBackupSettingsClick: () -> Unit = {},
+    onWebDavSettingsClick: () -> Unit = {},
+    onDiarySettingsClick: () -> Unit = {}
+) {
+    val context = LocalContext.current
+    val installedVersion = remember(context) { context.installedAppVersion() }
+    Column(modifier = Modifier.fillMaxSize()) {
+        SettingsItem(
+            icon = Icons.Default.Backup,
+            title = "备份设置",
+            description = "本地备份、导入导出、自动备份",
+            onClick = onBackupSettingsClick
+        )
+        SettingsItem(
+            icon = Icons.Default.Cloud,
+            title = "WebDAV 同步",
+            description = "配置云端同步服务",
+            onClick = onWebDavSettingsClick
+        )
+        SettingsItem(
+            icon = Icons.Default.Edit,
+            title = "日记设置",
+            description = "滚动动画速度、开关",
+            onClick = onDiarySettingsClick
+        )
+        SettingsItem(
+            icon = Icons.Default.NotificationImportant,
+            title = "提醒设置",
+            description = "PushPlus 推送、通知管理"
+        )
+        SettingsItem(
+            icon = Icons.Default.Info,
+            title = "关于",
+            description = "版本 ${installedVersion.name} (${installedVersion.code})"
+        )
+    }
+}
 @Composable
 fun SettingsItem(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -38,18 +78,13 @@ fun SettingsItem(
     onClick: (() -> Unit)? = null
 ) {
     val adaptiveUi = rememberAdaptiveUiSize()
-    val primaryColor = MaterialTheme.colorScheme.primary
-    val secondaryColor = MaterialTheme.colorScheme.secondary
-    val tertiaryColor = MaterialTheme.colorScheme.tertiary
-    val gradient = remember(primaryColor, secondaryColor, tertiaryColor) {
-        Brush.linearGradient(
-            listOf(
-                primaryColor.copy(alpha = 0.92f),
-                secondaryColor.copy(alpha = 0.88f),
-                tertiaryColor.copy(alpha = 0.84f)
-            )
+    val gradient = Brush.linearGradient(
+        listOf(
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.92f),
+            MaterialTheme.colorScheme.secondary.copy(alpha = 0.88f),
+            MaterialTheme.colorScheme.tertiary.copy(alpha = 0.84f)
         )
-    }
+    )
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -114,7 +149,7 @@ fun BackupSettingsContent(
                     style = MaterialTheme.typography.bodySmall,
                     color = if (autoBackupEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                 )
-                Spacer(Modifier.height(adaptiveUi.sectionSpacing))
+                Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = backupPassword,
                     onValueChange = onBackupPasswordChange,
@@ -125,29 +160,29 @@ fun BackupSettingsContent(
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !isBusy
                 )
-                Spacer(Modifier.height(adaptiveUi.sectionSpacing))
+                Spacer(Modifier.height(8.dp))
                 Button(onClick = onSelectDir, enabled = !isBusy, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Default.Folder, null)
-                    Spacer(Modifier.width(adaptiveUi.sectionSpacing))
+                    Spacer(Modifier.width(8.dp))
                     Text("选择备份目录")
                 }
-                Spacer(Modifier.height(adaptiveUi.sectionSpacing))
+                Spacer(Modifier.height(8.dp))
                 Button(onClick = onManualBackup, enabled = !isBusy, modifier = Modifier.fillMaxWidth()) {
                     if (isBusy) {
-                        CircularProgressIndicator(modifier = Modifier.size(adaptiveUi.iconSmall), strokeWidth = 2.dp)
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                     } else {
                         Icon(Icons.Default.Backup, null)
                     }
-                    Spacer(Modifier.width(adaptiveUi.sectionSpacing))
+                    Spacer(Modifier.width(8.dp))
                     Text(if (isBusy) "处理中" else "立即备份")
                 }
-                Spacer(Modifier.height(adaptiveUi.sectionSpacing))
+                Spacer(Modifier.height(8.dp))
                 Button(onClick = onImport, enabled = !isBusy, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Default.Upload, null)
-                    Spacer(Modifier.width(adaptiveUi.sectionSpacing))
+                    Spacer(Modifier.width(8.dp))
                     Text("导入备份")
                 }
-                Spacer(Modifier.height(adaptiveUi.sectionSpacing))
+                Spacer(Modifier.height(8.dp))
                 Text(
                     "备份文件可跨设备导入。导入会合并到当前数据，同 ID 内容会被覆盖，其余保留。",
                     style = MaterialTheme.typography.bodySmall,
@@ -162,7 +197,6 @@ fun BackupSettingsContent(
 fun WebDavSettingsContent(
     modifier: Modifier = Modifier
 ) {
-    val adaptiveUi = rememberAdaptiveUiSize()
     var serverUrl by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -170,11 +204,11 @@ fun WebDavSettingsContent(
     
     Column(
         modifier = modifier
-            .padding(adaptiveUi.screenPadding)
+            .padding(16.dp)
             .fillMaxWidth()
     ) {
         Text("WebDAV 设置", style = MaterialTheme.typography.titleLarge)
-        Spacer(Modifier.height(adaptiveUi.cardPadding))
+        Spacer(Modifier.height(16.dp))
         
         OutlinedTextField(
             value = serverUrl,
@@ -182,14 +216,14 @@ fun WebDavSettingsContent(
             label = { Text("服务器地址") },
             modifier = Modifier.fillMaxWidth()
         )
-        Spacer(Modifier.height(adaptiveUi.sectionSpacing))
+        Spacer(Modifier.height(8.dp))
         OutlinedTextField(
             value = username,
             onValueChange = { username = it },
             label = { Text("用户名") },
             modifier = Modifier.fillMaxWidth()
         )
-        Spacer(Modifier.height(adaptiveUi.sectionSpacing))
+        Spacer(Modifier.height(8.dp))
         OutlinedTextField(
             value = password,
             onValueChange = { password = it },
@@ -198,7 +232,7 @@ fun WebDavSettingsContent(
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
-        Spacer(Modifier.height(adaptiveUi.cardPadding))
+        Spacer(Modifier.height(16.dp))
         Button(
             onClick = {
                 statusText = if (serverUrl.isBlank()) {
@@ -212,7 +246,7 @@ fun WebDavSettingsContent(
             Text("检查配置")
         }
         statusText?.let {
-            Spacer(Modifier.height(adaptiveUi.sectionSpacing))
+            Spacer(Modifier.height(8.dp))
             Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
@@ -222,7 +256,6 @@ fun WebDavSettingsContent(
 fun DiarySettingsDialog(
     onDismiss: () -> Unit
 ) {
-    val adaptiveUi = rememberAdaptiveUiSize()
     val context = androidx.compose.ui.platform.LocalContext.current
     var scrollEnabled by remember { mutableStateOf(com.memoriabox.utils.AppSettings.getDiaryScrollEnabled(context)) }
     var scrollSpeed by remember { mutableIntStateOf(com.memoriabox.utils.AppSettings.getDiaryScrollSpeed(context)) }
@@ -231,7 +264,7 @@ fun DiarySettingsDialog(
         onDismissRequest = onDismiss,
         title = { Text("日记设置") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(adaptiveUi.cardPadding)) {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -319,7 +352,6 @@ fun MonthlySummarySettingsDialog(
             }
         }
     }
-    val adaptiveUi = rememberAdaptiveUiSize()
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -327,7 +359,7 @@ fun MonthlySummarySettingsDialog(
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(adaptiveUi.cardPadding)
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -456,15 +488,14 @@ private fun MonthlyMediaSettingsPanel(
     onClearImages: () -> Unit,
     onClearVideos: () -> Unit
 ) {
-    val adaptiveUi = rememberAdaptiveUiSize()
-    Column(verticalArrangement = Arrangement.spacedBy(adaptiveUi.contentSpacing)) {
-        Column(verticalArrangement = Arrangement.spacedBy(adaptiveUi.tightSpacing / 2f)) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text("当月相册 / 视频", style = MaterialTheme.typography.titleSmall)
             Text("当前配置 ${selectedYear} 年 ${selectedMonth} 月素材。支持一次选择多张照片或多个视频，下面可横向滑动预览和移除。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             OutlinedButton(onClick = { onYearSelected((selectedYear - 1).coerceIn(1900, 2100)) }) { Text("上一年") }
@@ -473,7 +504,7 @@ private fun MonthlyMediaSettingsPanel(
         }
         Row(
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(adaptiveUi.tightSpacing)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             (1..12).forEach { month ->
                 FilterChip(
@@ -483,15 +514,15 @@ private fun MonthlyMediaSettingsPanel(
                 )
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing), modifier = Modifier.fillMaxWidth()) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             OutlinedButton(onClick = onAddImages, modifier = Modifier.weight(1f)) {
                 Icon(Icons.Default.Image, contentDescription = null)
-                Spacer(Modifier.width(adaptiveUi.tightSpacing))
+                Spacer(Modifier.width(4.dp))
                 Text("批量加照片")
             }
             OutlinedButton(onClick = onAddVideos, modifier = Modifier.weight(1f)) {
                 Icon(Icons.Default.Videocam, contentDescription = null)
-                Spacer(Modifier.width(adaptiveUi.tightSpacing))
+                Spacer(Modifier.width(4.dp))
                 Text("批量加视频")
             }
         }
@@ -502,11 +533,10 @@ private fun MonthlyMediaSettingsPanel(
 
 @Composable
 private fun MonthlyMediaStrip(title: String, items: List<String>, isVideo: Boolean, onRemove: (String) -> Unit, onClear: () -> Unit) {
-    val adaptiveUi = rememberAdaptiveUiSize()
     var selectedIndex by remember(items) { mutableIntStateOf(0) }
     var showClearConfirm by remember { mutableStateOf(false) }
     val selectedItem = items.getOrNull(selectedIndex.coerceIn(0, (items.size - 1).coerceAtLeast(0)))
-    Column(verticalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing)) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -519,55 +549,55 @@ private fun MonthlyMediaStrip(title: String, items: List<String>, isVideo: Boole
         }
         if (items.isEmpty()) {
             Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.56f), modifier = Modifier.fillMaxWidth()) {
-                Text(if (isVideo) "暂无视频，可一次选择多个视频" else "暂无照片，可一次选择多张照片", modifier = Modifier.padding(adaptiveUi.cardPadding), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(if (isVideo) "暂无视频，可一次选择多个视频" else "暂无照片，可一次选择多张照片", modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         } else {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(adaptiveUi.cardRadius),
+                shape = RoundedCornerShape(20.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(if (isVideo) adaptiveUi.homeRowMinHeight * 1.2f else adaptiveUi.homeRowMinHeight * 1.85f)
-                        .padding(adaptiveUi.sectionSpacing)
-                        .clip(RoundedCornerShape(adaptiveUi.cardRadius))
+                        .height(if (isVideo) 96.dp else 148.dp)
+                        .padding(8.dp)
+                        .clip(RoundedCornerShape(16.dp))
                         .background(MaterialTheme.colorScheme.surface),
                     contentAlignment = Alignment.Center
                 ) {
                     if (selectedItem != null && !isVideo) {
                         AsyncImage(model = selectedItem, contentDescription = "当前照片", contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
                     } else {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(adaptiveUi.tightSpacing)) {
-                            Icon(Icons.Default.PlayCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(adaptiveUi.iconLarge))
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Icon(Icons.Default.PlayCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
                             Text(selectedItem?.substringAfterLast('/')?.take(36) ?: "视频素材", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                         }
                     }
                     IconButton(
                         onClick = { selectedItem?.let(onRemove) },
-                        modifier = Modifier.align(Alignment.TopEnd).size(adaptiveUi.buttonHeight)
+                        modifier = Modifier.align(Alignment.TopEnd).size(44.dp)
                     ) {
                         Icon(Icons.Default.Close, contentDescription = "移除当前素材", tint = if (isVideo) MaterialTheme.colorScheme.primary else Color.White)
                     }
                 }
             }
-            Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing)) {
+            Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items.forEachIndexed { index, uri ->
                     Box(
                         modifier = Modifier
-                            .size(width = adaptiveUi.filterMinWidth, height = adaptiveUi.homeRowMinHeight * 0.85f)
-                            .clip(RoundedCornerShape(adaptiveUi.cardRadius))
+                            .size(width = 84.dp, height = 68.dp)
+                            .clip(RoundedCornerShape(18.dp))
                             .background(if (index == selectedIndex) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)
                             .clickable { selectedIndex = index }
                     ) {
                         if (isVideo) {
-                            Icon(Icons.Default.PlayCircle, contentDescription = "视频", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.align(Alignment.Center).size(adaptiveUi.iconLarge))
+                            Icon(Icons.Default.PlayCircle, contentDescription = "视频", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.align(Alignment.Center).size(28.dp))
                         } else {
                             AsyncImage(model = uri, contentDescription = "照片", contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
                         }
-                        IconButton(onClick = { onRemove(uri) }, modifier = Modifier.align(Alignment.TopEnd).size(adaptiveUi.chipHeight)) {
-                            Icon(Icons.Default.Close, contentDescription = "移除", tint = if (isVideo) MaterialTheme.colorScheme.primary else Color.White, modifier = Modifier.size(adaptiveUi.iconSmall))
+                        IconButton(onClick = { onRemove(uri) }, modifier = Modifier.align(Alignment.TopEnd).size(40.dp)) {
+                            Icon(Icons.Default.Close, contentDescription = "移除", tint = if (isVideo) MaterialTheme.colorScheme.primary else Color.White, modifier = Modifier.size(20.dp))
                         }
                     }
                 }
@@ -603,13 +633,12 @@ fun UpcomingEventsSettingsDialog(
     var reminderEnabled by remember { mutableStateOf(com.memoriabox.utils.AppSettings.getUpcomingEventsReminderEnabled(context)) }
     var urgentColor by remember { mutableStateOf(com.memoriabox.utils.AppSettings.getUpcomingEventsUrgentColor(context)) }
     var normalColor by remember { mutableStateOf(com.memoriabox.utils.AppSettings.getUpcomingEventsNormalColor(context)) }
-    val adaptiveUi = rememberAdaptiveUiSize()
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("即将到来") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(adaptiveUi.cardPadding)) {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -725,13 +754,12 @@ fun HolidaySettingsDialog(
     val context = androidx.compose.ui.platform.LocalContext.current
     var reminderEnabled by remember { mutableStateOf(com.memoriabox.utils.AppSettings.getHolidayReminderEnabled(context)) }
     var testResult by remember { mutableStateOf<String?>(null) }
-    val adaptiveUi = rememberAdaptiveUiSize()
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("节假日提醒") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(adaptiveUi.cardPadding)) {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,

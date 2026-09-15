@@ -657,23 +657,23 @@ fun EventDialog(
                                 modifier = Modifier.fillMaxSize()
                             )
                             Surface(
-                                modifier = Modifier.align(Alignment.BottomEnd).padding(adaptiveUi.tightSpacing),
+                                modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp),
                                 color = Color.Black.copy(alpha = 0.5f),
-                                shape = RoundedCornerShape(adaptiveUi.tightSpacing)
+                                shape = RoundedCornerShape(8.dp)
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = adaptiveUi.sectionSpacing, vertical = adaptiveUi.tightSpacing / 2f),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(adaptiveUi.tightSpacing)
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
-                                    Icon(Icons.Default.Edit, contentDescription = null, tint = Color.White, modifier = Modifier.size(adaptiveUi.iconSmall))
+                                    Icon(Icons.Default.Edit, contentDescription = null, tint = Color.White, modifier = Modifier.size(13.dp))
                                     Text("切换背景图", color = Color.White, style = MaterialTheme.typography.labelSmall)
                                 }
                             }
                         } else {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Icon(Icons.Default.Image, contentDescription = null)
-                                Spacer(modifier = Modifier.height(adaptiveUi.tightSpacing))
+                                Spacer(modifier = Modifier.height(4.dp))
                                 Text("选择背景图", style = MaterialTheme.typography.bodyMedium)
                             }
                         }
@@ -923,7 +923,7 @@ fun EventDialog(
                 EditSection(title = "更多", expanded = moreExpanded, onToggle = { moreExpanded = !moreExpanded }) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         OutlinedButton(
                             onClick = { showLunarCalendar = true },

@@ -9,6 +9,7 @@ import androidx.compose.ui.unit.dp
 
 data class AdaptiveUiSize(
     val compact: Boolean,
+    val roomy: Boolean,
     val screenPadding: Dp,
     val sectionSpacing: Dp,
     val tightSpacing: Dp,
@@ -18,6 +19,7 @@ data class AdaptiveUiSize(
     val chipHeight: Dp,
     val cardRadius: Dp,
     val cardPadding: Dp,
+    val listItemMinHeight: Dp,
     val homeRowMinHeight: Dp,
     val iconSmall: Dp,
     val iconMedium: Dp,
@@ -25,12 +27,7 @@ data class AdaptiveUiSize(
     val logoMarkSize: Dp,
     val filterMinWidth: Dp,
     val filterMaxWidth: Dp,
-    val maxContentWidth: Dp,
-    val calendarCellMin: Dp,
-    val calendarCellMax: Dp,
-    val heatStripHeight: Dp,
-    val swatchWidth: Dp,
-    val swatchHeight: Dp
+    val maxContentWidth: Dp
 )
 
 @Composable
@@ -47,6 +44,7 @@ fun rememberAdaptiveUiSize(): AdaptiveUiSize {
         val roomy = tablet || width >= 430 || tallest >= 960
         AdaptiveUiSize(
             compact = compact,
+            roomy = roomy,
             screenPadding = when {
                 tablet -> 28.dp
                 compact -> 14.dp
@@ -91,6 +89,7 @@ fun rememberAdaptiveUiSize(): AdaptiveUiSize {
                 tablet -> 18.dp
                 else -> 14.dp
             },
+            listItemMinHeight = if (compact) 92.dp else 104.dp,
             homeRowMinHeight = when {
                 compact -> 72.dp
                 roomy -> 88.dp
@@ -102,12 +101,7 @@ fun rememberAdaptiveUiSize(): AdaptiveUiSize {
             logoMarkSize = if (compact) 28.dp else 32.dp,
             filterMinWidth = if (compact) 84.dp else 96.dp,
             filterMaxWidth = if (compact) 128.dp else if (roomy) 180.dp else 150.dp,
-            maxContentWidth = if (tablet) 760.dp else 640.dp,
-            calendarCellMin = if (compact) 44.dp else 52.dp,
-            calendarCellMax = if (roomy) 88.dp else 72.dp,
-            heatStripHeight = if (compact) 5.dp else 6.dp,
-            swatchWidth = if (compact) 48.dp else 54.dp,
-            swatchHeight = if (compact) 24.dp else 28.dp
+            maxContentWidth = if (tablet) 760.dp else 640.dp
         )
     }
 }

@@ -93,6 +93,9 @@ fun LogsScreen(application: Application) {
     val logs by viewModel.logs.collectAsState(initial = emptyList())
 
     Column(modifier = Modifier.fillMaxSize()) {
+        LogFilterBar(
+            onFilterChange = { viewModel.setFilter(it) }
+        )
         LogsList(logs = logs)
     }
 }

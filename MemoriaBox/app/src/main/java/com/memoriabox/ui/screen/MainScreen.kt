@@ -356,6 +356,11 @@ fun MainScreen(
                     TodoScreen(application)
                 }
             }
+            composable(Screen.Logs.route) {
+                ScreenBgWrapper(context = androidx.compose.ui.platform.LocalContext.current, page = "LOGS") {
+                    LogsScreen(application)
+                }
+            }
             composable(Screen.Settings.route) {
                 ScreenBgWrapper(context = androidx.compose.ui.platform.LocalContext.current, page = "SETTINGS") {
                     SettingsScreen(
@@ -374,6 +379,12 @@ fun MainScreen(
                 )
                 }
             }
+            composable(Screen.Export.route) {
+                ExportScreen(
+                    application = application,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
             composable(Screen.BackupSettings.route) {
                 BackupSettingsScreen(
                     application = application,
@@ -385,6 +396,12 @@ fun MainScreen(
                     application = application,
                     onNavigateBack = { navController.popBackStack() }
                 )
+            }
+            composable(Screen.Timeline.route) {
+                TimelineScreen(application)
+            }
+            composable(Screen.SyncStatus.route) {
+                SyncStatusScreen(application)
             }
             composable(Screen.CustomizationSettings.route) {
                 CustomizationSettingsScreen(
@@ -398,6 +415,24 @@ fun MainScreen(
                     onNavigateToFriendDetail = { friendId ->
                         navController.navigate(Screen.FriendDetail.createRoute(friendId))
                     }
+                )
+            }
+            composable(Screen.EchoTime.route) {
+                EchoTimeScreen(
+                    application = application,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+            composable(Screen.Mood.route) {
+                MoodScreen(
+                    application = application,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+            composable(Screen.Labels.route) {
+                LabelManageScreen(
+                    application = application,
+                    onNavigateBack = { navController.popBackStack() }
                 )
             }
             composable(

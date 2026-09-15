@@ -285,11 +285,6 @@ fun SettingsScreen(
 @Composable
 fun SettingsHeroCard() {
     val adaptiveUi = rememberAdaptiveUiSize()
-    val primaryContainer = MaterialTheme.colorScheme.primaryContainer
-    val surfaceColor = MaterialTheme.colorScheme.surface
-    val heroBrush = remember(primaryContainer, surfaceColor) {
-        Brush.linearGradient(listOf(primaryContainer.copy(alpha = 0.80f), surfaceColor))
-    }
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = adaptiveUi.screenPadding, vertical = adaptiveUi.sectionSpacing),
         shape = MaterialTheme.shapes.extraLarge,
@@ -299,7 +294,14 @@ fun SettingsHeroCard() {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(heroBrush)
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.80f),
+                            MaterialTheme.colorScheme.surface
+                        )
+                    )
+                )
                 .padding(adaptiveUi.cardPadding),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(adaptiveUi.cardPadding)
@@ -329,14 +331,14 @@ fun ThemeModeCard(currentThemeMode: AppThemeMode, onThemeModeChange: (AppThemeMo
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(adaptiveUi.tightSpacing / 2f)) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text("当前主题", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
                     Text(currentThemeMode.label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                 }
                 Box(
                     modifier = Modifier
-                        .width(adaptiveUi.swatchWidth)
-                        .height(adaptiveUi.swatchHeight)
+                        .width(54.dp)
+                        .height(28.dp)
                         .clip(RoundedCornerShape(999.dp))
                         .background(themePreviewBrush(currentThemeMode))
                 )
@@ -382,7 +384,7 @@ private fun ThemePreviewCard(mode: AppThemeMode, selected: Boolean, onClick: () 
                     .clip(RoundedCornerShape(adaptiveUi.tightSpacing + 3.dp))
                     .background(themePreviewBrush(mode))
             )
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(adaptiveUi.tightSpacing / 4f)) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 Text(mode.label, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(mode.description, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
@@ -390,14 +392,14 @@ private fun ThemePreviewCard(mode: AppThemeMode, selected: Boolean, onClick: () 
     }
 }
 
-private val themePreviewBrushes: Map<AppThemeMode, Brush> = mapOf(
-    AppThemeMode.BLUE_WHITE to Brush.linearGradient(listOf(Color(0xFF1677FF), Color(0xFFFFFFFF))),
-    AppThemeMode.DARK to Brush.linearGradient(listOf(Color(0xFF17121A), Color(0xFFB8A6FF))),
-    AppThemeMode.EYE_CARE to Brush.linearGradient(listOf(Color(0xFF2E7D32), Color(0xFFFAFCF4))),
-    AppThemeMode.LAVENDER to Brush.linearGradient(listOf(Color(0xFF8B5CF6), Color(0xFFFCF8FF)))
-)
-
-private fun themePreviewBrush(mode: AppThemeMode): Brush = themePreviewBrushes.getValue(mode)
+private fun themePreviewBrush(mode: AppThemeMode): Brush {
+    return when (mode) {
+        AppThemeMode.BLUE_WHITE -> Brush.linearGradient(listOf(Color(0xFF1677FF), Color(0xFFFFFFFF)))
+        AppThemeMode.DARK -> Brush.linearGradient(listOf(Color(0xFF17121A), Color(0xFFB8A6FF)))
+        AppThemeMode.EYE_CARE -> Brush.linearGradient(listOf(Color(0xFF2E7D32), Color(0xFFFAFCF4)))
+        AppThemeMode.LAVENDER -> Brush.linearGradient(listOf(Color(0xFF8B5CF6), Color(0xFFFCF8FF)))
+    }
+}
 
 @Composable
 fun SettingsSectionTitle(title: String, description: String) {
