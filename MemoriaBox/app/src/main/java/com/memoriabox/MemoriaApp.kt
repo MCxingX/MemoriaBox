@@ -93,6 +93,7 @@ class MemoriaApp : Application() {
     override fun onTerminate() {
         super.onTerminate()
         Log.d(TAG, "Application onTerminate")
+        runCatching { backupManager.cancel() }
     }
     
     override fun onLowMemory() {
