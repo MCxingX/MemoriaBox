@@ -36,16 +36,19 @@ fun BackgroundCustomizerDialog(
     var blurLevel by remember { mutableFloatStateOf(0f) }
     var overlayAlpha by remember { mutableFloatStateOf(0f) }
     var showColorPicker by remember { mutableStateOf(false) }
+    var isCopying by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         uri?.let {
+            isCopying = true
             scope.launch(Dispatchers.IO) {
                 val saved = ImageImportUtils.copyImageToPrivateStorage(context, it, "dialog_backgrounds")
                 selectedBgType = com.memoriabox.data.model.BgType.IMAGE
                 selectedBgValue = saved ?: it.toString()
+                isCopying = false
             }
         }
     }
@@ -70,9 +73,13 @@ fun BackgroundCustomizerDialog(
                             } else {
                                 Color.Gray
                             }
-                        )
+                        ),
+                    contentAlignment = Alignment.Center
                 ) {
-                    if (selectedBgType == com.memoriabox.data.model.BgType.IMAGE) {
+                    if (isCopying) {
+                        CircularProgressIndicator(modifier = Modifier.size(32.dp), strokeWidth = 2.dp)
+                    }
+                    if (selectedBgType == com.memoriabox.data.model.BgType.IMAGE && !isCopying) {
                         Box(
                             modifier = Modifier
                                 .matchParentSize()

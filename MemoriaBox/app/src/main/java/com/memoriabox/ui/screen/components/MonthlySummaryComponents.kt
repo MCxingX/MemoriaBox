@@ -16,6 +16,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
@@ -153,6 +155,7 @@ fun MonthlySummaryPanel(
 fun DailySummaryPanel(
     state: MonthlySummaryUiState,
     onDismiss: () -> Unit,
+    onRetry: () -> Unit,
     onPlayModeChange: (Boolean) -> Unit,
     onSpeedChange: (Float) -> Unit,
     onTextEnabledChange: (Boolean) -> Unit,
@@ -232,7 +235,7 @@ fun DailySummaryPanel(
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Text("今日总结加载失败，请稍后重试。", color = Color.White)
-                        FilledTonalButton(onClick = onDismiss) {
+                        FilledTonalButton(onClick = onRetry) {
                             Icon(Icons.Default.Refresh, contentDescription = null)
                             Spacer(Modifier.width(4.dp))
                             Text("重试")
@@ -311,12 +314,12 @@ private fun MonthlySummaryControls(
             IconButton(onClick = onPrev, enabled = canMovePrev) { Icon(Icons.Default.SkipPrevious, contentDescription = "上一项", tint = Color.White) }
             IconButton(onClick = onNext, enabled = canMoveNext) { Icon(Icons.Default.SkipNext, contentDescription = "下一项", tint = Color.White) }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Switch(checked = textEnabled, onCheckedChange = onTextEnabledChange)
+                Switch(checked = textEnabled, onCheckedChange = onTextEnabledChange, modifier = Modifier.semantics { contentDescription = "显示文字" })
                 Text("文字", color = Color.White, style = MaterialTheme.typography.labelMedium)
             }
         }
         Text("播放速度 ${"%.1f".format(speed)}x", color = Color.White.copy(alpha = 0.84f), style = MaterialTheme.typography.labelMedium)
-        Slider(value = speed, onValueChange = onSpeedChange, valueRange = 0.5f..2.0f, steps = 4)
+        Slider(value = speed, onValueChange = onSpeedChange, valueRange = 0.5f..2.0f, steps = 4, modifier = Modifier.semantics { contentDescription = "播放速度 ${"%.1f".format(speed)}倍" })
     }
 }
 

@@ -18,12 +18,14 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -38,6 +40,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
@@ -542,9 +547,9 @@ fun CalendarViewScreen(
     val themeTokens = LocalMemoriaThemeTokens.current
     val context = LocalContext.current
     val settingsVersion = AppSettings.settingsVersion
-    var currentMonthYear by remember { mutableStateOf("${Calendar.getInstance().get(Calendar.YEAR)}-${Calendar.getInstance().get(Calendar.MONTH) + 1}") }
-    var showMonthPicker by remember { mutableStateOf(false) }
-    var showMonthlySummary by remember { mutableStateOf(initialShowSummary) }
+    var currentMonthYear by rememberSaveable { mutableStateOf("${Calendar.getInstance().get(Calendar.YEAR)}-${Calendar.getInstance().get(Calendar.MONTH) + 1}") }
+    var showMonthPicker by rememberSaveable { mutableStateOf(false) }
+    var showMonthlySummary by rememberSaveable { mutableStateOf(initialShowSummary) }
     LaunchedEffect(initialShowSummary) {
         if (initialShowSummary) showMonthlySummary = true
     }
@@ -574,10 +579,14 @@ fun CalendarViewScreen(
     var detailDay by remember { mutableStateOf<Pair<Long, List<Event>>?>(null) }
     var selectedDiaryForView by remember { mutableStateOf<DiaryEntry?>(null) }
     var editingDiary by remember { mutableStateOf<DiaryEntry?>(null) }
-    var editingDiaryDate by remember { mutableStateOf<Long?>(null) }
+    var editingDiaryDate by rememberSaveable { mutableStateOf<Long?>(null) }
     var diaryForDelete by remember { mutableStateOf<DiaryEntry?>(null) }
     var monthSwipeOffset by remember { mutableFloatStateOf(0f) }
     val animatedMonthSwipeOffset by animateFloatAsState(monthSwipeOffset, label = "calendarMonthSwipe")
+
+    androidx.activity.compose.BackHandler(enabled = selectedDay != null) {
+        selectedDay = null
+    }
 
     val diaryMap = remember(diaries) {
         diaries.groupBy { startOfDayMillis(it.dateStart) }
@@ -1122,7 +1131,7 @@ private fun CalendarHeatStrip(events: List<Event>, diaries: List<DiaryEntry>, mo
                 count > 0 -> tokens.heatLow
                 else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
             }
-            Box(modifier = Modifier.weight(1f).height(6.dp).clip(RoundedCornerShape(99.dp)).background(color))
+            Box(modifier = Modifier.weight(1f).height(6.dp).clip(RoundedCornerShape(99.dp)).background(color).semantics { contentDescription = "${day}日 $count 条记录" })
         }
     }
 }
@@ -1192,7 +1201,7 @@ private fun SelectedDaySummaryCard(
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(adaptiveUi.tightSpacing)
+                horizontalArrangement = Arrangement.spacedBy(adaptiveUi.contentSpacing)
             ) {
                 TextButton(onClick = { onAddEvent(date) }) { Text("新增日子") }
                 TextButton(onClick = onWriteDiary) { Text("写日记") }
@@ -1201,7 +1210,7 @@ private fun SelectedDaySummaryCard(
                 if (diaries.isNotEmpty()) {
                     TextButton(onClick = onPlayDaySummary) {
                         Icon(Icons.Default.AutoStories, contentDescription = "今日总结", modifier = Modifier.size(adaptiveUi.iconSmall))
-                        Spacer(Modifier.width(adaptiveUi.tightSpacing))
+                        Spacer(Modifier.width(adaptiveUi.contentSpacing))
                         Text("今日总结")
                     }
                 }
@@ -1358,13 +1367,15 @@ private fun MonthJumpDialog(initialMonth: Long, onDismiss: () -> Unit, onConfirm
     val initial = remember(initialMonth) { Calendar.getInstance().apply { timeInMillis = initialMonth } }
     var yearText by remember(initialMonth) { mutableStateOf(initial.get(Calendar.YEAR).toString()) }
     var monthText by remember(initialMonth) { mutableStateOf((initial.get(Calendar.MONTH) + 1).toString()) }
+    val yearValid = yearText.toIntOrNull()?.let { it in 1900..2100 } ?: false
+    val monthValid = monthText.toIntOrNull()?.let { it in 1..12 } ?: false
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("跳转月份") },
         text = {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(value = yearText, onValueChange = { yearText = it.filter(Char::isDigit).take(4) }, label = { Text("年份") }, modifier = Modifier.weight(1f))
-                OutlinedTextField(value = monthText, onValueChange = { monthText = it.filter(Char::isDigit).take(2) }, label = { Text("月份") }, modifier = Modifier.weight(1f))
+                OutlinedTextField(value = yearText, onValueChange = { yearText = it.filter(Char::isDigit).take(4) }, label = { Text("年份") }, isError = yearText.isNotEmpty() && !yearValid, supportingText = { if (yearText.isNotEmpty() && !yearValid) Text("1900-2100") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f))
+                OutlinedTextField(value = monthText, onValueChange = { monthText = it.filter(Char::isDigit).take(2) }, label = { Text("月份") }, isError = monthText.isNotEmpty() && !monthValid, supportingText = { if (monthText.isNotEmpty() && !monthValid) Text("1-12") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f))
             }
         },
         confirmButton = {
@@ -1372,7 +1383,7 @@ private fun MonthJumpDialog(initialMonth: Long, onDismiss: () -> Unit, onConfirm
                 val year = yearText.toIntOrNull()?.coerceIn(1900, 2100) ?: initial.get(Calendar.YEAR)
                 val month = monthText.toIntOrNull()?.coerceIn(1, 12) ?: initial.get(Calendar.MONTH) + 1
                 onConfirm(Calendar.getInstance().apply { clear(); set(Calendar.ERA, java.util.GregorianCalendar.AD); set(year, month - 1, 1, 0, 0, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis)
-            }) { Text("跳转") }
+            }, enabled = yearText.isNotBlank() && monthText.isNotBlank() && (yearValid || yearText.isBlank()) && (monthValid || monthText.isBlank())) { Text("跳转") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
     )
@@ -1442,16 +1453,16 @@ fun CalendarDayCell(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (diaries.isNotEmpty()) {
-                    CalendarMarker(color = tokens.diaryMarker, wide = diaries.size > 1)
+                    CalendarMarker(color = tokens.diaryMarker, wide = diaries.size > 1, label = "日记${diaries.size}篇")
                 }
                 if (hasAnniversary) {
-                    CalendarMarker(color = tokens.anniversaryMarker, wide = events.size > 1)
+                    CalendarMarker(color = tokens.anniversaryMarker, wide = events.size > 1, label = "日子${events.size}个")
                 }
                 if (hasBirthday) {
-                    CalendarMarker(color = tokens.festivalMarker)
+                    CalendarMarker(color = tokens.festivalMarker, label = "生日")
                 }
                 if (hasTodo) {
-                    CalendarMarker(color = tokens.todoMarker)
+                    CalendarMarker(color = tokens.todoMarker, label = "待办")
                 }
             }
         }
@@ -1459,13 +1470,14 @@ fun CalendarDayCell(
 }
 
 @Composable
-private fun CalendarMarker(color: Color, wide: Boolean = false) {
+private fun CalendarMarker(color: Color, wide: Boolean = false, label: String = "") {
     Box(
         modifier = Modifier
             .height(7.dp)
             .width(if (wide) 16.dp else 9.dp)
             .clip(RoundedCornerShape(999.dp))
             .background(color)
+            .semantics { if (label.isNotEmpty()) contentDescription = label }
     )
 }
 

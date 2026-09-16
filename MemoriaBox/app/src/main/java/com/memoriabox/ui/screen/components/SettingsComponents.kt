@@ -21,7 +21,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.memoriabox.ui.utils.rememberAdaptiveUiSize
@@ -160,6 +162,7 @@ fun BackupSettingsContent(
                     supportingText = { Text("留空导出为明文备份，可在新设备免密码导入；设置密码后备份会加密。") },
                     visualTransformation = PasswordVisualTransformation(),
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !isBusy
                 )
@@ -218,6 +221,8 @@ fun WebDavSettingsContent(
             value = serverUrl,
             onValueChange = { serverUrl = it },
             label = { Text("服务器地址") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.height(adaptiveUi.contentSpacing))
@@ -225,6 +230,8 @@ fun WebDavSettingsContent(
             value = username,
             onValueChange = { username = it },
             label = { Text("用户名") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.height(adaptiveUi.contentSpacing))
@@ -234,6 +241,7 @@ fun WebDavSettingsContent(
             label = { Text("密码") },
             visualTransformation = PasswordVisualTransformation(),
             singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.height(adaptiveUi.sectionSpacing))

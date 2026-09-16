@@ -461,7 +461,7 @@ fun EventDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = true, dismissOnClickOutside = false)
     ) {
-        Surface(modifier = Modifier.fillMaxSize().navigationBarsPadding().imePadding(), color = MaterialTheme.colorScheme.surface) {
+        Surface(modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding(), color = MaterialTheme.colorScheme.surface) {
             Column(modifier = Modifier.fillMaxSize()) {
                 Row(
                     modifier = Modifier

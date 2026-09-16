@@ -394,16 +394,16 @@ private fun LabelCreateDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    palette.forEach { hex ->
+                    palette.forEachIndexed { index, hex ->
                         val selected = color == hex
                         Box(
                             modifier = Modifier
-                                .size(44.dp)
+                                .size(48.dp)
                                 .clip(CircleShape)
                                 .border(2.dp, if (selected) MaterialTheme.colorScheme.primary else Color.Transparent, CircleShape)
                                 .background(runCatching { ColorUtils.hexToColor(hex) }.getOrDefault(Color.Gray))
                                 .clickable { color = hex }
-                                .semantics { contentDescription = "选择颜色 $hex" }
+                                .semantics { contentDescription = "颜色选项第${index + 1}个${if (selected) "，已选中" else ""}" }
                         )
                     }
                 }

@@ -72,13 +72,16 @@ fun ScrollingTextAnimation(
 
     var visibleChars by remember { mutableIntStateOf(0) }
     var isComplete by remember { mutableStateOf(false) }
+    val stepSize = if (text.length > 100) (text.length / 100).coerceAtLeast(1) else 1
 
     LaunchedEffect(text, scrollSpeed) {
         visibleChars = 0
         isComplete = false
-        for (i in text.indices) {
+        var i = 0
+        while (i < text.length) {
             if (!isActive) break
-            visibleChars = i + 1
+            i = (i + stepSize).coerceAtMost(text.length)
+            visibleChars = i
             delay(scrollSpeed.toLong())
         }
         isComplete = true

@@ -303,6 +303,7 @@ fun MainScreen(
                     DailySummaryPanel(
                         state = dailySummaryState,
                         onDismiss = { dailySummaryDate = null },
+                        onRetry = { calendarVM.loadDailySummary(it) },
                         onPlayModeChange = { },
                         onSpeedChange = { speed ->
                             AppSettings.setMonthlySummaryPlaySpeedFactor(calendarContext, speed)

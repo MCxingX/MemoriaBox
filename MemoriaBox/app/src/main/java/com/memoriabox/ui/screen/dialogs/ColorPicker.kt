@@ -25,6 +25,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.memoriabox.utils.ColorUtils
 import kotlinx.coroutines.delay
@@ -107,6 +109,7 @@ fun ColorPickerDialog(
                         .height(60.dp)
                         .clip(RoundedCornerShape(8.dp))
                         .background(selectedColor)
+                        .semantics { contentDescription = "当前颜色 ${ColorUtils.colorToHex(selectedColor)}" }
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -190,6 +193,7 @@ fun HsvColorPicker(
                         onColorChanged(Color.hsv(hue, newSat, newBright))
                     }
                 }
+                .semantics { contentDescription = "饱和度与亮度选择区，可拖动调整" }
                 .onSizeChanged { size ->
                     boxWidth = size.width.toFloat()
                     boxHeight = size.height.toFloat()
@@ -368,18 +372,20 @@ fun PresetColors(
         Text("莫兰迪色系", style = MaterialTheme.typography.labelLarge)
         Spacer(modifier = Modifier.height(8.dp))
         LazyVerticalGrid(
-            columns = GridCells.Fixed(8),
-            modifier = Modifier.height(80.dp),
+            columns = GridCells.Fixed(6),
+            modifier = Modifier.heightIn(max = 120.dp),
             contentPadding = PaddingValues(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(MORANDI_COLORS) { color ->
                 Box(
                     modifier = Modifier
-                        .size(32.dp)
+                        .size(48.dp)
                         .clip(CircleShape)
                         .background(color)
                         .clickable { onColorSelected(color) }
+                        .semantics { contentDescription = "莫兰迪色 ${ColorUtils.colorToHex(color)}" }
                 )
             }
         }
@@ -389,19 +395,20 @@ fun PresetColors(
         Text("预设颜色", style = MaterialTheme.typography.labelLarge)
         Spacer(modifier = Modifier.height(8.dp))
         LazyVerticalGrid(
-            columns = GridCells.Fixed(6),
-            modifier = Modifier.height(240.dp),
+            columns = GridCells.Fixed(5),
+            modifier = Modifier.heightIn(max = 320.dp),
             contentPadding = PaddingValues(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(PRESET_COLORS) { color ->
                 Box(
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(48.dp)
                         .clip(CircleShape)
                         .background(color)
                         .clickable { onColorSelected(color) }
+                        .semantics { contentDescription = "预设色 ${ColorUtils.colorToHex(color)}" }
                 )
             }
         }
