@@ -68,8 +68,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.memoriabox.utils.LunarDateUtils
 import coil.compose.AsyncImage
-import coil.compose.AsyncImagePainter
-import coil.compose.rememberAsyncImagePainter
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.abs
