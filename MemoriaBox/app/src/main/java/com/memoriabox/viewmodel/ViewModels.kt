@@ -83,7 +83,7 @@ class MainViewModel(
         try {
             val defaultBoxId = "default_1"
             if (box.id != defaultBoxId) {
-                val eventsInBox = eventRepository.getAllEventsOnce().filter { it.boxId == box.id }
+                val eventsInBox = eventRepository.getEventsByBoxIdOnce(box.id)
                 if (eventsInBox.isNotEmpty()) {
                     eventRepository.moveEventsToBox(eventsInBox.map { it.id }, defaultBoxId)
                 }
@@ -286,7 +286,7 @@ class BoxDetailViewModel(
         try {
             val defaultBoxId = "default_1"
             if (box.id != defaultBoxId) {
-                val eventsInBox = eventRepository.getAllEventsOnce().filter { it.boxId == box.id }
+                val eventsInBox = eventRepository.getEventsByBoxIdOnce(box.id)
                 if (eventsInBox.isNotEmpty()) {
                     eventRepository.moveEventsToBox(eventsInBox.map { it.id }, defaultBoxId)
                 }
@@ -482,20 +482,20 @@ class TodoViewModel(
         .map { list -> list.sortedWith(compareBy<Event> { if (it.todoStatus == TodoStatus.PENDING) 0 else 1 }.thenByDescending { it.todoPriority.ordinal }.thenBy { it.dueDate ?: Long.MAX_VALUE }.thenBy { it.createdAt }) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    private val _subtaskMap = MutableStateFlow<Map<String, List<TodoSubtask>>>(emptyMap())
-    val subtaskMap: StateFlow<Map<String, List<TodoSubtask>>> = _subtaskMap.asStateFlow()
+    private val _subtaskRefresh = MutableStateFlow(0L)
 
-    fun loadSubtasks(events: List<Event>) = viewModelScope.launch {
-        try {
-            if (events.isEmpty()) {
-                _subtaskMap.value = emptyMap()
-                return@launch
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val subtaskMap: StateFlow<Map<String, List<TodoSubtask>>> = combine(todoEvents, _subtaskRefresh) { events, _ -> events }
+        .flatMapLatest { events ->
+            if (events.isEmpty()) flowOf(emptyMap())
+            else flow {
+                emit(subtaskRepository.getSubtasksForTodosOnce(events.map { it.id }).groupBy { it.todoId })
             }
-            val subtasks = subtaskRepository.getSubtasksForTodosOnce(events.map { it.id })
-            _subtaskMap.value = subtasks.groupBy { it.todoId }
-        } catch (e: Exception) {
-            Log.e("TodoViewModel", "loadSubtasks failed", e)
         }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
+    fun loadSubtasks(events: List<Event>) {
+        // subtaskMap is now reactive via flatMapLatest on todoEvents
     }
 
     fun toggleTodoStatus(event: Event) = viewModelScope.launch {
@@ -549,10 +549,8 @@ class TodoViewModel(
         }
     }
 
-    private suspend fun refreshSubtasks() {
-        val ids = eventRepository.getAllEventsOnce().filter { it.type == EventType.TODO }.map { it.id }
-        _subtaskMap.value = if (ids.isEmpty()) emptyMap()
-            else subtaskRepository.getSubtasksForTodosOnce(ids).groupBy { it.todoId }
+    private fun refreshSubtasks() {
+        _subtaskRefresh.value++
     }
 
     fun isOverdue(event: Event): Boolean =
@@ -753,7 +751,7 @@ class LabelViewModel(
 
     fun setEventLabels(eventId: String, labels: Set<String>) = viewModelScope.launch {
         try {
-            val current = labelRepository.getAllEventLabelsOnce().filter { it.eventId == eventId }.map { it.label }.toSet()
+            val current = labelRepository.getEventLabelsOnce(eventId).toSet()
             val toAdd = labels - current
             val toRemove = current - labels
             toAdd.forEach { labelRepository.addEventLabel(EventLabel(eventId, it)) }
@@ -791,7 +789,7 @@ fun createMainViewModel(application: Application): MainViewModel {
         EventRepository(app.database.eventDao()),
         LogRepository(app.database.logDao()),
         app.backupManager,
-        NotificationHelper(application)
+        app.notificationHelper
     )
 }
 
@@ -803,7 +801,7 @@ fun createBoxDetailViewModel(application: Application): BoxDetailViewModel {
         com.memoriabox.repository.BoxRepository(app.database.boxDao()),
         LogRepository(app.database.logDao()),
         app.backupManager,
-        NotificationHelper(application)
+        app.notificationHelper
     )
 }
 
@@ -951,10 +949,9 @@ class FriendDetailViewModel(
     fun load(friendId: String) = viewModelScope.launch {
         try {
             _friendId.value = friendId
-            _friend.value = friendRepository.getAllFriendsOnce().firstOrNull { it.id == friendId }
+            _friend.value = friendRepository.getFriendById(friendId)
             _relations.value = friendRepository.getFriendRelationsOnce(friendId)
-            _birthdayEvent.value = eventRepository.getAllEventsOnce()
-                .firstOrNull { it.type == EventType.BIRTHDAY && it.avatarUri == "friend:$friendId" }
+            _birthdayEvent.value = eventRepository.getBirthdayEventByAvatarUri("friend:$friendId")
         } catch (e: Exception) {
             Log.e("FriendDetailVM", "load failed", e)
         }
@@ -1024,8 +1021,7 @@ class FriendDetailViewModel(
     }
 
     private suspend fun syncBirthdayEvent(friend: Friend) {
-        val existing = eventRepository.getAllEventsOnce()
-            .firstOrNull { it.type == EventType.BIRTHDAY && it.avatarUri == "friend:${friend.id}" }
+        val existing = eventRepository.getBirthdayEventByAvatarUri("friend:${friend.id}")
         val birthday = friend.birthdayDate
         if (birthday == null) {
             existing?.let {

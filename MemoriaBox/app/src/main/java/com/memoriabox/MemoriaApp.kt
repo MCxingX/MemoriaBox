@@ -12,6 +12,7 @@ import com.memoriabox.database.AppDatabase
 import com.memoriabox.receiver.HolidayReminderReceiver
 import com.memoriabox.utils.AppSettings
 import com.memoriabox.utils.BackupManager
+import com.memoriabox.utils.NotificationHelper
 import java.io.File
 import java.io.PrintWriter
 import java.io.StringWriter
@@ -42,6 +43,8 @@ class MemoriaApp : Application() {
             throw e
         }
     }
+
+    val notificationHelper by lazy { NotificationHelper(this) }
 
     override fun attachBaseContext(base: Context) {
         super.attachBaseContext(base)
