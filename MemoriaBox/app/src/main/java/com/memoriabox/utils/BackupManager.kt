@@ -84,6 +84,8 @@ class BackupManager(
         private const val URI_MAP_ENTRY = "uris.txt"
         private const val BACKUP_PASSWORD_KEY = "backup_password_encrypted"
         private const val BACKUP_PASSWORD_KEY_ALIAS = "memoriabox-backup-password"
+        private const val DEVICE_KEY_KEK_ALIAS = "memoriabox-device-key-kek"
+        private const val DEVICE_KEY_ENCRYPTED = "device_key_encrypted"
         private val SETTINGS_FILES = listOf("app_settings", "ui_settings", "pushplus_config")
     }
 
@@ -149,6 +151,11 @@ class BackupManager(
             delay(config.autoBackupDelay)
             performAutoBackup()
         }
+    }
+
+    fun cancel() {
+        debounceJob?.cancel()
+        scope.cancel()
     }
 
     private suspend fun performAutoBackup() {
@@ -501,14 +508,41 @@ class BackupManager(
             context.contentResolver.openInputStream(encryptedUri)?.use { input ->
                 val salt = ByteArray(16).also { input.readFully(it) }
                 val iv = ByteArray(12).also { input.readFully(it) }
-
-                // TODO: 大数据库可能 OOM，后续改为 CipherInputStream 流式解密
-                val remainingBytes = input.readBytes()
-                val decrypted = decryptBytes(remainingBytes, salt, iv, password)
-
-                FileOutputStream(output).use { it.write(decrypted) }
+                val keys = if (!password.isNullOrEmpty()) {
+                    listOf(deriveKeyFromPassword(password, salt))
+                } else {
+                    listOf(deriveKeyFromPassword(BACKUP_KEY_ALIAS, salt), getDeviceKey())
+                }
+                var lastError: Exception? = null
+                var success = false
+                for (keyBytes in keys) {
+                    try {
+                        context.contentResolver.openInputStream(encryptedUri)?.use { keyInput ->
+                            keyInput.readFully(ByteArray(28))
+                            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+                            cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(keyBytes, "AES"), GCMParameterSpec(128, iv))
+                            FileOutputStream(output).use { fos ->
+                                val buffer = ByteArray(8192)
+                                while (true) {
+                                    val bytesRead = keyInput.read(buffer)
+                                    if (bytesRead == -1) break
+                                    val decrypted = cipher.update(buffer, 0, bytesRead)
+                                    if (decrypted != null) fos.write(decrypted)
+                                }
+                                val finalBytes = cipher.doFinal()
+                                if (finalBytes != null) fos.write(finalBytes)
+                            }
+                        }
+                        success = true
+                        break
+                    } catch (e: Exception) {
+                        lastError = e
+                        output.delete()
+                    }
+                }
+                if (!success) throw lastError ?: IllegalStateException("Unable to decrypt backup")
+                true
             } ?: throw IOException("Cannot open backup file")
-            true
         } catch (e: Exception) {
             Log.e(TAG, "Legacy decryption failed", e)
             false
@@ -732,15 +766,68 @@ class BackupManager(
 
     private fun getDeviceKey(): ByteArray {
         val prefs = context.getSharedPreferences("device_key", Context.MODE_PRIVATE)
-        var keyBase64 = prefs.getString("device_key", null)
-        if (keyBase64 == null) {
-            val keyGenerator = KeyGenerator.getInstance("AES")
-            keyGenerator.init(256)
-            val key = keyGenerator.generateKey()
-            keyBase64 = android.util.Base64.encodeToString(key.encoded, android.util.Base64.NO_WRAP)
-            prefs.edit().putString("device_key", keyBase64).apply()
+
+        val encryptedKey = prefs.getString(DEVICE_KEY_ENCRYPTED, null)
+        if (encryptedKey != null) {
+            return decryptWithKek(encryptedKey)
         }
-        return android.util.Base64.decode(keyBase64, android.util.Base64.NO_WRAP)
+
+        val legacyKeyBase64 = prefs.getString("device_key", null)
+        if (legacyKeyBase64 != null) {
+            val keyBytes = android.util.Base64.decode(legacyKeyBase64, android.util.Base64.NO_WRAP)
+            migrateDeviceKeyToEncrypted(prefs, keyBytes)
+            return keyBytes
+        }
+
+        val keyGenerator = KeyGenerator.getInstance("AES")
+        keyGenerator.init(256)
+        val keyBytes = keyGenerator.generateKey().encoded
+        migrateDeviceKeyToEncrypted(prefs, keyBytes)
+        return keyBytes
+    }
+
+    private fun migrateDeviceKeyToEncrypted(prefs: android.content.SharedPreferences, keyBytes: ByteArray) {
+        val encrypted = encryptWithKek(keyBytes)
+        prefs.edit()
+            .putString(DEVICE_KEY_ENCRYPTED, encrypted)
+            .remove("device_key")
+            .apply()
+    }
+
+    private fun getOrCreateDeviceKeyKek(): javax.crypto.SecretKey {
+        val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        val existingKey = (keyStore.getEntry(DEVICE_KEY_KEK_ALIAS, null) as? KeyStore.SecretKeyEntry)?.secretKey
+        if (existingKey != null) return existingKey
+        return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").apply {
+            init(
+                KeyGenParameterSpec.Builder(
+                    DEVICE_KEY_KEK_ALIAS,
+                    KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
+                )
+                    .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                    .build()
+            )
+        }.generateKey()
+    }
+
+    private fun encryptWithKek(data: ByteArray): String {
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, getOrCreateDeviceKeyKek())
+        val encrypted = cipher.iv + cipher.doFinal(data)
+        return android.util.Base64.encodeToString(encrypted, android.util.Base64.NO_WRAP)
+    }
+
+    private fun decryptWithKek(value: String): ByteArray {
+        val encrypted = android.util.Base64.decode(value, android.util.Base64.NO_WRAP)
+        require(encrypted.size > 12) { "Device key ciphertext invalid" }
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(
+            Cipher.DECRYPT_MODE,
+            getOrCreateDeviceKeyKek(),
+            GCMParameterSpec(128, encrypted.copyOfRange(0, 12))
+        )
+        return cipher.doFinal(encrypted.copyOfRange(12, encrypted.size))
     }
 
     private fun formatTimestamp(timestamp: Long): String {
