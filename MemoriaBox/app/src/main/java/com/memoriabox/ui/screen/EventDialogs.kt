@@ -187,12 +187,11 @@ fun EventDetailDialog(
 }
 
 fun repeatModeLabel(event: Event): String = when {
-    event.repeatMode == RepeatMode.YEARLY || event.repeatYearly -> "每年重复"
-    event.repeatMode == RepeatMode.MONTHLY -> "每月重复"
-    event.repeatMode == RepeatMode.CUSTOM_DAYS -> if (event.repeatInterval <= 1) "每日重复" else "每 ${event.repeatInterval} 天重复"
-    event.repeatMode == RepeatMode.CUSTOM_WEEKS -> if (event.repeatInterval <= 1) "每周重复" else "每 ${event.repeatInterval} 周重复"
-    event.repeatMode == RepeatMode.CUSTOM_MONTHS -> if (event.repeatInterval <= 1) "每月重复" else "每 ${event.repeatInterval} 个月重复"
-    event.type == EventType.BIRTHDAY -> "每年重复"
+    event.repeatMode == RepeatMode.YEARLY || event.repeatYearly || event.type == EventType.BIRTHDAY -> "每年"
+    event.repeatMode == RepeatMode.MONTHLY -> if (event.repeatInterval <= 1) "每月" else "每 ${event.repeatInterval} 个月"
+    event.repeatMode == RepeatMode.CUSTOM_DAYS -> if (event.repeatInterval <= 1) "每天" else "每 ${event.repeatInterval} 天"
+    event.repeatMode == RepeatMode.CUSTOM_WEEKS -> if (event.repeatInterval <= 1) "每周" else "每 ${event.repeatInterval} 周"
+    event.repeatMode == RepeatMode.CUSTOM_MONTHS -> if (event.repeatInterval <= 1) "每月" else "每 ${event.repeatInterval} 个月"
     else -> "不重复"
 }
 

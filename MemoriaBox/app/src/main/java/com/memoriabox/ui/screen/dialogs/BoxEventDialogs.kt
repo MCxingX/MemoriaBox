@@ -61,6 +61,7 @@ import com.memoriabox.data.model.EventType
 import com.memoriabox.data.model.RepeatMode
 import com.memoriabox.data.model.TodoPriority
 import com.memoriabox.data.model.TodoStatus
+import com.memoriabox.ui.utils.rememberAdaptiveUiSize
 import com.memoriabox.utils.ColorUtils
 import com.memoriabox.utils.ImageImportUtils
 import kotlinx.coroutines.Dispatchers
@@ -413,6 +414,20 @@ fun EventDialog(
     }
     var showDiscardConfirm by remember { mutableStateOf(false) }
     var showRemoveBgConfirm by remember { mutableStateOf(false) }
+    val adaptiveUi = rememberAdaptiveUiSize()
+    val repeatFrequency = when (repeatMode) {
+        RepeatMode.NONE -> RepeatFrequency.NONE
+        RepeatMode.CUSTOM_DAYS -> if (repeatInterval <= 1) RepeatFrequency.DAILY else RepeatFrequency.CUSTOM
+        RepeatMode.CUSTOM_WEEKS -> if (repeatInterval <= 1) RepeatFrequency.WEEKLY else RepeatFrequency.CUSTOM
+        RepeatMode.MONTHLY -> RepeatFrequency.MONTHLY
+        RepeatMode.YEARLY -> RepeatFrequency.YEARLY
+        RepeatMode.CUSTOM_MONTHS -> RepeatFrequency.CUSTOM
+    }
+    val customUnit = when (repeatMode) {
+        RepeatMode.CUSTOM_WEEKS -> RepeatCustomUnit.WEEK
+        RepeatMode.CUSTOM_MONTHS -> RepeatCustomUnit.MONTH
+        else -> RepeatCustomUnit.DAY
+    }
 
     val saveEvent: () -> Unit = {
         val event = Event(
@@ -464,7 +479,8 @@ fun EventDialog(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 4.dp, end = 8.dp, top = 8.dp, bottom = 4.dp),
+                        .heightIn(min = adaptiveUi.topBarHeight)
+                        .padding(start = adaptiveUi.tightSpacing, end = adaptiveUi.contentSpacing, top = adaptiveUi.tightSpacing, bottom = adaptiveUi.tightSpacing),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = { showDiscardConfirm = true }) {
@@ -484,9 +500,9 @@ fun EventDialog(
                     modifier = Modifier
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp)
-                        .padding(top = 14.dp, bottom = 28.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                        .padding(horizontal = adaptiveUi.screenPadding)
+                        .padding(top = adaptiveUi.cardPadding, bottom = adaptiveUi.screenPadding + 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(adaptiveUi.sectionSpacing)
                 ) {
                 EditSection(title = "基本信息", expanded = basicExpanded, onToggle = { basicExpanded = !basicExpanded }) {
                 OutlinedTextField(
@@ -496,7 +512,7 @@ fun EventDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(adaptiveUi.contentSpacing))
 
                 OutlinedTextField(
                     value = selectedDate?.let { formatDate(it) } ?: "",
@@ -513,11 +529,11 @@ fun EventDialog(
                     }
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(adaptiveUi.contentSpacing))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(adaptiveUi.contentSpacing)
                 ) {
                     OutlinedButton(
                         onClick = { showLunarCalendar = true },
@@ -538,14 +554,14 @@ fun EventDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(adaptiveUi.contentSpacing))
 
                 if (availableBoxes.isNotEmpty()) {
                     Text("所属分类", style = MaterialTheme.typography.labelLarge)
                     FlowRow(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(adaptiveUi.contentSpacing),
+                        verticalArrangement = Arrangement.spacedBy(adaptiveUi.contentSpacing)
                     ) {
                         availableBoxes.forEach { box ->
                             FilterChip(
@@ -559,15 +575,15 @@ fun EventDialog(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(adaptiveUi.contentSpacing))
                 }
 
                 if (allowTypeChange) {
                     Text("事件类型", style = MaterialTheme.typography.labelLarge)
                     FlowRow(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(adaptiveUi.contentSpacing),
+                        verticalArrangement = Arrangement.spacedBy(adaptiveUi.contentSpacing)
                     ) {
                         EventType.entries.forEach { type ->
                             FilterChip(
@@ -607,7 +623,7 @@ fun EventDialog(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(adaptiveUi.contentSpacing))
 
                 OutlinedTextField(
                     value = note,
@@ -706,17 +722,17 @@ fun EventDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(adaptiveUi.contentSpacing))
 
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
+                    shape = RoundedCornerShape(adaptiveUi.cardRadius),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
                 ) {
                     Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                        modifier = Modifier.padding(adaptiveUi.cardPadding),
+                        verticalArrangement = Arrangement.spacedBy(adaptiveUi.contentSpacing)
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -751,8 +767,8 @@ fun EventDialog(
                         )
                         FlowRow(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(adaptiveUi.contentSpacing),
+                            verticalArrangement = Arrangement.spacedBy(adaptiveUi.contentSpacing)
                         ) {
                             listOf(
                                 "HERO" to "封面",
@@ -771,16 +787,16 @@ fun EventDialog(
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                Spacer(modifier = Modifier.height(adaptiveUi.contentSpacing))
+                Row(horizontalArrangement = Arrangement.spacedBy(adaptiveUi.contentSpacing), modifier = Modifier.fillMaxWidth()) {
                     ColorSelectButton("起色", gradientStart, { showColorPickerFor = "start" }, Modifier.weight(1f))
                     ColorSelectButton("止色", gradientEnd, { showColorPickerFor = "end" }, Modifier.weight(1f))
                 }
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(adaptiveUi.contentSpacing))
                 ColorSelectButton("字体颜色", textColor, { showColorPickerFor = "text" }, Modifier.fillMaxWidth())
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(adaptiveUi.contentSpacing))
                 Text("展示字段", style = MaterialTheme.typography.labelMedium)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(adaptiveUi.contentSpacing), verticalArrangement = Arrangement.spacedBy(adaptiveUi.contentSpacing)) {
                     listOf("date" to "日期", "note" to "备注", "lunar" to "农历", "reminder" to "提醒").forEach { (key, label) ->
                         FilterChip(
                             selected = displayFieldSet[key] == true,
@@ -792,70 +808,118 @@ fun EventDialog(
                 }
 
                 EditSection(title = "重复规则", expanded = repeatExpanded, onToggle = { repeatExpanded = !repeatExpanded }) {
-                if (selectedType != EventType.BIRTHDAY) {
-                    Text("重复规则", style = MaterialTheme.typography.labelLarge)
+                if (selectedType == EventType.BIRTHDAY) {
+                    Text("生日默认每年重复", style = MaterialTheme.typography.bodyMedium)
+                } else {
+                    Text("重复频率", style = MaterialTheme.typography.labelLarge)
                     FlowRow(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(adaptiveUi.contentSpacing),
+                        verticalArrangement = Arrangement.spacedBy(adaptiveUi.contentSpacing)
                     ) {
-                        listOf(
-                            RepeatMode.NONE to "不重复",
-                            RepeatMode.CUSTOM_DAYS to "每日/按天",
-                            RepeatMode.CUSTOM_WEEKS to "每周/按周",
-                            RepeatMode.MONTHLY to "每月",
-                            RepeatMode.YEARLY to "每年",
-                            RepeatMode.CUSTOM_MONTHS to "按月数"
-                        ).forEach { (mode, label) ->
+                        RepeatFrequency.entries.forEach { frequency ->
                             FilterChip(
-                                selected = repeatMode == mode,
+                                selected = repeatFrequency == frequency,
                                 onClick = {
-                                    repeatMode = mode
-                                    if (mode == RepeatMode.CUSTOM_DAYS || mode == RepeatMode.CUSTOM_WEEKS) repeatInterval = 1
+                                    when (frequency) {
+                                        RepeatFrequency.NONE -> {
+                                            repeatMode = RepeatMode.NONE
+                                            repeatInterval = 1
+                                        }
+                                        RepeatFrequency.DAILY -> {
+                                            repeatMode = RepeatMode.CUSTOM_DAYS
+                                            repeatInterval = 1
+                                        }
+                                        RepeatFrequency.WEEKLY -> {
+                                            repeatMode = RepeatMode.CUSTOM_WEEKS
+                                            repeatInterval = 1
+                                        }
+                                        RepeatFrequency.MONTHLY -> {
+                                            repeatMode = RepeatMode.MONTHLY
+                                            repeatInterval = 1
+                                        }
+                                        RepeatFrequency.YEARLY -> {
+                                            repeatMode = RepeatMode.YEARLY
+                                            repeatInterval = 1
+                                        }
+                                        RepeatFrequency.CUSTOM -> {
+                                            if (repeatMode !in listOf(RepeatMode.CUSTOM_DAYS, RepeatMode.CUSTOM_WEEKS, RepeatMode.CUSTOM_MONTHS) || repeatInterval <= 1) {
+                                                repeatMode = RepeatMode.CUSTOM_DAYS
+                                                repeatInterval = 2
+                                            }
+                                        }
+                                    }
                                 },
-                                label = { Text(label) }
+                                label = { Text(frequency.label) }
                             )
                         }
                     }
-                    if (repeatMode in listOf(RepeatMode.CUSTOM_DAYS, RepeatMode.CUSTOM_WEEKS, RepeatMode.CUSTOM_MONTHS)) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("每", style = MaterialTheme.typography.bodySmall)
+                    if (repeatFrequency == RepeatFrequency.CUSTOM) {
+                        Spacer(modifier = Modifier.height(adaptiveUi.contentSpacing))
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(adaptiveUi.contentSpacing)) {
+                            Text("每", style = MaterialTheme.typography.bodyMedium)
                             OutlinedTextField(
                                 value = repeatInterval.toString(),
                                 onValueChange = { repeatInterval = it.toIntOrNull()?.coerceIn(1, 365) ?: 1 },
                                 modifier = Modifier.width(88.dp),
                                 singleLine = true,
-                                textStyle = MaterialTheme.typography.bodySmall,
+                                textStyle = MaterialTheme.typography.bodyMedium,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                             )
-                            Text(
-                                when (repeatMode) {
-                                    RepeatMode.CUSTOM_DAYS -> "天重复"
-                                    RepeatMode.CUSTOM_WEEKS -> "周重复"
-                                    else -> "个月重复"
-                                },
-                                style = MaterialTheme.typography.bodySmall
-                            )
+                            RepeatCustomUnit.entries.forEach { unit ->
+                                FilterChip(
+                                    selected = customUnit == unit,
+                                    onClick = {
+                                        repeatMode = when (unit) {
+                                            RepeatCustomUnit.DAY -> RepeatMode.CUSTOM_DAYS
+                                            RepeatCustomUnit.WEEK -> RepeatMode.CUSTOM_WEEKS
+                                            RepeatCustomUnit.MONTH -> RepeatMode.CUSTOM_MONTHS
+                                        }
+                                        if (repeatInterval <= 1) repeatInterval = 2
+                                    },
+                                    label = { Text(unit.label) }
+                                )
+                            }
                         }
+                        Text(
+                            "例如每 2 周、每 3 个月",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                     if (repeatMode != RepeatMode.NONE) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        Spacer(modifier = Modifier.height(adaptiveUi.contentSpacing))
+                        Text("结束条件", style = MaterialTheme.typography.labelLarge)
+                        Text(
+                            "可只填一项：次数优先，日期作为兜底截止",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(adaptiveUi.tightSpacing))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(adaptiveUi.contentSpacing),
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             OutlinedTextField(
                                 value = repeatCountText,
                                 onValueChange = { repeatCountText = it.filter { char -> char.isDigit() } },
                                 label = { Text("重复次数") },
-                                placeholder = { Text("留空为不限") },
+                                placeholder = { Text("不限") },
                                 modifier = Modifier.weight(1f),
                                 singleLine = true,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                             )
                             OutlinedButton(
                                 onClick = { showRepeatEndPicker = true },
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.weight(1f).heightIn(min = adaptiveUi.buttonHeight)
                             ) {
                                 Text(repeatEndDate?.let { formatDate(it) } ?: "结束日期")
+                            }
+                        }
+                        if (repeatEndDate != null) {
+                            TextButton(onClick = { repeatEndDate = null }) {
+                                Text("清除结束日期")
                             }
                         }
                     }
@@ -865,6 +929,7 @@ fun EventDialog(
                 EditSection(title = "提醒", expanded = reminderExpanded, onToggle = { reminderExpanded = !reminderExpanded }) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(adaptiveUi.contentSpacing)
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -880,7 +945,7 @@ fun EventDialog(
                     if (reminderEnabled) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(adaptiveUi.contentSpacing)
                         ) {
                             Text("提前", style = MaterialTheme.typography.bodySmall)
                             OutlinedTextField(
@@ -895,7 +960,6 @@ fun EventDialog(
                             )
                             Text("天提醒", style = MaterialTheme.typography.bodySmall)
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
                         OutlinedTextField(
                             value = reminderOffsetsText,
                             onValueChange = { reminderOffsetsText = it.filter { char -> char.isDigit() || char == ',' } },
@@ -905,8 +969,7 @@ fun EventDialog(
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(adaptiveUi.contentSpacing), verticalArrangement = Arrangement.spacedBy(adaptiveUi.contentSpacing)) {
                             listOf(
                                 "当天" to 0,
                                 "提前1天" to 1,
@@ -930,7 +993,6 @@ fun EventDialog(
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.clickable { pushPlusEnabled = !pushPlusEnabled }
@@ -1080,9 +1142,10 @@ private fun EditSection(
     onToggle: () -> Unit,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val adaptiveUi = rememberAdaptiveUiSize()
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(adaptiveUi.cardRadius),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.30f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
@@ -1091,7 +1154,7 @@ private fun EditSection(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable { onToggle() }
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                    .padding(horizontal = adaptiveUi.cardPadding, vertical = adaptiveUi.cardPadding),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
@@ -1108,12 +1171,32 @@ private fun EditSection(
             }
             if (expanded) {
                 Column(
-                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 14.dp),
+                    modifier = Modifier.padding(
+                        start = adaptiveUi.cardPadding,
+                        end = adaptiveUi.cardPadding,
+                        top = adaptiveUi.tightSpacing,
+                        bottom = adaptiveUi.cardPadding
+                    ),
                     content = content
                 )
             }
         }
     }
+}
+
+private enum class RepeatFrequency(val label: String) {
+    NONE("不重复"),
+    DAILY("每天"),
+    WEEKLY("每周"),
+    MONTHLY("每月"),
+    YEARLY("每年"),
+    CUSTOM("自定义")
+}
+
+private enum class RepeatCustomUnit(val label: String) {
+    DAY("天"),
+    WEEK("周"),
+    MONTH("个月")
 }
 
 private fun cardCropAspectRatio(template: String): Float = when (template) {
