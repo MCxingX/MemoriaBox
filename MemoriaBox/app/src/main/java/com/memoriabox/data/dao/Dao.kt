@@ -54,6 +54,15 @@ interface EventDao {
     @Query("SELECT * FROM events WHERE id NOT LIKE 'milestone_%' ORDER BY is_pinned DESC, date ASC")
     suspend fun getAllEventsOnce(): List<Event>
 
+    @Query("SELECT * FROM events WHERE box_id = :boxId AND id NOT LIKE 'milestone_%' ORDER BY is_pinned DESC, date ASC")
+    suspend fun getEventsByBoxIdOnce(boxId: String): List<Event>
+
+    @Query("SELECT * FROM events WHERE type = 'TODO' AND id NOT LIKE 'milestone_%' ORDER BY due_date ASC")
+    suspend fun getTodoEventsOnce(): List<Event>
+
+    @Query("SELECT * FROM events WHERE type = 'BIRTHDAY' AND avatar_uri = :avatarUri AND id NOT LIKE 'milestone_%' LIMIT 1")
+    suspend fun getBirthdayEventByAvatarUri(avatarUri: String): Event?
+
     @Query("SELECT * FROM events WHERE type = 'TODO' AND id NOT LIKE 'milestone_%' ORDER BY due_date ASC")
     fun getTodoEvents(): Flow<List<Event>>
 
@@ -210,6 +219,9 @@ interface FriendDao {
     @Query("SELECT * FROM friends ORDER BY created_at ASC")
     suspend fun getAllFriendsOnce(): List<Friend>
 
+    @Query("SELECT * FROM friends WHERE id = :id LIMIT 1")
+    suspend fun getFriendById(id: String): Friend?
+
     @Query("SELECT * FROM friend_relations")
     suspend fun getAllFriendRelationsOnce(): List<FriendRelation>
 
@@ -266,6 +278,9 @@ interface LabelDao {
 
     @Query("SELECT label FROM event_labels WHERE event_id = :eventId")
     fun getEventLabels(eventId: String): Flow<List<String>>
+
+    @Query("SELECT label FROM event_labels WHERE event_id = :eventId")
+    suspend fun getEventLabelsOnce(eventId: String): List<String>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun addEventLabel(eventLabel: EventLabel)

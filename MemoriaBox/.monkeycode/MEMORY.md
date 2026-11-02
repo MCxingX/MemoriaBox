@@ -74,7 +74,8 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - Release 构建：`JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 ./gradlew :app:assembleRelease --no-daemon`（Android SDK 在 `/opt/android-sdk`）。约 8 分钟，R8 阶段峰值内存约 3.5GiB，须用 background_terminal_create 并设 memory_percent≥50。
   - 快速语法验证用 `:app:compileDebugKotlin`（约 1.5 分钟，内存更低）。
   - APK 产物：`app/build/outputs/apk/release/MemoriaBox.apk`，大小约 16M。
-  - 发布：`gh release create v<versionName> app/build/outputs/apk/release/MemoriaBox.apk --title "v<versionName>" --notes "..."`，notes 中附 `sha256sum` 计算的 SHA-256。
+  - 发布：`gh release create v<versionName> app/build/outputs/apk/release/MemoriaBox.apk --title "v<versionName>" --notes "..."`，notes 中必须附 `sha256sum` 计算的 SHA-256（形如 `SHA-256: <64位hex>`），否则客户端 `UpdateManager.fetchLatestRelease` 会报"GitHub Release 缺少 SHA-256 校验信息"。
+  - 发布后必须额外上传 `.apk.sha256` 校验资产：`printf '%s  MemoriaBox.apk\n' "$(sha256sum <apk> | awk '{print $1}')" > <apk>.sha256 && gh release upload v<versionName> <apk>.sha256 --clobber`。客户端会先从 release body 解析 SHA-256，失败则回退下载 `.apk.sha256` 资产，两者缺一不可。
   - 本地分支为 `main`，远程为 `origin/master`（`git push origin main` 推送）；TLS 偶发失败需重试。
 
 [核心交互保护]

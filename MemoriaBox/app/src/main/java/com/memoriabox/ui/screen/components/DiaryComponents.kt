@@ -272,17 +272,15 @@ fun FullscreenVideoDialog(
     androidx.compose.runtime.DisposableEffect(uri) {
         val window = (context as? android.app.Activity)?.window
             ?: (view.parent as? android.view.View)?.let { (it.context as? android.app.Activity)?.window }
-        val originalFlags = window?.decorView?.systemUiVisibility ?: 0
-        window?.decorView?.systemUiVisibility = (
-            android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                or android.view.View.SYSTEM_UI_FLAG_FULLSCREEN
-                or android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                or android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                or android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                or android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-        )
+        val insetsController = window?.let {
+            androidx.core.view.WindowCompat.getInsetsController(it, it.decorView)
+        }
+        val originalBehavior = insetsController?.systemBarsBehavior ?: 0
+        insetsController?.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        insetsController?.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
         onDispose {
-            window?.decorView?.systemUiVisibility = originalFlags
+            insetsController?.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+            insetsController?.systemBarsBehavior = originalBehavior
         }
     }
 }

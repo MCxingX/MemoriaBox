@@ -2,4 +2,7 @@
 <full-backup-content>
     <include domain="sharedpref" path="."/>
     <exclude domain="sharedpref" path="device.xml"/>
+    <exclude domain="sharedpref" path="db_key.xml"/>
+    <exclude domain="sharedpref" path="device_key.xml"/>
+    <exclude domain="sharedpref" path="backup_config.xml"/>
 </full-backup-content>

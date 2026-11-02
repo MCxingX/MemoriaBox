@@ -2,6 +2,7 @@ package com.memoriabox.utils
 
 import android.content.Context
 import org.json.JSONObject
+import java.util.concurrent.ConcurrentHashMap
 
 object CardSpacingCache {
     private const val PREFS = "card_spacing_cache"
@@ -22,7 +23,7 @@ object CardSpacingCache {
                 .clear()
                 .putString(KEY_VERSION, version)
                 .apply()
-            memory = mutableMapOf()
+            memory = ConcurrentHashMap()
             loadedVersion = version
         } else {
             ensureLoaded(context, version)
@@ -34,7 +35,7 @@ object CardSpacingCache {
         ensureLoaded(context, version)
         memory?.get(key)?.let { return it }
         val value = compute()
-        val store = memory ?: mutableMapOf<String, Float>().also { memory = it }
+        val store = memory ?: ConcurrentHashMap<String, Float>().also { memory = it }
         store[key] = value
         persist(context, version, store)
         return value
@@ -64,12 +65,12 @@ object CardSpacingCache {
         if (memory != null && loadedVersion == version) return
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (prefs.getString(KEY_VERSION, null) != version) {
-            memory = mutableMapOf()
+            memory = ConcurrentHashMap()
             loadedVersion = version
             prefs.edit().clear().putString(KEY_VERSION, version).apply()
             return
         }
-        val parsed = mutableMapOf<String, Float>()
+        val parsed = ConcurrentHashMap<String, Float>()
         runCatching {
             val json = JSONObject(prefs.getString(KEY_GAPS, "{}") ?: "{}")
             json.keys().forEach { key ->

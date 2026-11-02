@@ -22,12 +22,15 @@ import com.memoriabox.utils.BackupArchive
 import com.memoriabox.utils.Header
 import com.memoriabox.utils.AppSettings
 import com.memoriabox.utils.MonthlySummaryHelper
+import com.memoriabox.utils.MonthlySummaryStatus
 import com.memoriabox.utils.MonthlySummaryUiState
 import com.memoriabox.utils.NotificationHelper
 import com.memoriabox.utils.SystemCalendarHelper
 import com.memoriabox.utils.startOfMonth
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -80,7 +83,7 @@ class MainViewModel(
         try {
             val defaultBoxId = "default_1"
             if (box.id != defaultBoxId) {
-                val eventsInBox = eventRepository.getAllEventsOnce().filter { it.boxId == box.id }
+                val eventsInBox = eventRepository.getEventsByBoxIdOnce(box.id)
                 if (eventsInBox.isNotEmpty()) {
                     eventRepository.moveEventsToBox(eventsInBox.map { it.id }, defaultBoxId)
                 }
@@ -283,7 +286,7 @@ class BoxDetailViewModel(
         try {
             val defaultBoxId = "default_1"
             if (box.id != defaultBoxId) {
-                val eventsInBox = eventRepository.getAllEventsOnce().filter { it.boxId == box.id }
+                val eventsInBox = eventRepository.getEventsByBoxIdOnce(box.id)
                 if (eventsInBox.isNotEmpty()) {
                     eventRepository.moveEventsToBox(eventsInBox.map { it.id }, defaultBoxId)
                 }
@@ -333,22 +336,34 @@ class CalendarViewModel(
     }
 
     fun loadDiaryMedia(diaryId: String) = viewModelScope.launch {
-        _selectedDiaryMedia.value = diaryRepository.getMediaForDiaryOnce(diaryId)
+        try {
+            _selectedDiaryMedia.value = diaryRepository.getMediaForDiaryOnce(diaryId)
+        } catch (e: Exception) {
+            Log.e("CalendarViewModel", "loadDiaryMedia failed", e)
+        }
     }
 
     fun saveDiary(date: Long, content: String, mediaUris: List<String>, backgroundUri: String?) = viewModelScope.launch {
-        saveDiaryInternal(null, date, content, mediaUris.mapIndexed { index, uri ->
-            DiaryMedia(
-                diaryId = "",
-                mediaUri = uri,
-                mediaType = inferDiaryMediaType(uri),
-                sortOrder = index
-            )
-        }, backgroundUri)
+        try {
+            saveDiaryInternal(null, date, content, mediaUris.mapIndexed { index, uri ->
+                DiaryMedia(
+                    diaryId = "",
+                    mediaUri = uri,
+                    mediaType = inferDiaryMediaType(uri),
+                    sortOrder = index
+                )
+            }, backgroundUri)
+        } catch (e: Exception) {
+            Log.e("CalendarViewModel", "saveDiary failed", e)
+        }
     }
 
     fun saveDiaryWithMedia(existingDiary: DiaryEntry?, date: Long, content: String, mediaItems: List<DiaryMedia>, backgroundUri: String?) = viewModelScope.launch {
-        saveDiaryInternal(existingDiary, date, content, mediaItems, backgroundUri)
+        try {
+            saveDiaryInternal(existingDiary, date, content, mediaItems, backgroundUri)
+        } catch (e: Exception) {
+            Log.e("CalendarViewModel", "saveDiaryWithMedia failed", e)
+        }
     }
 
     fun loadMonthlySummary(monthStart: Long) = viewModelScope.launch {
@@ -369,6 +384,7 @@ class CalendarViewModel(
             )
         } catch (e: Exception) {
             Log.e("CalendarViewModel", "loadMonthlySummary failed", e)
+            _monthlySummary.value = _monthlySummary.value.copy(summaryStatus = MonthlySummaryStatus.ERROR)
         } finally {
             _monthlySummary.value = _monthlySummary.value.copy(isLoading = false)
         }
@@ -393,6 +409,7 @@ class CalendarViewModel(
             )
         } catch (e: Exception) {
             Log.e("CalendarViewModel", "loadDailySummary failed", e)
+            _dailySummary.value = _dailySummary.value.copy(summaryStatus = MonthlySummaryStatus.ERROR)
         } finally {
             _dailySummary.value = _dailySummary.value.copy(isLoading = false)
         }
@@ -427,9 +444,13 @@ class CalendarViewModel(
     }
 
     fun deleteDiary(diary: DiaryEntry) = viewModelScope.launch {
-        diaryRepository.deleteDiary(diary)
-        _selectedDiaryMedia.value = emptyList()
-        backupManager.onDataChanged()
+        try {
+            diaryRepository.deleteDiary(diary)
+            _selectedDiaryMedia.value = emptyList()
+            backupManager.onDataChanged()
+        } catch (e: Exception) {
+            Log.e("CalendarViewModel", "deleteDiary failed", e)
+        }
     }
 
     private fun startOfDay(timestamp: Long): Long {
@@ -461,53 +482,75 @@ class TodoViewModel(
         .map { list -> list.sortedWith(compareBy<Event> { if (it.todoStatus == TodoStatus.PENDING) 0 else 1 }.thenByDescending { it.todoPriority.ordinal }.thenBy { it.dueDate ?: Long.MAX_VALUE }.thenBy { it.createdAt }) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    private val _subtaskMap = MutableStateFlow<Map<String, List<TodoSubtask>>>(emptyMap())
-    val subtaskMap: StateFlow<Map<String, List<TodoSubtask>>> = _subtaskMap.asStateFlow()
+    private val _subtaskRefresh = MutableStateFlow(0L)
 
-    fun loadSubtasks(events: List<Event>) = viewModelScope.launch {
-        if (events.isEmpty()) {
-            _subtaskMap.value = emptyMap()
-            return@launch
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val subtaskMap: StateFlow<Map<String, List<TodoSubtask>>> = combine(todoEvents, _subtaskRefresh) { events, _ -> events }
+        .flatMapLatest { events ->
+            if (events.isEmpty()) flowOf(emptyMap())
+            else flow {
+                emit(subtaskRepository.getSubtasksForTodosOnce(events.map { it.id }).groupBy { it.todoId })
+            }
         }
-        val subtasks = subtaskRepository.getSubtasksForTodosOnce(events.map { it.id })
-        _subtaskMap.value = subtasks.groupBy { it.todoId }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
+    fun loadSubtasks(events: List<Event>) {
+        // subtaskMap is now reactive via flatMapLatest on todoEvents
     }
 
     fun toggleTodoStatus(event: Event) = viewModelScope.launch {
-        val updated = event.copy(
-            todoStatus = if (event.todoStatus == TodoStatus.PENDING) TodoStatus.COMPLETED else TodoStatus.PENDING
-        )
-        eventRepository.updateEvent(updated)
+        try {
+            val updated = event.copy(
+                todoStatus = if (event.todoStatus == TodoStatus.PENDING) TodoStatus.COMPLETED else TodoStatus.PENDING
+            )
+            eventRepository.updateEvent(updated)
+        } catch (e: Exception) {
+            Log.e("TodoViewModel", "toggleTodoStatus failed", e)
+        }
     }
 
     fun updatePriority(event: Event, priority: TodoPriority) = viewModelScope.launch {
-        eventRepository.updateEvent(event.copy(todoPriority = priority))
+        try {
+            eventRepository.updateEvent(event.copy(todoPriority = priority))
+        } catch (e: Exception) {
+            Log.e("TodoViewModel", "updatePriority failed", e)
+        }
     }
 
     fun addSubtask(todoId: String, title: String) = viewModelScope.launch {
-        val trimmed = title.trim()
-        if (trimmed.isEmpty()) return@launch
-        val existing = subtaskRepository.getSubtasksOnce(todoId)
-        subtaskRepository.upsertSubtask(
-            TodoSubtask(todoId = todoId, title = trimmed, sortOrder = existing.size)
-        )
-        refreshSubtasks()
+        try {
+            val trimmed = title.trim()
+            if (trimmed.isEmpty()) return@launch
+            val existing = subtaskRepository.getSubtasksOnce(todoId)
+            subtaskRepository.upsertSubtask(
+                TodoSubtask(todoId = todoId, title = trimmed, sortOrder = existing.size)
+            )
+            refreshSubtasks()
+        } catch (e: Exception) {
+            Log.e("TodoViewModel", "addSubtask failed", e)
+        }
     }
 
     fun toggleSubtask(subtask: TodoSubtask) = viewModelScope.launch {
-        subtaskRepository.updateSubtask(subtask.copy(done = !subtask.done))
-        refreshSubtasks()
+        try {
+            subtaskRepository.updateSubtask(subtask.copy(done = !subtask.done))
+            refreshSubtasks()
+        } catch (e: Exception) {
+            Log.e("TodoViewModel", "toggleSubtask failed", e)
+        }
     }
 
     fun deleteSubtask(subtask: TodoSubtask) = viewModelScope.launch {
-        subtaskRepository.deleteSubtask(subtask)
-        refreshSubtasks()
+        try {
+            subtaskRepository.deleteSubtask(subtask)
+            refreshSubtasks()
+        } catch (e: Exception) {
+            Log.e("TodoViewModel", "deleteSubtask failed", e)
+        }
     }
 
-    private suspend fun refreshSubtasks() {
-        val ids = eventRepository.getAllEventsOnce().filter { it.type == EventType.TODO }.map { it.id }
-        _subtaskMap.value = if (ids.isEmpty()) emptyMap()
-            else subtaskRepository.getSubtasksForTodosOnce(ids).groupBy { it.todoId }
+    private fun refreshSubtasks() {
+        _subtaskRefresh.value++
     }
 
     fun isOverdue(event: Event): Boolean =
@@ -525,23 +568,31 @@ class FriendViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun saveFriend(existing: Friend?, name: String, birthdayDate: Long?) = viewModelScope.launch {
-        val trimmed = name.trim()
-        if (trimmed.isBlank()) return@launch
-        friendRepository.upsertFriend(
-            Friend(
-                id = existing?.id ?: java.util.UUID.randomUUID().toString(),
-                name = trimmed,
-                avatarUri = existing?.avatarUri,
-                birthdayDate = birthdayDate,
-                createdAt = existing?.createdAt ?: System.currentTimeMillis()
+        try {
+            val trimmed = name.trim()
+            if (trimmed.isBlank()) return@launch
+            friendRepository.upsertFriend(
+                Friend(
+                    id = existing?.id ?: java.util.UUID.randomUUID().toString(),
+                    name = trimmed,
+                    avatarUri = existing?.avatarUri,
+                    birthdayDate = birthdayDate,
+                    createdAt = existing?.createdAt ?: System.currentTimeMillis()
+                )
             )
-        )
-        backupManager.onDataChanged()
+            backupManager.onDataChanged()
+        } catch (e: Exception) {
+            Log.e("FriendViewModel", "saveFriend failed", e)
+        }
     }
 
     fun deleteFriend(friend: Friend) = viewModelScope.launch {
-        friendRepository.deleteFriend(friend)
-        backupManager.onDataChanged()
+        try {
+            friendRepository.deleteFriend(friend)
+            backupManager.onDataChanged()
+        } catch (e: Exception) {
+            Log.e("FriendViewModel", "deleteFriend failed", e)
+        }
     }
 }
 
@@ -635,10 +686,10 @@ class BackupViewModel(
     }
 
     suspend fun inspectBackup(uri: Uri): Header? =
-        backupManager.inspectBackup(uri)
+        withContext(Dispatchers.IO) { backupManager.inspectBackup(uri) }
 }
 
-private fun AndroidViewModel.runEventSideEffects(event: Event, notificationHelper: NotificationHelper, backupManager: BackupManager) {
+private suspend fun AndroidViewModel.runEventSideEffects(event: Event, notificationHelper: NotificationHelper, backupManager: BackupManager) = withContext(Dispatchers.IO) {
     runCatching {
         if (event.reminderEnabled) {
             notificationHelper.scheduleReminder(event)
@@ -672,37 +723,61 @@ class LabelViewModel(
     val eventLabelsMap: StateFlow<Map<String, List<String>>> = _eventLabelsMap.asStateFlow()
 
     fun refreshEventLabels() = viewModelScope.launch {
-        _eventLabelsMap.value = labelRepository.getAllEventLabelsOnce()
-            .groupBy { it.eventId }
-            .mapValues { (_, list) -> list.map { it.label } }
+        try {
+            _eventLabelsMap.value = labelRepository.getAllEventLabelsOnce()
+                .groupBy { it.eventId }
+                .mapValues { (_, list) -> list.map { it.label } }
+        } catch (e: Exception) {
+            Log.e("LabelViewModel", "refreshEventLabels failed", e)
+        }
     }
 
     fun createLabel(name: String, color: String = "#7C4DFF") = viewModelScope.launch {
-        labelRepository.insertLabel(Label(name = name, color = color))
+        try {
+            labelRepository.insertLabel(Label(name = name, color = color))
+        } catch (e: Exception) {
+            Log.e("LabelViewModel", "createLabel failed", e)
+        }
     }
 
     fun deleteLabel(label: Label) = viewModelScope.launch {
-        labelRepository.deleteLabel(label)
-        refreshEventLabels()
+        try {
+            labelRepository.deleteLabel(label)
+            refreshEventLabels()
+        } catch (e: Exception) {
+            Log.e("LabelViewModel", "deleteLabel failed", e)
+        }
     }
 
     fun setEventLabels(eventId: String, labels: Set<String>) = viewModelScope.launch {
-        val current = labelRepository.getAllEventLabelsOnce().filter { it.eventId == eventId }.map { it.label }.toSet()
-        val toAdd = labels - current
-        val toRemove = current - labels
-        toAdd.forEach { labelRepository.addEventLabel(EventLabel(eventId, it)) }
-        toRemove.forEach { labelRepository.removeEventLabel(EventLabel(eventId, it)) }
-        refreshEventLabels()
+        try {
+            val current = labelRepository.getEventLabelsOnce(eventId).toSet()
+            val toAdd = labels - current
+            val toRemove = current - labels
+            toAdd.forEach { labelRepository.addEventLabel(EventLabel(eventId, it)) }
+            toRemove.forEach { labelRepository.removeEventLabel(EventLabel(eventId, it)) }
+            refreshEventLabels()
+        } catch (e: Exception) {
+            Log.e("LabelViewModel", "setEventLabels failed", e)
+        }
     }
 
     fun addEventLabel(eventId: String, label: String) = viewModelScope.launch {
-        labelRepository.addEventLabel(com.memoriabox.data.model.EventLabel(eventId, label))
-        refreshEventLabels()
+        try {
+            labelRepository.addEventLabel(com.memoriabox.data.model.EventLabel(eventId, label))
+            refreshEventLabels()
+        } catch (e: Exception) {
+            Log.e("LabelViewModel", "addEventLabel failed", e)
+        }
     }
 
     fun removeEventLabel(eventId: String, label: String) = viewModelScope.launch {
-        labelRepository.removeEventLabel(com.memoriabox.data.model.EventLabel(eventId, label))
-        refreshEventLabels()
+        try {
+            labelRepository.removeEventLabel(com.memoriabox.data.model.EventLabel(eventId, label))
+            refreshEventLabels()
+        } catch (e: Exception) {
+            Log.e("LabelViewModel", "removeEventLabel failed", e)
+        }
     }
 }
 
@@ -714,7 +789,7 @@ fun createMainViewModel(application: Application): MainViewModel {
         EventRepository(app.database.eventDao()),
         LogRepository(app.database.logDao()),
         app.backupManager,
-        NotificationHelper(application)
+        app.notificationHelper
     )
 }
 
@@ -726,7 +801,7 @@ fun createBoxDetailViewModel(application: Application): BoxDetailViewModel {
         com.memoriabox.repository.BoxRepository(app.database.boxDao()),
         LogRepository(app.database.logDao()),
         app.backupManager,
-        NotificationHelper(application)
+        app.notificationHelper
     )
 }
 
@@ -783,21 +858,29 @@ class MoodViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun upsertMood(date: Long, level: Int, activity: String, note: String) = viewModelScope.launch {
-        val safeLevel = com.memoriabox.utils.NextFeaturesLogic.coerceMoodLevel(level)
-        val existing = moodRepository.getMoodByDate(date)
-        val mood = existing?.copy(level = safeLevel, activity = activity, note = note) ?: MoodEntry(
-            date = date,
-            level = safeLevel,
-            activity = activity,
-            note = note
-        )
-        moodRepository.upsertMood(mood)
-        backupManager.onDataChanged()
+        try {
+            val safeLevel = com.memoriabox.utils.NextFeaturesLogic.coerceMoodLevel(level)
+            val existing = moodRepository.getMoodByDate(date)
+            val mood = existing?.copy(level = safeLevel, activity = activity, note = note) ?: MoodEntry(
+                date = date,
+                level = safeLevel,
+                activity = activity,
+                note = note
+            )
+            moodRepository.upsertMood(mood)
+            backupManager.onDataChanged()
+        } catch (e: Exception) {
+            Log.e("MoodViewModel", "upsertMood failed", e)
+        }
     }
 
     fun deleteMood(date: Long) = viewModelScope.launch {
-        moodRepository.getMoodByDate(date)?.let { moodRepository.deleteMood(it) }
-        backupManager.onDataChanged()
+        try {
+            moodRepository.getMoodByDate(date)?.let { moodRepository.deleteMood(it) }
+            backupManager.onDataChanged()
+        } catch (e: Exception) {
+            Log.e("MoodViewModel", "deleteMood failed", e)
+        }
     }
 
     fun moodForDate(date: Long): MoodEntry? {
@@ -864,59 +947,81 @@ class FriendDetailViewModel(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun load(friendId: String) = viewModelScope.launch {
-        _friendId.value = friendId
-        _friend.value = friendRepository.getAllFriendsOnce().firstOrNull { it.id == friendId }
-        _relations.value = friendRepository.getFriendRelationsOnce(friendId)
-        _birthdayEvent.value = eventRepository.getAllEventsOnce()
-            .firstOrNull { it.type == EventType.BIRTHDAY && it.avatarUri == "friend:$friendId" }
+        try {
+            _friendId.value = friendId
+            _friend.value = friendRepository.getFriendById(friendId)
+            _relations.value = friendRepository.getFriendRelationsOnce(friendId)
+            _birthdayEvent.value = eventRepository.getBirthdayEventByAvatarUri("friend:$friendId")
+        } catch (e: Exception) {
+            Log.e("FriendDetailVM", "load failed", e)
+        }
     }
 
     fun updateFriend(name: String, birthdayDate: Long?, avatarUri: String?, relations: List<String>) = viewModelScope.launch {
-        val current = _friend.value ?: return@launch
-        val updated = current.copy(
-            name = name.trim().ifBlank { current.name },
-            birthdayDate = birthdayDate,
-            avatarUri = avatarUri
-        )
-        friendRepository.upsertFriend(updated)
-        _friend.value = updated
-        friendRepository.deleteFriendRelations(current.id)
-        relations.filter { it.isNotBlank() }.distinct().forEach { label ->
-            friendRepository.upsertFriendRelation(FriendRelation(current.id, label.trim()))
+        try {
+            val current = _friend.value ?: return@launch
+            val updated = current.copy(
+                name = name.trim().ifBlank { current.name },
+                birthdayDate = birthdayDate,
+                avatarUri = avatarUri
+            )
+            friendRepository.upsertFriend(updated)
+            _friend.value = updated
+            friendRepository.deleteFriendRelations(current.id)
+            relations.filter { it.isNotBlank() }.distinct().forEach { label ->
+                friendRepository.upsertFriendRelation(FriendRelation(current.id, label.trim()))
+            }
+            _relations.value = relations.filter { it.isNotBlank() }.distinct()
+            syncBirthdayEvent(updated)
+            backupManager.onDataChanged()
+        } catch (e: Exception) {
+            Log.e("FriendDetailVM", "updateFriend failed", e)
         }
-        _relations.value = relations.filter { it.isNotBlank() }.distinct()
-        syncBirthdayEvent(updated)
-        backupManager.onDataChanged()
     }
 
     fun addGift(name: String, price: Double, status: GiftStatus, year: Int) = viewModelScope.launch {
-        val id = _friendId.value ?: return@launch
-        giftRepository.upsertGift(FriendGift(friendId = id, name = name, price = price, status = status, year = year))
-        backupManager.onDataChanged()
+        try {
+            val id = _friendId.value ?: return@launch
+            giftRepository.upsertGift(FriendGift(friendId = id, name = name, price = price, status = status, year = year))
+            backupManager.onDataChanged()
+        } catch (e: Exception) {
+            Log.e("FriendDetailVM", "addGift failed", e)
+        }
     }
 
     fun deleteGift(gift: FriendGift) = viewModelScope.launch {
-        giftRepository.deleteGift(gift)
-        backupManager.onDataChanged()
+        try {
+            giftRepository.deleteGift(gift)
+            backupManager.onDataChanged()
+        } catch (e: Exception) {
+            Log.e("FriendDetailVM", "deleteGift failed", e)
+        }
     }
 
     fun addBirthdayRecord(note: String) = viewModelScope.launch {
-        val id = _friendId.value ?: return@launch
-        val currentYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
-        birthdayRecordRepository.upsertBirthdayRecord(
-            FriendBirthdayRecord(friendId = id, year = currentYear, note = note)
-        )
-        backupManager.onDataChanged()
+        try {
+            val id = _friendId.value ?: return@launch
+            val currentYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
+            birthdayRecordRepository.upsertBirthdayRecord(
+                FriendBirthdayRecord(friendId = id, year = currentYear, note = note)
+            )
+            backupManager.onDataChanged()
+        } catch (e: Exception) {
+            Log.e("FriendDetailVM", "addBirthdayRecord failed", e)
+        }
     }
 
     fun deleteBirthdayRecord(record: FriendBirthdayRecord) = viewModelScope.launch {
-        birthdayRecordRepository.deleteBirthdayRecord(record)
-        backupManager.onDataChanged()
+        try {
+            birthdayRecordRepository.deleteBirthdayRecord(record)
+            backupManager.onDataChanged()
+        } catch (e: Exception) {
+            Log.e("FriendDetailVM", "deleteBirthdayRecord failed", e)
+        }
     }
 
     private suspend fun syncBirthdayEvent(friend: Friend) {
-        val existing = eventRepository.getAllEventsOnce()
-            .firstOrNull { it.type == EventType.BIRTHDAY && it.avatarUri == "friend:${friend.id}" }
+        val existing = eventRepository.getBirthdayEventByAvatarUri("friend:${friend.id}")
         val birthday = friend.birthdayDate
         if (birthday == null) {
             existing?.let {
@@ -954,10 +1059,14 @@ class FriendDetailViewModel(
     }
 
     fun deleteBirthdayEvent() = viewModelScope.launch {
-        val event = _birthdayEvent.value ?: return@launch
-        eventRepository.deleteEvent(event)
-        _birthdayEvent.value = null
-        backupManager.onDataChanged()
+        try {
+            val event = _birthdayEvent.value ?: return@launch
+            eventRepository.deleteEvent(event)
+            _birthdayEvent.value = null
+            backupManager.onDataChanged()
+        } catch (e: Exception) {
+            Log.e("FriendDetailVM", "deleteBirthdayEvent failed", e)
+        }
     }
 }
 

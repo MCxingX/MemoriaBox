@@ -30,6 +30,7 @@ class NotificationHelper(private val context: Context) {
     
     private val alarmManager: AlarmManager?
     private val prefs = context.getSharedPreferences("pushplus_config", Context.MODE_PRIVATE)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     
     companion object {
         private const val CHANNEL_ID = "memoriabox_reminders"
@@ -90,11 +91,15 @@ class NotificationHelper(private val context: Context) {
     private fun scheduleSingleReminder(event: Event, occurrenceDate: Long, offsetDays: Int) {
         val alarmMgr = alarmManager ?: return
         try {
+            val (hour, minute) = parseAlarmTime(event.alarmTime) ?: run {
+                Log.e(TAG, "Invalid alarm time format: '${event.alarmTime}' for event ${event.name}")
+                return
+            }
             val calendar = Calendar.getInstance().apply {
                 timeInMillis = occurrenceDate
                 add(Calendar.DAY_OF_YEAR, -offsetDays)
-                set(Calendar.HOUR_OF_DAY, event.alarmTime.substring(0, 2).toInt())
-                set(Calendar.MINUTE, event.alarmTime.substring(3, 5).toInt())
+                set(Calendar.HOUR_OF_DAY, hour)
+                set(Calendar.MINUTE, minute)
                 set(Calendar.SECOND, 0)
             }
 
@@ -197,13 +202,23 @@ class NotificationHelper(private val context: Context) {
     }
 
     private fun reminderTriggerTime(date: Long, event: Event): Long {
+        val (hour, minute) = parseAlarmTime(event.alarmTime) ?: return Long.MAX_VALUE
         return Calendar.getInstance().apply {
             timeInMillis = date
             add(Calendar.DAY_OF_YEAR, -event.reminderDays)
-            set(Calendar.HOUR_OF_DAY, event.alarmTime.substring(0, 2).toInt())
-            set(Calendar.MINUTE, event.alarmTime.substring(3, 5).toInt())
+            set(Calendar.HOUR_OF_DAY, hour)
+            set(Calendar.MINUTE, minute)
             set(Calendar.SECOND, 0)
         }.timeInMillis
+    }
+
+    private fun parseAlarmTime(alarmTime: String): Pair<Int, Int>? {
+        val parts = alarmTime.split(":")
+        if (parts.size != 2) return null
+        val hour = parts[0].toIntOrNull() ?: return null
+        val minute = parts[1].toIntOrNull() ?: return null
+        if (hour !in 0..23 || minute !in 0..59) return null
+        return hour to minute
     }
 
     private fun effectiveRepeatMode(event: Event): RepeatMode {
@@ -303,10 +318,11 @@ class NotificationHelper(private val context: Context) {
 
         val channel = getPushPlusChannel()
         
-        CoroutineScope(Dispatchers.IO).launch {
+        scope.launch {
+            var connection: HttpURLConnection? = null
             try {
                 val url = URL("https://www.pushplus.plus/send")
-                val connection = url.openConnection() as HttpURLConnection
+                connection = url.openConnection() as HttpURLConnection
                 connection.requestMethod = "POST"
                 connection.setRequestProperty("Content-Type", "application/json")
                 connection.doOutput = true
@@ -332,6 +348,8 @@ class NotificationHelper(private val context: Context) {
                 }
             } catch (e: Exception) {
                 android.util.Log.e("PushPlus", "Error sending PushPlus notification", e)
+            } finally {
+                connection?.disconnect()
             }
         }
     }

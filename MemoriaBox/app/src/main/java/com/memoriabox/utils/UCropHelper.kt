@@ -121,19 +121,24 @@ object UCropHelper {
         folder: String,
         onResult: (String?) -> Unit
     ) {
-        if (result.resultCode == Activity.RESULT_OK && result.data != null) {
-            val resultUri = UCrop.getOutput(result.data!!)
-            if (resultUri != null) {
-                scope.launch(Dispatchers.IO) {
-                    val finalPath = copyToDestination(context, resultUri, folder)
-                    runCatching { resultUri.path?.let { File(it).delete() } }
-                    onResult(finalPath)
+        if (result.resultCode == Activity.RESULT_OK) {
+            val data = result.data
+            if (data != null) {
+                val resultUri = UCrop.getOutput(data)
+                if (resultUri != null) {
+                    scope.launch(Dispatchers.IO) {
+                        val finalPath = copyToDestination(context, resultUri, folder)
+                        runCatching { resultUri.path?.let { File(it).delete() } }
+                        onResult(finalPath)
+                    }
+                } else {
+                    onResult(null)
                 }
             } else {
                 onResult(null)
             }
-        } else if (result.resultCode == UCrop.RESULT_ERROR && result.data != null) {
-            val error = UCrop.getError(result.data!!)
+        } else if (result.resultCode == UCrop.RESULT_ERROR) {
+            val error = result.data?.let { UCrop.getError(it) }
             Log.e(TAG, "uCrop error: ${error?.message}")
             onResult(null)
         } else {

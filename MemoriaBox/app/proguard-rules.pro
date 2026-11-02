@@ -1,5 +1,6 @@
 -keep class net.sqlcipher.** { *; }
 -keep class net.zetetic.** { *; }
+-keepclasseswithmembernames class * { native <methods>; }
 -keep class androidx.room.** { *; }
 -keep class com.memoriabox.data.model.** { *; }
 -keep class com.yalantis.ucrop.** { *; }
