@@ -28,6 +28,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -42,11 +43,13 @@ import com.memoriabox.data.model.DiaryMediaType
 import com.memoriabox.R
 import com.memoriabox.utils.ColorUtils
 import com.memoriabox.utils.ImageImportUtils
+import com.memoriabox.utils.VideoThumbnailUtils
 import com.memoriabox.ui.screen.dialogs.DatePickerDialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -165,6 +168,11 @@ fun DiaryVideoPlayer(
 ) {
     val context = LocalContext.current
     var playbackError by remember(uri) { mutableStateOf<String?>(null) }
+    var thumbnailUri by remember(uri) { mutableStateOf<String?>(null) }
+    var started by remember(uri) { mutableStateOf(autoPlay) }
+    LaunchedEffect(uri) {
+        thumbnailUri = withContext(Dispatchers.IO) { VideoThumbnailUtils.thumbnailUri(context, uri) }
+    }
     val exoPlayer = remember(uri) {
         ExoPlayer.Builder(context.applicationContext).build().apply {
             setMediaItem(MediaItem.fromUri(Uri.parse(uri)))
@@ -197,7 +205,7 @@ fun DiaryVideoPlayer(
     LaunchedEffect(exoPlayer, autoPlay, loop, muted) {
         exoPlayer.repeatMode = if (loop) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
         exoPlayer.volume = if (muted) 0f else 1f
-        exoPlayer.playWhenReady = autoPlay
+        exoPlayer.playWhenReady = autoPlay || started
     }
 
     Box(
@@ -206,8 +214,35 @@ fun DiaryVideoPlayer(
             .background(Color.Black),
         contentAlignment = Alignment.Center
     ) {
+        if (!started && thumbnailUri != null) {
+            AsyncImage(
+                model = thumbnailUri,
+                contentDescription = "视频封面",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable {
+                        started = true
+                        exoPlayer.playWhenReady = true
+                    }
+            )
+            Icon(
+                Icons.Default.PlayCircle,
+                contentDescription = "播放视频",
+                tint = Color.White,
+                modifier = Modifier
+                    .size(58.dp)
+                    .align(Alignment.Center)
+                    .clickable {
+                        started = true
+                        exoPlayer.playWhenReady = true
+                    }
+            )
+        }
         AndroidView(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .alpha(if (!started && thumbnailUri != null) 0f else 1f),
             factory = { viewContext ->
                 (android.view.LayoutInflater.from(viewContext)
                     .inflate(R.layout.diary_video_player, null, false) as PlayerView).apply {
@@ -422,6 +457,7 @@ fun DiaryEditorDialog(
             scope.launch(Dispatchers.IO) {
                 val copied = ImageImportUtils.copyMediaToPrivateStorage(context, it, "diary_videos", "mp4")
                 copied?.let { uri ->
+                    VideoThumbnailUtils.thumbnailUri(context, uri)
                     mediaItems.add(
                         DiaryMedia(
                             diaryId = existingDiary?.id ?: "",
@@ -449,6 +485,7 @@ fun DiaryEditorDialog(
                     "diary_media",
                     if (video) "mp4" else "jpg"
                 ) ?: return@launch
+                if (video) VideoThumbnailUtils.thumbnailUri(context, copied)
                 mediaItems[index] = mediaItems[index].copy(
                     mediaUri = copied,
                     mediaType = if (video) DiaryMediaType.VIDEO else DiaryMediaType.IMAGE
@@ -728,6 +765,13 @@ private fun DiaryMediaEditorRow(
     onReplace: () -> Unit,
     onAspectRatioChange: (String) -> Unit
 ) {
+    val context = LocalContext.current
+    var coverUri by remember(media.mediaUri) { mutableStateOf<String?>(null) }
+    LaunchedEffect(media.mediaUri, media.mediaType) {
+        if (media.mediaType == DiaryMediaType.VIDEO) {
+            coverUri = withContext(Dispatchers.IO) { VideoThumbnailUtils.thumbnailUri(context, media.mediaUri) }
+        }
+    }
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp)
@@ -742,11 +786,31 @@ private fun DiaryMediaEditorRow(
                         modifier = Modifier.size(64.dp).clip(RoundedCornerShape(10.dp))
                     )
                 } else {
-                    Box(
-                        modifier = Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.secondaryContainer),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.Videocam, contentDescription = null)
+                    if (coverUri != null) {
+                        Box(
+                            modifier = Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            AsyncImage(
+                                model = coverUri,
+                                contentDescription = "视频封面",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                            Icon(
+                                Icons.Default.PlayCircle,
+                                contentDescription = "视频",
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    } else {
+                        Box(
+                            modifier = Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.secondaryContainer),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Videocam, contentDescription = null)
+                        }
                     }
                 }
                 Column(modifier = Modifier.weight(1f)) {

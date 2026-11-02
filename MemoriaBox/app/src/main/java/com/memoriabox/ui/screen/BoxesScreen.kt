@@ -41,6 +41,7 @@ import com.memoriabox.utils.Header
 import com.memoriabox.utils.NotificationHelper
 import com.memoriabox.utils.LunarDateUtils
 import com.memoriabox.utils.HolidayUtils
+import com.memoriabox.utils.DailyQuoteRepository
 import com.memoriabox.viewmodel.*
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -442,9 +443,17 @@ fun HomeHeroCard(adaptiveUi: AdaptiveUiSize) {
     val settingsVersion = AppSettings.settingsVersion
     val useCustom = remember(settingsVersion) { AppSettings.getUseCustomQuote(context) }
     val customQuotes = remember(settingsVersion) { AppSettings.getCustomDailyQuotes(context) }
+    var remoteQuote by remember { mutableStateOf(DailyQuoteRepository.today(context)) }
+    LaunchedEffect(Unit) {
+        if (remoteQuote == null) {
+            DailyQuoteRepository.refresh(context)?.let { remoteQuote = it }
+        }
+    }
     val dailyQuote = if (useCustom && customQuotes.isNotEmpty()) {
         val dayOfYear = Calendar.getInstance().get(Calendar.DAY_OF_YEAR)
         customQuotes[dayOfYear % customQuotes.size]
+    } else if (!remoteQuote.isNullOrBlank()) {
+        remoteQuote.orEmpty()
     } else {
         val quotes = listOf(
             "把今天第一束光，放进值得纪念的小盒子。",
