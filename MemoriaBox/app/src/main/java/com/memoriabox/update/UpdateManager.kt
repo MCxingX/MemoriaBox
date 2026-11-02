@@ -104,8 +104,14 @@ object UpdateManager {
         downloadCancelled = true
         activeCalls.forEach(Call::cancel)
         activeCalls.clear()
-        context?.applicationContext?.let { appContext ->
-            runCatching { WorkManager.getInstance(appContext).cancelUniqueWork(UpdateDownloadWorker.WORK_NAME) }
+        val appContext = context?.applicationContext ?: downloadContext
+        appContext?.let {
+            runCatching { WorkManager.getInstance(it).cancelUniqueWork(UpdateDownloadWorker.WORK_NAME) }
+        }
+        // 立即把状态机从 Downloading 推回可再次下载的状态，避免 UI 与通知卡死。
+        val current = mutableState.value
+        if (current is UpdateState.Downloading) {
+            mutableState.value = UpdateState.Available(current.info)
         }
         downloadContext = null
     }
@@ -159,17 +165,20 @@ object UpdateManager {
         )
     }
 
-    internal suspend fun executeDownload(context: Context, info: UpdateInfo) {
+    /** 下载结果三态，供 WorkManager 决策重试，避免依赖全局状态误判。 */
+    enum class DownloadOutcome { CANCELLED, SUCCESS, FAILURE }
+
+    internal suspend fun executeDownload(context: Context, info: UpdateInfo): DownloadOutcome {
         downloadContext = context.applicationContext
         if (downloadCancelled) {
             mutableState.value = UpdateState.Available(info)
-            return
+            return DownloadOutcome.CANCELLED
         }
         val updateDir = File(context.filesDir, "updates").apply { mkdirs() }
         val destination = File(updateDir, "MemoriaBox-${info.versionName}.apk")
         if (destination.isFile && UpdateVerifier.verify(context, destination, info).isSuccess) {
             mutableState.value = readyOrError(context, info, destination)
-            return
+            return outcomeFromState()
         }
         val temporary = File(destination.parentFile, "${destination.name}.part")
         if (temporary.isFile && temporary.length() > 0) {
@@ -182,7 +191,7 @@ object UpdateManager {
                 destination.delete()
                 if (temporary.renameTo(destination)) {
                     mutableState.value = readyOrError(context, info, destination)
-                    return
+                    return outcomeFromState()
                 }
             }
         }
@@ -190,17 +199,17 @@ object UpdateManager {
         val mirrors = fastestMirrors(info.apkUrl)
         if (downloadCancelled) {
             mutableState.value = UpdateState.Available(info)
-            return
+            return DownloadOutcome.CANCELLED
         }
         if (mirrors.isEmpty()) {
             mutableState.value = UpdateState.Error("更新镜像测速失败，请检查网络后重试", info)
-            return
+            return DownloadOutcome.FAILURE
         }
         var downloadError: Throwable? = null
         for ((index, mirror) in mirrors.withIndex()) {
             if (downloadCancelled) {
                 mutableState.value = UpdateState.Available(info)
-                return
+                return DownloadOutcome.CANCELLED
             }
             val isLast = index == mirrors.lastIndex
             val result = runCatching { download(mirror, destination, info) }
@@ -208,17 +217,17 @@ object UpdateManager {
             downloadError = result.exceptionOrNull()
             if (downloadCancelled) {
                 mutableState.value = UpdateState.Available(info)
-                return
+                return DownloadOutcome.CANCELLED
             }
             if (info.apkSize > 0 && temporary.length() >= info.apkSize) temporary.delete()
             if (isLast) {
                 mutableState.value = UpdateState.Error(downloadError?.message ?: "所有镜像下载失败", info)
-                return
+                return DownloadOutcome.FAILURE
             }
         }
         if (downloadCancelled) {
             mutableState.value = UpdateState.Available(info)
-            return
+            return DownloadOutcome.CANCELLED
         }
         UpdateVerifier.verify(context, destination, info)
             .onSuccess {
@@ -229,6 +238,14 @@ object UpdateManager {
                 destination.delete()
                 mutableState.value = UpdateState.Error(error.message ?: "更新包校验失败", info)
             }
+        return outcomeFromState()
+    }
+
+    /** 把当前状态映射为下载结果，供 Worker 决定是否重试。 */
+    private fun outcomeFromState(): DownloadOutcome = when (mutableState.value) {
+        is UpdateState.Error -> DownloadOutcome.FAILURE
+        is UpdateState.Ready -> DownloadOutcome.SUCCESS
+        else -> DownloadOutcome.SUCCESS
     }
 
     private fun download(url: String, destination: File, info: UpdateInfo) {
@@ -250,8 +267,13 @@ object UpdateManager {
                 require(response.isSuccessful || response.code == 206) { "下载失败：HTTP ${response.code}" }
                 val body = response.body ?: error("下载内容为空")
                 // 服务端忽略 Range 返回 200 时，必须从零开始写，避免把完整包拼到旧片段后面。
-                val resumed = resumeFrom > 0 && response.code == 206
-                        val total = when {
+                // 另外只有确认 Content-Range 起点等于续传起点时才允许追加，否则同样按零开始重写。
+                val contentRangeStart = response.header("Content-Range")
+                    ?.substringAfter("bytes ", "")
+                    ?.substringBefore("-")
+                    ?.toLongOrNull()
+                val resumed = resumeFrom > 0 && response.code == 206 && contentRangeStart == resumeFrom
+                val total = when {
                     resumed -> (resumeFrom + body.contentLength()).takeIf { it > resumeFrom } ?: info.apkSize
                     else -> body.contentLength().takeIf { it > 0 } ?: info.apkSize
                 }

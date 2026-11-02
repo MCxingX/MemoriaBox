@@ -8,10 +8,11 @@ object LunarDateUtils {
     val monthNames = listOf("正月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "腊月")
 
     fun nextOccurrenceMillis(lunar: String, nowMillis: Long = System.currentTimeMillis()): Long? {
-        val (month, day) = parseMonthDay(lunar) ?: return null
+        val parsed = parseMonthDayWithLeap(lunar) ?: return null
+        val (month, day, leap) = parsed
         val cursor = startOfDay(nowMillis)
         repeat(420) {
-            if (isMonthDay(cursor.timeInMillis, month, day)) return cursor.timeInMillis
+            if (isMonthDay(cursor.timeInMillis, month, day, leap)) return cursor.timeInMillis
             cursor.add(Calendar.DAY_OF_YEAR, 1)
         }
         return null
@@ -80,14 +81,74 @@ object LunarDateUtils {
     }
 
     fun parseMonthDay(lunar: String): Pair<Int, Int>? {
-        val month = monthNames.indexOfFirst { lunar.contains(it) }.takeIf { it >= 0 }?.plus(1) ?: return null
-        val day = parseDay(lunar) ?: return null
-        return month to day
+        val parsed = parseMonthDayWithLeap(lunar) ?: return null
+        return parsed.first to parsed.second
     }
+
+    /** 解析农历字符串，返回 (月, 日, 是否闰月)。 */
+    fun parseMonthDayWithLeap(lunar: String): Triple<Int, Int, Boolean>? {
+        val leap = lunar.contains("闰")
+        // 月名按"最长命中优先、其次最靠前"匹配：
+        // 长度优先避免"十一月"被"十月"抢先；位置优先避免"农历十一月初五"里的"正月"被误选。
+        val best = monthNames
+            .withIndex()
+            .mapNotNull { (index, name) ->
+                val position = lunar.indexOf(name)
+                if (position < 0) null else dataclassMonth(index + 1, name, position)
+            }
+            .maxWithOrNull(compareBy({ it.length }, { -it.position }))
+            ?: return null
+        // 先把月名从字符串里剔除，否则"十一月初五"的"十一"会被当成日号解析成 11。
+        val dayText = lunar.removeRange(best.position, best.position + best.length).replace("闰", "")
+        val day = parseDay(dayText) ?: return null
+        return Triple(best.month, day, leap)
+    }
+
+    private data class MonthHit(val month: Int, val length: Int, val position: Int)
+
+    private fun dataclassMonth(month: Int, name: String, position: Int) = MonthHit(month, name.length, position)
 
     fun parseDay(lunar: String): Int? {
         Regex("(\\d{1,2})日").find(lunar)?.groupValues?.getOrNull(1)?.toIntOrNull()?.takeIf { it in 1..30 }?.let { return it }
-        return (1..30).firstOrNull { lunar.contains(dayLabel(it)) }
+        // 先用完整词正则抓取，长写法优先（二十一/二十/十一…），避免"二十一"被前缀"十一"或"二十"抢先命中。
+        Regex("三十|廿[一二三四五六七八九]|二十[一二三四五六七八九]?|十[一二三四五六七八九]|初[一二三四五六七八九十]")
+            .find(lunar)
+            ?.value
+            ?.let { return chineseDayToInt(it) }
+        return null
+    }
+
+    /** 把中文写法（二十/廿一/初三/十一）转成 1..30 的日号。 */
+    private fun chineseDayToInt(text: String): Int? {
+        if (text == "三十") return 30
+        if (text.startsWith("廿")) {
+            val rest = text.removePrefix("廿")
+            return if (rest.isEmpty()) 20 else rest.toChineseDigit()?.plus(20)
+        }
+        if (text.startsWith("初")) return text.removePrefix("初").toChineseDigit()
+        if (text.startsWith("二十")) {
+            val rest = text.removePrefix("二十")
+            return if (rest.isEmpty()) 20 else rest.toChineseDigit()?.plus(20)
+        }
+        if (text.startsWith("十")) {
+            val rest = text.removePrefix("十")
+            return if (rest.isEmpty()) 10 else rest.toChineseDigit()?.plus(10)
+        }
+        return text.toChineseDigit()
+    }
+
+    private fun String.toChineseDigit(): Int? = when (this) {
+        "一" -> 1
+        "二" -> 2
+        "三" -> 3
+        "四" -> 4
+        "五" -> 5
+        "六" -> 6
+        "七" -> 7
+        "八" -> 8
+        "九" -> 9
+        "十" -> 10
+        else -> null
     }
 
     fun dayLabel(day: Int): String = when (day) {
@@ -108,16 +169,20 @@ object LunarDateUtils {
         else -> day.toString()
     }
 
-    private fun isMonthDay(timeMillis: Long, month: Int, day: Int): Boolean {
+    private fun isMonthDay(timeMillis: Long, month: Int, day: Int, leap: Boolean = false): Boolean {
         val chineseCalendar = ChineseCalendar().apply { this.timeInMillis = timeMillis }
-        return chineseCalendar.get(Calendar.MONTH) + 1 == month && chineseCalendar.get(Calendar.DAY_OF_MONTH) == day
+        return chineseCalendar.get(Calendar.MONTH) + 1 == month &&
+            chineseCalendar.get(Calendar.DAY_OF_MONTH) == day &&
+            // 闰月与正月的月号相同，必须一并比较闰月标志，否则农历生日会整体偏一个月。
+            (chineseCalendar.get(ChineseCalendar.IS_LEAP_MONTH) != 0) == leap
     }
 
-    private fun isYearMonthDay(timeMillis: Long, year: Int, month: Int, day: Int): Boolean {
+    private fun isYearMonthDay(timeMillis: Long, year: Int, month: Int, day: Int, leap: Boolean = false): Boolean {
         val chineseCalendar = ChineseCalendar().apply { this.timeInMillis = timeMillis }
         return chineseCalendar.get(ChineseCalendar.EXTENDED_YEAR) == year + 2637 &&
             chineseCalendar.get(Calendar.MONTH) + 1 == month &&
-            chineseCalendar.get(Calendar.DAY_OF_MONTH) == day
+            chineseCalendar.get(Calendar.DAY_OF_MONTH) == day &&
+            (chineseCalendar.get(ChineseCalendar.IS_LEAP_MONTH) != 0) == leap
     }
 
     private fun startOfDay(timeMillis: Long): Calendar = Calendar.getInstance().apply {

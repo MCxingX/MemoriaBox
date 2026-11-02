@@ -3,13 +3,16 @@ package com.memoriabox.utils
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Credentials
 import java.util.concurrent.TimeUnit
 
 class WebDavClient {
 
-    private lateinit var client: OkHttpClient
+    // 用 @Volatile 保证多线程（上传/下载/测速）间的可见性，避免重复初始化竞态。
+    @Volatile
+    private var client: OkHttpClient? = null
 
     data class WebDavConfig(
         val serverUrl: String,
@@ -18,15 +21,18 @@ class WebDavClient {
         val path: String = "/NianJi/"
     )
 
+    /** 拼接远端地址，处理 serverUrl 结尾斜杠与 path 开头斜杠的重复或缺失。 */
+    private fun buildUrl(config: WebDavConfig, fileName: String = ""): String {
+        val base = config.serverUrl.trimEnd('/')
+        val path = config.path.let { if (it.startsWith("/")) it else "/$it" }
+        val suffix = fileName.removePrefix("/")
+        return base + path.trimEnd('/') + "/" + suffix
+    }
+
     suspend fun testConnection(config: WebDavConfig): Result<Boolean> {
         return try {
-            client = OkHttpClient.Builder()
-                .connectTimeout(10, TimeUnit.SECONDS)
-                .readTimeout(10, TimeUnit.SECONDS)
-                .build()
-
             val credential = Credentials.basic(config.username, config.password)
-            val url = "${config.serverUrl}${config.path}"
+            val url = buildUrl(config)
 
             val request = Request.Builder()
                 .url(url)
@@ -35,7 +41,7 @@ class WebDavClient {
                 .header("Authorization", credential)
                 .build()
 
-            client.newCall(request).execute().use { response ->
+            getOrCreateClient().newCall(request).execute().use { response ->
                 if (response.isSuccessful) {
                     Result.success(true)
                 } else {
@@ -49,12 +55,12 @@ class WebDavClient {
 
     suspend fun uploadFile(config: WebDavConfig, localFilePath: String, remoteFileName: String): Result<Boolean> {
         return try {
-            val client = getOrCreateClient()
             val credential = Credentials.basic(config.username, config.password)
-            val url = "${config.serverUrl}${config.path}$remoteFileName"
+            val url = buildUrl(config, remoteFileName)
 
-            val fileBytes = java.io.File(localFilePath).readBytes()
-            val requestBody = fileBytes.toRequestBody("application/octet-stream".toMediaType())
+            val source = java.io.File(localFilePath)
+            // 流式上传，避免大备份文件一次性读入内存导致 OOM。
+            val requestBody = source.asRequestBody("application/octet-stream".toMediaType())
 
             val request = Request.Builder()
                 .url(url)
@@ -62,7 +68,7 @@ class WebDavClient {
                 .header("Authorization", credential)
                 .build()
 
-            client.newCall(request).execute().use { response ->
+            getOrCreateClient().newCall(request).execute().use { response ->
                 if (response.isSuccessful) {
                     Result.success(true)
                 } else {
@@ -76,9 +82,8 @@ class WebDavClient {
 
     suspend fun listFiles(config: WebDavConfig): Result<List<WebDavFileInfo>> {
         return try {
-            val client = getOrCreateClient()
             val credential = Credentials.basic(config.username, config.password)
-            val url = "${config.serverUrl}${config.path}"
+            val url = buildUrl(config)
 
             val request = Request.Builder()
                 .url(url)
@@ -87,11 +92,10 @@ class WebDavClient {
                 .header("Authorization", credential)
                 .build()
 
-            client.newCall(request).execute().use { response ->
+            getOrCreateClient().newCall(request).execute().use { response ->
                 if (response.isSuccessful) {
                     val body = response.body?.string() ?: ""
-                    val files = parsePropFindResponse(body)
-                    Result.success(files)
+                    Result.success(parsePropFindResponse(body))
                 } else {
                     Result.failure(Exception("Failed to list files: ${response.code}"))
                 }
@@ -103,27 +107,26 @@ class WebDavClient {
 
     suspend fun downloadFile(config: WebDavConfig, remoteFileName: String, localFilePath: String): Result<Boolean> {
         return try {
-            val client = getOrCreateClient()
             val credential = Credentials.basic(config.username, config.password)
-            val url = "${config.serverUrl}${config.path}$remoteFileName"
+            val url = buildUrl(config, remoteFileName)
 
             val request = Request.Builder()
                 .url(url)
                 .header("Authorization", credential)
                 .build()
 
-            client.newCall(request).execute().use { response ->
-                if (response.isSuccessful) {
-                    val body = response.body?.bytes()
-                    if (body != null) {
-                        java.io.File(localFilePath).writeBytes(body)
-                        Result.success(true)
-                    } else {
-                        Result.failure(Exception("Empty response"))
-                    }
-                } else {
-                    Result.failure(Exception("Download failed: ${response.code}"))
+            getOrCreateClient().newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    return Result.failure(Exception("Download failed: ${response.code}"))
                 }
+                val body = response.body ?: return Result.failure(Exception("Empty response"))
+                // 流式落盘，避免大文件整包驻留内存。
+                val target = java.io.File(localFilePath)
+                target.parentFile?.mkdirs()
+                body.byteStream().use { input ->
+                    target.outputStream().use { output -> input.copyTo(output) }
+                }
+                Result.success(true)
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -131,13 +134,16 @@ class WebDavClient {
     }
 
     private fun getOrCreateClient(): OkHttpClient {
-        if (!::client.isInitialized) {
-            client = OkHttpClient.Builder()
+        client?.let { return it }
+        return synchronized(this) {
+            client ?: OkHttpClient.Builder()
                 .connectTimeout(30, TimeUnit.SECONDS)
-                .readTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(60, TimeUnit.SECONDS)
+                .writeTimeout(60, TimeUnit.SECONDS)
+                .retryOnConnectionFailure(true)
                 .build()
+                .also { client = it }
         }
-        return client
     }
 
     private fun parsePropFindResponse(xml: String): List<WebDavFileInfo> {

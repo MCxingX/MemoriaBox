@@ -44,8 +44,9 @@ data class MonthlySummaryUiState(
 )
 
 object MonthlySummaryHelper {
-    private val monthFormat = SimpleDateFormat("yyyy-MM", Locale.getDefault())
-    private val dayFormat = SimpleDateFormat("M月d日", Locale.getDefault())
+    // SimpleDateFormat 非线程安全，改为每次使用时新建，避免并发格式化出错。
+    private fun monthFormat() = SimpleDateFormat("yyyy-MM", Locale.ROOT)
+    private fun dayFormat() = SimpleDateFormat("M月d日", Locale.ROOT)
 
     fun buildSummary(
         monthStart: Long,
@@ -65,7 +66,7 @@ object MonthlySummaryHelper {
                         dateStart = dateStart,
                         mediaUri = uri,
                         mediaType = diary.backgroundMediaType ?: DiaryMediaType.IMAGE,
-                        aspectRatio = "16:9",
+                        aspectRatio = if (diary.backgroundMediaType == DiaryMediaType.VIDEO) "16:9" else "3:4",
                         caption = diary.content.take(40)
                     )
                 }
@@ -106,7 +107,7 @@ object MonthlySummaryHelper {
         )
     }
 
-    fun monthKey(timestamp: Long): String = monthFormat.format(timestamp)
+    fun monthKey(timestamp: Long): String = monthFormat().format(timestamp)
 
     fun previousMonthStart(now: Long = System.currentTimeMillis()): Long {
         return Calendar.getInstance().apply {
@@ -145,10 +146,10 @@ object MonthlySummaryHelper {
         mediaCount: Int
     ): String {
         if (diaries.isEmpty() && mediaCount == 0) {
-            return "${monthFormat.format(monthStart)} 暂无日记和媒体记录。"
+            return "${monthFormat().format(monthStart)} 暂无日记和媒体记录。"
         }
-        val lines = mutableListOf("${monthFormat.format(monthStart)} 记录了 ${diaries.size} 篇日记，留下了 $mediaCount 个媒体。")
-        slides.take(8).forEach { slide -> lines.add("${dayFormat.format(slide.dateStart)}：${slide.text}") }
+        val lines = mutableListOf("${monthFormat().format(monthStart)} 记录了 ${diaries.size} 篇日记，留下了 $mediaCount 个媒体。")
+        slides.take(8).forEach { slide -> lines.add("${dayFormat().format(slide.dateStart)}：${slide.text}") }
         if (slides.size > 8) lines.add("还有 ${slides.size - 8} 天的记录，打开月度总结继续查看。")
         return lines.joinToString("\n")
     }

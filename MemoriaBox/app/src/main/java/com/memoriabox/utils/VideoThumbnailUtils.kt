@@ -24,8 +24,14 @@ object VideoThumbnailUtils {
                 ?: return null
             try {
                 FileOutputStream(output).use { stream ->
-                    check(bitmap.compress(Bitmap.CompressFormat.JPEG, 86, stream))
+                    if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 86, stream)) {
+                        // 压缩失败会留下 0 字节或半截文件，必须删掉，否则会被当成有效封面缓存。
+                        throw IllegalStateException("视频封面压缩失败")
+                    }
                 }
+            } catch (error: Throwable) {
+                output.delete()
+                throw error
             } finally {
                 bitmap.recycle()
             }

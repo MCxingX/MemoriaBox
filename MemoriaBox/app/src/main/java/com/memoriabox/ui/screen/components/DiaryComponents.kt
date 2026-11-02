@@ -416,8 +416,8 @@ fun DiaryEditorDialog(
     val scope = rememberCoroutineScope()
     val dateFormatter = remember { SimpleDateFormat("yyyy年M月d日", Locale.getDefault()) }
     var selectedDateStart by remember(existingDiary?.id, dateStart) { mutableLongStateOf(existingDiary?.dateStart ?: startOfDayForEditor(dateStart)) }
-    var content by remember { mutableStateOf(existingDiary?.content ?: "") }
-    var backgroundUri by remember { mutableStateOf(existingDiary?.backgroundMediaUri) }
+    var content by remember(existingDiary?.id) { mutableStateOf(existingDiary?.content ?: "") }
+    var backgroundUri by remember(existingDiary?.id) { mutableStateOf(existingDiary?.backgroundMediaUri) }
     val mediaItems = remember(existingDiary?.id, existingMedia) { mutableStateListOf<DiaryMedia>().apply { addAll(existingMedia) } }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var replacingMediaIndex by remember { mutableStateOf<Int?>(null) }
@@ -442,7 +442,11 @@ fun DiaryEditorDialog(
                         diaryId = existingDiary?.id ?: "",
                         mediaUri = uri,
                         mediaType = DiaryMediaType.IMAGE,
-                        sortOrder = mediaItems.size + index
+                        sortOrder = mediaItems.size + index,
+                        // 按真实图片比例保存，避免竖图/方图在详情页被拉伸成 16:9。
+                        aspectRatio = ImageImportUtils.getImageAspectRatio(context, uri)
+                            ?.let { ratio -> nearestAspectRatioLabel(ratio) }
+                            ?: "16:9"
                     )
                 })
             }
@@ -635,13 +639,18 @@ fun DiaryEditorDialog(
                     mediaItems.forEachIndexed { index, media ->
                         DiaryMediaEditorRow(
                             media = media,
-                            onDelete = { mediaItems.removeAt(index) },
+                            onDelete = {
+                                // 按 id 重新定位，避免列表变化后索引失效导致删错项。
+                                val position = mediaItems.indexOfFirst { it.id == media.id }
+                                if (position >= 0) mediaItems.removeAt(position)
+                            },
                             onReplace = {
                                 replacingMediaIndex = index
                                 replacePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
                             },
                             onAspectRatioChange = { ratio ->
-                                mediaItems[index] = media.copy(aspectRatio = ratio)
+                                val position = mediaItems.indexOfFirst { it.id == media.id }
+                                if (position >= 0) mediaItems[position] = mediaItems[position].copy(aspectRatio = ratio)
                             }
                         )
                     }
@@ -833,16 +842,18 @@ private fun DiaryMediaEditorRow(
     }
 }
 
-private fun inferDiaryMediaTypeForEditor(uri: String): DiaryMediaType {
-    val videoExtensions = listOf(".mp4", ".mkv", ".webm", ".3gp", ".mov")
-    return if (videoExtensions.any { uri.endsWith(it, ignoreCase = true) }) DiaryMediaType.VIDEO else DiaryMediaType.IMAGE
-}
-
 private fun String.toFloatRatio(): Float {
     val parts = split(":")
     val width = parts.getOrNull(0)?.toFloatOrNull()
     val height = parts.getOrNull(1)?.toFloatOrNull()
     return if (width != null && height != null && height > 0f) width / height else 16f / 9f
+}
+
+/** 把真实图片比例吸附到编辑器可选的比例档位。 */
+private fun nearestAspectRatioLabel(ratio: Float): String {
+    if (!ratio.isFinite() || ratio <= 0f) return "16:9"
+    val options = listOf("1:1" to 1f, "4:3" to 4f / 3f, "16:9" to 16f / 9f, "3:4" to 3f / 4f, "9:16" to 9f / 16f)
+    return options.minByOrNull { (_, value) -> kotlin.math.abs(value - ratio) }?.first ?: "16:9"
 }
 
 private fun startOfDayForEditor(timestamp: Long): Long {

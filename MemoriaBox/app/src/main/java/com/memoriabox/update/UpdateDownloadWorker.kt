@@ -16,13 +16,15 @@ class UpdateDownloadWorker(
     override suspend fun doWork(): Result {
         val info = inputData.getString(EXTRA_INFO)?.let(UpdateInfoJson::fromJson) ?: return Result.failure()
         if (isStopped) return Result.failure()
-        UpdateManager.executeDownload(applicationContext, info)
+        // 依据本次执行的显式结果决策：被取消的任务绝不重试，避免取消后又被自动拉起。
+        val outcome = UpdateManager.executeDownload(applicationContext, info)
         if (isStopped) return Result.failure()
-        // 最多重试 3 次，避免校验失败/存储满等永久错误无限重下
-        return when {
-            UpdateManager.state.value is UpdateState.Error && runAttemptCount < 3 -> Result.retry()
-            UpdateManager.state.value is UpdateState.Error -> Result.failure()
-            else -> Result.success()
+        return when (outcome) {
+            UpdateManager.DownloadOutcome.CANCELLED -> Result.failure()
+            UpdateManager.DownloadOutcome.SUCCESS -> Result.success()
+            // 最多重试 3 次，避免校验失败/存储满等永久错误无限重下
+            UpdateManager.DownloadOutcome.FAILURE ->
+                if (runAttemptCount < 3) Result.retry() else Result.failure()
         }
     }
 
@@ -35,7 +37,8 @@ class UpdateDownloadWorker(
                 .setInputData(workDataOf(EXTRA_INFO to UpdateInfoJson.toJson(info)))
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
                 .build()
-            WorkManager.getInstance(context).enqueueUniqueWork(WORK_NAME, ExistingWorkPolicy.REPLACE, request)
+            // 使用 KEEP：已有同版本任务在跑时不再替换，避免新旧 Worker 并发写同一个 .part 文件。
+            WorkManager.getInstance(context).enqueueUniqueWork(WORK_NAME, ExistingWorkPolicy.KEEP, request)
         }
     }
 }

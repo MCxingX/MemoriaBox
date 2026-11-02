@@ -28,6 +28,7 @@ class UpdateDownloadService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var runningInfo: UpdateInfo? = null
     private var sawDownloading = false
+    private var foregroundStarted = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -39,25 +40,37 @@ class UpdateDownloadService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val info = intent?.getStringExtra(EXTRA_INFO)?.let { UpdateInfoJson.fromJson(it) }
         if (info == null) {
-            stopForegroundCompat()
+            // 此时还没调用过 startForeground，直接 stopSelf 即可，避免 stopForeground 抛异常。
             stopSelf()
             return START_NOT_STICKY
         }
         if (runningInfo != null && runningInfo?.versionName == info.versionName) {
+            // 重复启动时补发一次当前进度通知，避免通知被系统清理后不再刷新。
+            if (canPostNotifications()) {
+                val manager = getSystemService(NotificationManager::class.java)
+                val progress = (UpdateManager.state.value as? UpdateState.Downloading)?.progress ?: 0
+                runCatching { manager.notify(NOTIFICATION_ID, buildNotification(info, progress, downloading = true)) }
+            }
             return START_NOT_STICKY
         }
         runningInfo = info
         val notification = buildNotification(info, 0, downloading = true)
-        ServiceCompat.startForeground(
-            this,
-            NOTIFICATION_ID,
-            notification,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
-            } else {
-                0
-            }
-        )
+        runCatching {
+            ServiceCompat.startForeground(
+                this,
+                NOTIFICATION_ID,
+                notification,
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                } else {
+                    0
+                }
+            )
+        }.onFailure {
+            // Android 14+ 后台启动前台服务受限时，退化为普通后台 Worker 下载，避免崩溃。
+            android.util.Log.w("UpdateDownloadService", "启动前台服务失败，改用后台下载", it)
+        }
+        foregroundStarted = true
         serviceScope.launch {
             UpdateManager.state.collectLatest { state ->
                 when (state) {
@@ -157,7 +170,14 @@ class UpdateDownloadService : Service() {
     }
 
     private fun stopForegroundCompat() {
-        ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_DETACH)
+        // 只有在确实 startForeground 成功过之后才允许调用，否则部分 ROM 会抛异常。
+        if (!foregroundStarted) return
+        runCatching {
+            ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_DETACH)
+        }.onFailure {
+            android.util.Log.w("UpdateDownloadService", "停止前台通知失败", it)
+        }
+        foregroundStarted = false
     }
 
     private fun createChannel() {

@@ -23,7 +23,10 @@ class ReminderReceiver : BroadcastReceiver() {
         val repeatMode = runCatching { RepeatMode.valueOf(intent.getStringExtra("repeat_mode") ?: "NONE") }.getOrDefault(RepeatMode.NONE)
 
         val notificationManager = NotificationManagerCompat.from(context)
-        
+
+        // 确保通知渠道已创建，否则 Android 8+ 会静默丢弃通知。
+        val helper = NotificationHelper(context)
+
         val notificationIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             putExtra("navigate_to_event", eventId)
@@ -38,7 +41,7 @@ class ReminderReceiver : BroadcastReceiver() {
 
         val channelId = "memoriabox_reminders"
         val notification = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(eventTitle)
             .setContentText(eventNote.takeIf { it.isNotEmpty() } ?: "您的纪念日即将到来！")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -46,17 +49,23 @@ class ReminderReceiver : BroadcastReceiver() {
             .setAutoCancel(true)
             .build()
 
-        notificationManager.notify(eventId.hashCode(), notification)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.POST_NOTIFICATIONS
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationManager.notify(eventId.hashCode(), notification)
+        }
 
         if (pushPlusEnabled) {
-            NotificationHelper(context).sendPushPlusNotification(
+            helper.sendPushPlusNotification(
                 title = eventTitle,
                 content = eventNote.takeIf { it.isNotEmpty() } ?: "您的纪念日即将到来！"
             )
         }
 
         if (repeatMode != RepeatMode.NONE) {
-            val helper = NotificationHelper(context)
             helper.scheduleReminder(
                 Event(
                     id = eventId,

@@ -93,12 +93,16 @@ object ImageImportUtils {
         return runCatching {
             val dir = File(context.filesDir, folder).apply { mkdirs() }
             val extension = resolveExtension(context, uri, fallbackExtension)
-            val target = File(dir, "media_${System.currentTimeMillis()}.$extension")
+            // 加 UUID 片段，避免批量导入同毫秒时重名互相覆盖。
+            val target = File(dir, "media_${System.currentTimeMillis()}_${java.util.UUID.randomUUID().toString().take(8)}.$extension")
             context.contentResolver.openInputStream(uri)?.use { input ->
                 target.outputStream().use { output -> input.copyTo(output) }
             } ?: return null
             Uri.fromFile(target).toString()
-        }.getOrNull()
+        }.getOrElse { error ->
+            android.util.Log.w("ImageImportUtils", "复制媒体失败：$uri", error)
+            null
+        }
     }
 
     fun cropImageToPrivateStorage(

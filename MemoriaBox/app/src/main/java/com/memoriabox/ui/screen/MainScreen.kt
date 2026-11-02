@@ -549,6 +549,11 @@ fun MainScreen(
                     dismissedUpdateVersion = visibleUpdateInfo.versionName
                     showUpdateDialog = false
                 },
+                onCancelDownload = {
+                    UpdateManager.cancelActiveDownload(context)
+                    dismissedUpdateVersion = null
+                    showUpdateDialog = true
+                },
                 onUpdate = {
                     when (val state = updateState) {
                         is UpdateState.Available -> UpdateManager.download(context, state.info)
@@ -620,6 +625,7 @@ private fun UpdateAvailableDialog(
     info: UpdateInfo,
     state: UpdateState,
     onDismiss: () -> Unit,
+    onCancelDownload: () -> Unit,
     onUpdate: () -> Unit
 ) {
     AlertDialog(
@@ -655,9 +661,11 @@ private fun UpdateAvailableDialog(
             TextButton(
                 onClick = {
                     if (state is UpdateState.Downloading) {
-                        UpdateManager.cancelActiveDownload()
+                        // 取消下载不应关闭弹窗、也不应记录 dismissed 版本，方便立即重新下载。
+                        onCancelDownload()
+                    } else {
+                        onDismiss()
                     }
-                    onDismiss()
                 }
             ) { Text(if (state is UpdateState.Downloading) "取消下载" else "稍后") }
         },

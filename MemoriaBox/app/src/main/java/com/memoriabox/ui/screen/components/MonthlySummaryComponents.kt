@@ -38,7 +38,8 @@ fun MonthlySummaryPanel(
     onTextEnabledChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var selectedIndex by remember(state.monthStart, state.slides) { mutableIntStateOf(0) }
+    // 用 slides.size 与月份作为 key，避免内容刷新时把播放进度重置回第一页。
+    var selectedIndex by remember(state.monthStart, state.slides.size) { mutableIntStateOf(0) }
     var selectedMediaIndex by remember(state.monthStart, selectedIndex) { mutableIntStateOf(0) }
     var playing by remember(state.isPlayMode) { mutableStateOf(state.isPlayMode) }
     val monthFormat = remember { SimpleDateFormat("yyyy年M月", Locale.getDefault()) }
@@ -57,6 +58,8 @@ fun MonthlySummaryPanel(
             selectedMediaIndex = 0
         } else {
             playing = false
+            // 播放到底后同步回写持久化状态，避免下次打开自动播放。
+            onPlayModeChange(false)
         }
     }
 

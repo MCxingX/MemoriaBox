@@ -386,7 +386,7 @@ fun HomeDashboard(
                 .padding(horizontal = adaptiveUi.screenPadding, vertical = adaptiveUi.sectionSpacing)
         ) {
         TodayHeader(adaptiveUi = adaptiveUi)
-        if (!adaptiveUi.compact) {
+        if (!adaptiveUi.hideHeroCard) {
             Spacer(Modifier.height(adaptiveUi.sectionSpacing))
             HomeHeroCard(adaptiveUi = adaptiveUi)
             Spacer(Modifier.height(adaptiveUi.sectionSpacing + 8.dp))
@@ -417,7 +417,7 @@ private fun TodayHeader(adaptiveUi: AdaptiveUiSize) {
             now = Date()
         }
     }
-    val dateText = remember(now) { SimpleDateFormat("M月d日 EEEE", Locale.getDefault()).format(now) }
+    val dateText = remember(now) { SimpleDateFormat("M月d日 EEEE", Locale.CHINA).format(now) }
     val lunarText = remember(now) { LunarDateUtils.fullLabelForGregorian(now.time) }
     val holidayText = remember(now) { HolidayUtils.holidayForDay(now.time) }
     Surface(
@@ -426,14 +426,21 @@ private fun TodayHeader(adaptiveUi: AdaptiveUiSize) {
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
         tonalElevation = 1.dp
     ) {
-        Text(
-            text = if (holidayText != null) "$dateText · $lunarText · $holidayText" else "$dateText · $lunarText",
-            modifier = Modifier.padding(adaptiveUi.cardPadding),
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (holidayText != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+        Column(modifier = Modifier.padding(adaptiveUi.cardPadding)) {
+            Text(
+                text = dateText,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = if (holidayText != null) "$lunarText · $holidayText" else lunarText,
+                modifier = Modifier.padding(top = 2.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = if (holidayText != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 
@@ -443,15 +450,35 @@ fun HomeHeroCard(adaptiveUi: AdaptiveUiSize) {
     val settingsVersion = AppSettings.settingsVersion
     val useCustom = remember(settingsVersion) { AppSettings.getUseCustomQuote(context) }
     val customQuotes = remember(settingsVersion) { AppSettings.getCustomDailyQuotes(context) }
+    // 以本地日期为 key，跨零点后自动重新取当天内容。
+    val dayKey = remember { mutableStateOf(DailyQuoteRepository.dayKey()) }
     var remoteQuote by remember { mutableStateOf(DailyQuoteRepository.today(context)) }
-    LaunchedEffect(Unit) {
+    LaunchedEffect(dayKey.value) {
+        val currentDay = DailyQuoteRepository.dayKey()
+        if (currentDay != dayKey.value) {
+            dayKey.value = currentDay
+            remoteQuote = DailyQuoteRepository.today(context)
+        }
         if (remoteQuote == null) {
             DailyQuoteRepository.refresh(context)?.let { remoteQuote = it }
         }
     }
+    LaunchedEffect(Unit) {
+        while (true) {
+            val current = System.currentTimeMillis()
+            val nextMidnight = startOfDay(current) + TimeUnit.DAYS.toMillis(1)
+            kotlinx.coroutines.delay((nextMidnight - current).coerceAtLeast(1000L))
+            val currentDay = DailyQuoteRepository.dayKey()
+            dayKey.value = currentDay
+            remoteQuote = DailyQuoteRepository.today(context)
+            if (remoteQuote == null) {
+                DailyQuoteRepository.refresh(context)?.let { remoteQuote = it }
+            }
+        }
+    }
     val dailyQuote = if (useCustom && customQuotes.isNotEmpty()) {
         val dayOfYear = Calendar.getInstance().get(Calendar.DAY_OF_YEAR)
-        customQuotes[dayOfYear % customQuotes.size]
+        customQuotes[(dayOfYear - 1 + customQuotes.size) % customQuotes.size]
     } else if (!remoteQuote.isNullOrBlank()) {
         remoteQuote.orEmpty()
     } else {
@@ -478,7 +505,7 @@ fun HomeHeroCard(adaptiveUi: AdaptiveUiSize) {
             "今天也去发现一件轻轻发光的小事。"
         )
         val dayOfYear = Calendar.getInstance().get(Calendar.DAY_OF_YEAR)
-        quotes[dayOfYear % quotes.size]
+        quotes[(dayOfYear - 1 + quotes.size) % quotes.size]
     }
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -514,7 +541,8 @@ fun HomeHeroCard(adaptiveUi: AdaptiveUiSize) {
                     modifier = Modifier.fillMaxWidth(),
                     color = Color.White,
                     style = MaterialTheme.typography.titleMedium,
-                    maxLines = 2
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
@@ -621,25 +649,19 @@ fun AllEventsTab(
         } else {
             EmptyEventListHint()
         }
-    } else if (upcomingEnabled) {
-        events.forEach { event ->
-            EnhancedEventCard(event = event, onClick = { onEventClick(event) }, onLongPress = { onEventLongClick(event) })
-            Spacer(Modifier.height(eventSpacing))
-        }
-    } else if (pinnedEvents.isNotEmpty()) {
+        return
+    }
+    if (pinnedEvents.isNotEmpty()) {
         Text("置顶", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.height(eventSpacing))
         pinnedEvents.forEach { event ->
             EnhancedEventCard(event = event, onClick = { onEventClick(event) }, onLongPress = { onEventLongClick(event) })
             Spacer(Modifier.height(eventSpacing))
         }
-        Spacer(Modifier.height(eventSpacing))
     }
-    if (events.isNotEmpty() && !upcomingEnabled) {
-        normalEvents.forEach { event ->
-            EnhancedEventCard(event = event, onClick = { onEventClick(event) }, onLongPress = { onEventLongClick(event) })
-            Spacer(Modifier.height(eventSpacing))
-        }
+    normalEvents.forEach { event ->
+        EnhancedEventCard(event = event, onClick = { onEventClick(event) }, onLongPress = { onEventLongClick(event) })
+        Spacer(Modifier.height(eventSpacing))
     }
 }
 
