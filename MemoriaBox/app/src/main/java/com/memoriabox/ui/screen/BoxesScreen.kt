@@ -417,7 +417,7 @@ private fun TodayHeader(adaptiveUi: AdaptiveUiSize) {
         }
     }
     val dateText = remember(now) { SimpleDateFormat("M月d日 EEEE", Locale.getDefault()).format(now) }
-    val lunarText = remember(now) { LunarDateUtils.dayLabelForGregorian(now.time) }
+    val lunarText = remember(now) { LunarDateUtils.fullLabelForGregorian(now.time) }
     val holidayText = remember(now) { HolidayUtils.holidayForDay(now.time) }
     Surface(
         modifier = Modifier.fillMaxWidth(),

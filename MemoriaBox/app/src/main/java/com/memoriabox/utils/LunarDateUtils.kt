@@ -31,11 +31,40 @@ object LunarDateUtils {
 
     fun isGregorianMatchingLunar(timeMillis: Long, month: Int, day: Int): Boolean = isMonthDay(timeMillis, month, day)
 
+    /**
+     * 日历格子里显示的农历副标题。
+     * 农历每月初一显示"当月月名"（正月/二月/…/腊月，闰月带"闰"字），
+     * 符合传统日历习惯，避免每个月 1 号都只写"初一"看不出是第几个月。
+     */
     fun dayLabelForGregorian(timeMillis: Long): String {
         val chineseCalendar = ChineseCalendar().apply { this.timeInMillis = timeMillis }
         val day = chineseCalendar.get(Calendar.DAY_OF_MONTH)
+        if (day == 1) return monthLabel(chineseCalendar)
         return dayLabel(day)
     }
+
+    /** 完整农历写法，如"十月初一"，用在需要完整表达的标题位置。 */
+    fun fullLabelForGregorian(timeMillis: Long): String {
+        val chineseCalendar = ChineseCalendar().apply { this.timeInMillis = timeMillis }
+        val day = chineseCalendar.get(Calendar.DAY_OF_MONTH)
+        return monthLabel(chineseCalendar) + dayLabel(day)
+    }
+
+    /** 只取农历月名，如"十月""闰四月"。 */
+    fun monthLabelForGregorian(timeMillis: Long): String =
+        monthLabel(ChineseCalendar().apply { this.timeInMillis = timeMillis })
+
+    /** 农历月名：1 月是"正月"，12 月是"腊月"，闰月加"闰"字前缀。 */
+    fun monthLabel(month: Int, leap: Boolean = false): String {
+        val index = if (month in 1..12) month - 1 else 0
+        val name = monthNames.getOrElse(index) { "${index + 1}月" }
+        return if (leap) "闰$name" else name
+    }
+
+    private fun monthLabel(chineseCalendar: ChineseCalendar): String = monthLabel(
+        month = chineseCalendar.get(Calendar.MONTH) + 1,
+        leap = chineseCalendar.get(ChineseCalendar.IS_LEAP_MONTH) != 0
+    )
 
     fun selectionForGregorian(timeMillis: Long): Triple<Int, Int, Int> {
         val chineseCalendar = ChineseCalendar().apply { this.timeInMillis = timeMillis }
