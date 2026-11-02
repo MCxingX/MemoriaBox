@@ -39,6 +39,7 @@ import coil.compose.AsyncImage
 import com.memoriabox.data.model.DiaryEntry
 import com.memoriabox.data.model.DiaryMedia
 import com.memoriabox.data.model.DiaryMediaType
+import com.memoriabox.R
 import com.memoriabox.utils.ColorUtils
 import com.memoriabox.utils.ImageImportUtils
 import com.memoriabox.ui.screen.dialogs.DatePickerDialog
@@ -208,7 +209,8 @@ fun DiaryVideoPlayer(
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { viewContext ->
-                PlayerView(viewContext).apply {
+                (android.view.LayoutInflater.from(viewContext)
+                    .inflate(R.layout.diary_video_player, null, false) as PlayerView).apply {
                     player = exoPlayer
                     useController = showControls
                     resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT

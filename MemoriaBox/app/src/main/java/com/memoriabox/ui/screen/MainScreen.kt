@@ -653,8 +653,13 @@ private fun UpdateAvailableDialog(
         },
         dismissButton = {
             TextButton(
-                onClick = onDismiss
-            ) { Text(if (state is UpdateState.Downloading) "后台下载" else "稍后") }
+                onClick = {
+                    if (state is UpdateState.Downloading) {
+                        UpdateManager.cancelActiveDownload()
+                    }
+                    onDismiss()
+                }
+            ) { Text(if (state is UpdateState.Downloading) "取消下载" else "稍后") }
         },
         confirmButton = {
             Button(
@@ -664,7 +669,7 @@ private fun UpdateAvailableDialog(
                 Text(
                     when (state) {
                         is UpdateState.Available -> "下载更新"
-                        is UpdateState.Downloading -> "正在下载"
+                        is UpdateState.Downloading -> "下载中"
                         is UpdateState.Ready -> "安装更新"
                         is UpdateState.Error -> "重新下载"
                         else -> "下载更新"

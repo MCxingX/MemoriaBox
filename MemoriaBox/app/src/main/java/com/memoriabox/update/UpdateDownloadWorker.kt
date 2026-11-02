@@ -15,7 +15,9 @@ class UpdateDownloadWorker(
 ) : CoroutineWorker(appContext, parameters) {
     override suspend fun doWork(): Result {
         val info = inputData.getString(EXTRA_INFO)?.let(UpdateInfoJson::fromJson) ?: return Result.failure()
+        if (isStopped) return Result.failure()
         UpdateManager.executeDownload(applicationContext, info)
+        if (isStopped) return Result.failure()
         // 最多重试 3 次，避免校验失败/存储满等永久错误无限重下
         return when {
             UpdateManager.state.value is UpdateState.Error && runAttemptCount < 3 -> Result.retry()
@@ -25,7 +27,7 @@ class UpdateDownloadWorker(
     }
 
     companion object {
-        private const val WORK_NAME = "memoriabox_update_download"
+        const val WORK_NAME = "memoriabox_update_download"
         private const val EXTRA_INFO = "update_info"
 
         fun enqueue(context: Context, info: UpdateInfo) {

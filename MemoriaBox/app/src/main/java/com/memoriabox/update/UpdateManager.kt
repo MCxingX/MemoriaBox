@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import androidx.work.WorkManager
+import okhttp3.Call
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
@@ -48,17 +50,20 @@ object UpdateManager {
         .callTimeout(12, TimeUnit.SECONDS)
         .build()
 
-    @Volatile
-    private var activeCall: okhttp3.Call? = null
+    private val activeCalls = java.util.concurrent.CopyOnWriteArraySet<Call>()
 
     @Volatile
     private var downloadCancelled = false
+
+    @Volatile
+    private var downloadContext: Context? = null
 
     private val mutableState = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val state: StateFlow<UpdateState> = mutableState.asStateFlow()
 
     fun check(context: Context, manual: Boolean = false) {
-        if (mutableState.value is UpdateState.Checking || mutableState.value is UpdateState.Downloading) return
+        if (mutableState.value is UpdateState.Checking) return
+        if (mutableState.value is UpdateState.Downloading) return
         if (!manual && !autoCheckDue(context)) return
         scope.launch {
             mutableState.value = UpdateState.Checking(manual)
@@ -83,17 +88,26 @@ object UpdateManager {
             return
         }
         if (mutableState.value is UpdateState.Downloading) return
+        downloadCancelled = false
+        downloadContext = context.applicationContext
         UpdateDownloadService.start(context.applicationContext, info)
     }
 
     fun download(context: Context, info: UpdateInfo) {
         if (mutableState.value is UpdateState.Downloading) return
+        downloadCancelled = false
+        downloadContext = context.applicationContext
         UpdateDownloadService.start(context.applicationContext, info)
     }
 
-    fun cancelActiveDownload() {
+    fun cancelActiveDownload(context: Context? = downloadContext) {
         downloadCancelled = true
-        activeCall?.cancel()
+        activeCalls.forEach(Call::cancel)
+        activeCalls.clear()
+        context?.applicationContext?.let { appContext ->
+            runCatching { WorkManager.getInstance(appContext).cancelUniqueWork(UpdateDownloadWorker.WORK_NAME) }
+        }
+        downloadContext = null
     }
 
     fun resetTransientState() {
@@ -146,7 +160,11 @@ object UpdateManager {
     }
 
     internal suspend fun executeDownload(context: Context, info: UpdateInfo) {
-        downloadCancelled = false
+        downloadContext = context.applicationContext
+        if (downloadCancelled) {
+            mutableState.value = UpdateState.Available(info)
+            return
+        }
         val updateDir = File(context.filesDir, "updates").apply { mkdirs() }
         val destination = File(updateDir, "MemoriaBox-${info.versionName}.apk")
         if (destination.isFile && UpdateVerifier.verify(context, destination, info).isSuccess) {
@@ -170,6 +188,10 @@ object UpdateManager {
         }
         mutableState.value = UpdateState.Downloading(info, progressFromPart(temporary, info.apkSize))
         val mirrors = fastestMirrors(info.apkUrl)
+        if (downloadCancelled) {
+            mutableState.value = UpdateState.Available(info)
+            return
+        }
         if (mirrors.isEmpty()) {
             mutableState.value = UpdateState.Error("更新镜像测速失败，请检查网络后重试", info)
             return
@@ -221,13 +243,15 @@ object UpdateManager {
         }
         val request = requestBuilder.build()
         val call = client.newCall(request)
-        activeCall = call
+        activeCalls += call
         try {
             call.execute().use { response ->
+                if (downloadCancelled) return
                 require(response.isSuccessful || response.code == 206) { "下载失败：HTTP ${response.code}" }
                 val body = response.body ?: error("下载内容为空")
+                // 服务端忽略 Range 返回 200 时，必须从零开始写，避免把完整包拼到旧片段后面。
                 val resumed = resumeFrom > 0 && response.code == 206
-                val total = when {
+                        val total = when {
                     resumed -> (resumeFrom + body.contentLength()).takeIf { it > resumeFrom } ?: info.apkSize
                     else -> body.contentLength().takeIf { it > 0 } ?: info.apkSize
                 }
@@ -252,8 +276,9 @@ object UpdateManager {
                 }
             }
         } finally {
-            activeCall = null
+            activeCalls.remove(call)
         }
+        if (downloadCancelled) return
         require(temporary.length() > 0) { "下载内容为空" }
         destination.delete()
         require(temporary.renameTo(destination)) { "无法保存更新包" }
@@ -332,21 +357,29 @@ object UpdateManager {
             .header("User-Agent", "MemoriaBox/${BuildConfig.VERSION_NAME}")
             .build()
         val call = speedClient.newCall(request)
-        call.execute().use { response ->
-            require(response.isSuccessful || response.code == 206) { "HTTP ${response.code}" }
-            val input = response.body?.byteStream() ?: error("空响应")
-            val buffer = ByteArray(16 * 1024)
-            var received = 0
-            val target = 256 * 1024
-            while (received < target) {
-                if (downloadCancelled) return null
-                val count = input.read(buffer)
-                if (count < 0) break
-                received += count
+        activeCalls += call
+        try {
+            call.execute().use { response ->
+                require(response.isSuccessful || response.code == 206) { "HTTP ${response.code}" }
+                val input = response.body?.byteStream() ?: error("空响应")
+                val buffer = ByteArray(16 * 1024)
+                var received = 0
+                val target = 256 * 1024
+                while (received < target) {
+                    if (downloadCancelled) {
+                        call.cancel()
+                        return null
+                    }
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    received += count
+                }
+                require(received > 0) { "空响应" }
+                val elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started).coerceAtLeast(1)
+                url to (received.toFloat() / elapsedMs)
             }
-            require(received > 0) { "空响应" }
-            val elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started).coerceAtLeast(1)
-            url to (received.toFloat() / elapsedMs)
+        } finally {
+            activeCalls.remove(call)
         }
     }.getOrNull()
 
