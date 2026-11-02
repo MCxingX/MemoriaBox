@@ -2,8 +2,12 @@ package com.memoriabox.ui.screen.components
 
 import android.content.Context
 import android.net.Uri
-import android.widget.MediaController
-import android.widget.VideoView
+import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.PlayerView
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -159,38 +163,78 @@ fun DiaryVideoPlayer(
     onCompletion: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
-    AndroidView(
+    var playbackError by remember(uri) { mutableStateOf<String?>(null) }
+    val exoPlayer = remember(uri) {
+        ExoPlayer.Builder(context.applicationContext).build().apply {
+            setMediaItem(MediaItem.fromUri(Uri.parse(uri)))
+            prepare()
+        }
+    }
+
+    DisposableEffect(exoPlayer) {
+        val listener = object : Player.Listener {
+            override fun onPlayerError(error: PlaybackException) {
+                playbackError = error.errorCodeName
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_READY) playbackError = null
+                if (playbackState == Player.STATE_ENDED && !loop) onCompletion?.invoke()
+            }
+
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (isPlaying) playbackError = null
+            }
+        }
+        exoPlayer.addListener(listener)
+        onDispose {
+            exoPlayer.removeListener(listener)
+            exoPlayer.release()
+        }
+    }
+
+    LaunchedEffect(exoPlayer, autoPlay, loop, muted) {
+        exoPlayer.repeatMode = if (loop) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+        exoPlayer.volume = if (muted) 0f else 1f
+        exoPlayer.playWhenReady = autoPlay
+    }
+
+    Box(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
             .background(Color.Black),
-        factory = {
-            VideoView(context).apply {
-                setVideoURI(Uri.parse(uri))
-                if (showControls) {
-                    setMediaController(MediaController(context).also { controller -> controller.setAnchorView(this) })
+        contentAlignment = Alignment.Center
+    ) {
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = { viewContext ->
+                PlayerView(viewContext).apply {
+                    player = exoPlayer
+                    useController = showControls
+                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                 }
-                setOnPreparedListener { player ->
-                    player.isLooping = loop
-                    if (muted) player.setVolume(0f, 0f)
-                    if (autoPlay) start()
-                }
-                setOnCompletionListener {
-                    if (!loop) onCompletion?.invoke()
-                }
+            },
+            update = { view ->
+                view.player = exoPlayer
+                view.useController = showControls
+            },
+            onRelease = { view -> view.player = null }
+        )
+        if (playbackError != null) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .background(Color.Black.copy(alpha = 0.78f))
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(3.dp)
+            ) {
+                Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = Color.White)
+                Text("视频无法播放 (${playbackError})", color = Color.White, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
             }
-        },
-        update = { view ->
-            val currentUri = Uri.parse(uri)
-            if (view.tag != uri) {
-                view.tag = uri
-                view.setVideoURI(currentUri)
-            }
-            if (autoPlay && !view.isPlaying) view.start()
-        },
-        onRelease = { view ->
-            view.stopPlayback()
         }
-    )
+    }
 }
 
 @Composable

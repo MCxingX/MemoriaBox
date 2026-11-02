@@ -121,6 +121,8 @@ dependencies {
 
     implementation(libs.com.github.yalantis.ucrop)
     implementation(libs.androidx.appcompat)
+    implementation(libs.androidx.media3.exoplayer)
+    implementation(libs.androidx.media3.ui)
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
