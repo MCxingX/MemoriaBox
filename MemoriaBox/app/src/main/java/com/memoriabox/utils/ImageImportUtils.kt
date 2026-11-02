@@ -40,6 +40,13 @@ object ImageImportUtils {
         return copyMediaToPrivateStorage(context, uri, folder, "jpg")
     }
 
+    fun isVideo(context: Context, uri: Uri): Boolean {
+        val mime = context.contentResolver.getType(uri).orEmpty().lowercase()
+        if (mime.startsWith("video/")) return true
+        val extension = uri.lastPathSegment?.substringAfterLast('.', "").orEmpty()
+        return extension in setOf("mp4", "mkv", "webm", "3gp", "mov", "m4v", "avi")
+    }
+
     fun saveOriginalImage(context: Context, uri: Uri): String? =
         copyImageToPrivateStorage(context, uri, "original_images")
 

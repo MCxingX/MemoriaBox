@@ -440,10 +440,16 @@ fun DiaryEditorDialog(
         replacingMediaIndex = null
         if (uri != null && index != null && index in mediaItems.indices) {
             scope.launch(Dispatchers.IO) {
-                val copied = ImageImportUtils.copyMediaToPrivateStorage(context, uri, "diary_media", "jpg") ?: return@launch
+                val video = ImageImportUtils.isVideo(context, uri)
+                val copied = ImageImportUtils.copyMediaToPrivateStorage(
+                    context,
+                    uri,
+                    "diary_media",
+                    if (video) "mp4" else "jpg"
+                ) ?: return@launch
                 mediaItems[index] = mediaItems[index].copy(
                     mediaUri = copied,
-                    mediaType = inferDiaryMediaTypeForEditor(copied)
+                    mediaType = if (video) DiaryMediaType.VIDEO else DiaryMediaType.IMAGE
                 )
             }
         }
@@ -455,7 +461,13 @@ fun DiaryEditorDialog(
     ) { uri ->
         uri?.let {
             scope.launch(Dispatchers.IO) {
-                val copied = ImageImportUtils.copyMediaToPrivateStorage(context, it, "diary_backgrounds", "jpg")
+                val video = ImageImportUtils.isVideo(context, it)
+                val copied = ImageImportUtils.copyMediaToPrivateStorage(
+                    context,
+                    it,
+                    "diary_backgrounds",
+                    if (video) "mp4" else "jpg"
+                )
                 if (copied != null) {
                     backgroundUri = copied
                 }

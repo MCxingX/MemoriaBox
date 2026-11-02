@@ -373,14 +373,17 @@ class CalendarViewModel(
             dateStart = dayStart,
             content = content.trim(),
             backgroundMediaUri = backgroundUri,
-            backgroundMediaType = backgroundUri?.let { inferDiaryMediaType(it) },
+            backgroundMediaType = backgroundUri?.let { uri ->
+                existingDiary?.backgroundMediaType?.takeIf { existingDiary.backgroundMediaUri == uri }
+                    ?: inferDiaryMediaType(uri)
+            },
             createdAt = existingDiary?.createdAt ?: System.currentTimeMillis(),
             updatedAt = System.currentTimeMillis()
         )
         val media = mediaItems.mapIndexed { index, item ->
             item.copy(
                 diaryId = diary.id,
-                mediaType = inferDiaryMediaType(item.mediaUri),
+                mediaType = if (item.mediaType == DiaryMediaType.VIDEO) DiaryMediaType.VIDEO else inferDiaryMediaType(item.mediaUri),
                 sortOrder = index
             )
         }
@@ -406,7 +409,7 @@ class CalendarViewModel(
     }
 
     private fun inferDiaryMediaType(uri: String): DiaryMediaType {
-        val videoExtensions = listOf(".mp4", ".mkv", ".webm", ".3gp", ".mov")
+        val videoExtensions = listOf(".mp4", ".mkv", ".webm", ".3gp", ".mov", ".m4v", ".avi")
         return when {
             videoExtensions.any { uri.endsWith(it, ignoreCase = true) } -> DiaryMediaType.VIDEO
             else -> DiaryMediaType.IMAGE
