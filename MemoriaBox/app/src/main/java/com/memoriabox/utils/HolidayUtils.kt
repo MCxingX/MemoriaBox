@@ -35,33 +35,6 @@ object HolidayUtils {
         12 to 23 to "小年"
     )
 
-    private val solarTerms: Map<Pair<Int, Int>, String> = mapOf(
-        2 to 4 to "立春",
-        2 to 19 to "雨水",
-        3 to 6 to "惊蛰",
-        3 to 21 to "春分",
-        4 to 5 to "清明",
-        4 to 20 to "谷雨",
-        5 to 6 to "立夏",
-        5 to 21 to "小满",
-        6 to 6 to "芒种",
-        6 to 21 to "夏至",
-        7 to 7 to "小暑",
-        7 to 23 to "大暑",
-        8 to 8 to "立秋",
-        8 to 23 to "处暑",
-        9 to 8 to "白露",
-        9 to 23 to "秋分",
-        10 to 8 to "寒露",
-        10 to 24 to "霜降",
-        11 to 8 to "立冬",
-        11 to 22 to "小雪",
-        12 to 7 to "大雪",
-        12 to 22 to "冬至",
-        1 to 6 to "小寒",
-        1 to 20 to "大寒"
-    )
-
     fun holidayForDay(timeMillis: Long): String? {
         val chinese = ChineseCalendar().apply { this.timeInMillis = timeMillis }
         val lunarMonth = chinese.get(Calendar.MONTH) + 1
@@ -74,7 +47,7 @@ object HolidayUtils {
         val month = solar.get(Calendar.MONTH) + 1
         val day = solar.get(Calendar.DAY_OF_MONTH)
         solarHolidays[Pair(month, day)]?.let { return it }
-        solarTerms[Pair(month, day)]?.let { return it }
+        SolarTermUtils.solarTermForDay(timeMillis)?.let { return it }
 
         return null
     }
@@ -84,7 +57,7 @@ object HolidayUtils {
         val month = solar.get(Calendar.MONTH) + 1
         val day = solar.get(Calendar.DAY_OF_MONTH)
         solarHolidays[Pair(month, day)]?.let { return it }
-        solarTerms[Pair(month, day)]?.let { return it }
+        SolarTermUtils.solarTermForDay(timeMillis)?.let { return it }
         return null
     }
 
