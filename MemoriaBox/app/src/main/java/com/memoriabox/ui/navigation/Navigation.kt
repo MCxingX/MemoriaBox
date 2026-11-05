@@ -10,6 +10,13 @@ sealed class Screen(val route: String) {
     object Settings : Screen("settings")
     object BoxDetail : Screen("box_detail/{boxId}") {
         fun createRoute(boxId: String) = "box_detail/$boxId"
+
+        /**
+         * 从搜索结果进入时带上目标事件 id，进入后直接定位到该事件。
+         * eventId 为空时与普通进入行为一致。
+         */
+        fun createRoute(boxId: String, eventId: String?): String =
+            if (eventId.isNullOrBlank()) createRoute(boxId) else "box_detail/$boxId?eventId=$eventId"
     }
     object BackupSettings : Screen("backup_settings")
     object WebDavSettings : Screen("webdav_settings")
@@ -24,6 +31,7 @@ sealed class Screen(val route: String) {
     object EchoTime : Screen("echo_time")
     object Mood : Screen("mood")
     object Labels : Screen("labels")
+    object Search : Screen("search")
     object FriendDetail : Screen("friend_detail/{friendId}") {
         fun createRoute(friendId: String) = "friend_detail/$friendId"
     }

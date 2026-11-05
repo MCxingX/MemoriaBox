@@ -25,6 +25,9 @@ import androidx.compose.material3.*
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -547,6 +550,9 @@ fun CalendarViewScreen(
     var editingDiary by remember { mutableStateOf<DiaryEntry?>(null) }
     var editingDiaryDate by remember { mutableStateOf<Long?>(null) }
     var monthSwipeOffset by remember { mutableFloatStateOf(0f) }
+    // 用序号保存，避免枚举在 rememberSaveable 中缺少 Saver 导致恢复失败
+    var displayModeIndex by rememberSaveable { mutableIntStateOf(0) }
+    val displayMode = CalendarDisplayMode.entries[displayModeIndex.coerceIn(0, CalendarDisplayMode.entries.size - 1)]
     val animatedMonthSwipeOffset by animateFloatAsState(monthSwipeOffset, label = "calendarMonthSwipe")
 
     val diaryMap = remember(diaries) {
@@ -599,6 +605,11 @@ fun CalendarViewScreen(
                     }) { Icon(Icons.Default.AutoStories, contentDescription = "月度总结") }
                 }
             }
+        )
+        CalendarDisplayModeSelector(
+            current = displayMode,
+            onSelect = { displayModeIndex = it.ordinal },
+            horizontalPadding = adaptiveUi.screenPadding
         )
         CalendarBoardSummary(
             totalCount = events.size,
@@ -665,14 +676,32 @@ fun CalendarViewScreen(
             val fontScale = LocalDensity.current.fontScale
             val cellSize = (widthCell * (1f + (fontScale - 1f).coerceAtLeast(0f) * 0.35f))
                 .coerceIn(52.dp, 78.dp)
-            CalendarGrid(
-                currentMonth = cal,
-                events = events,
-                cellSize = cellSize,
-                horizontalPadding = horizontalPadding,
-                diaryMap = diaryMap,
-                onDayClick = { dayCal, dayEvents -> selectedDay = dayCal.timeInMillis to dayEvents }
-            )
+            when (displayMode) {
+                CalendarDisplayMode.MONTH -> CalendarGrid(
+                    currentMonth = cal,
+                    events = events,
+                    cellSize = cellSize,
+                    horizontalPadding = horizontalPadding,
+                    diaryMap = diaryMap,
+                    onDayClick = { dayCal, dayEvents -> selectedDay = dayCal.timeInMillis to dayEvents }
+                )
+
+                CalendarDisplayMode.WEEK -> CalendarWeekView(
+                    events = events,
+                    diaryMap = diaryMap,
+                    cellSize = cellSize,
+                    horizontalPadding = horizontalPadding,
+                    onDayClick = { dayCal, dayEvents -> selectedDay = dayCal.timeInMillis to dayEvents }
+                )
+
+                CalendarDisplayMode.AGENDA -> CalendarAgendaView(
+                    events = events,
+                    diaries = diaries,
+                    horizontalPadding = horizontalPadding,
+                    onEventClick = onEventClick,
+                    onDiaryClick = { diary -> selectedDiaryForView = diary }
+                )
+            }
         }
     }
 
@@ -1057,6 +1086,66 @@ private fun CalendarBoardMetric(label: String, value: String, modifier: Modifier
 
 private enum class CalendarDisplayMode(val label: String) {
     MONTH("月"), WEEK("周"), AGENDA("议程")
+}
+
+/** 界面按序号持久化视图选择，这里提供稳定的标签查询，方便测试与越界兜底。 */
+internal fun calendarDisplayModeLabels(): List<String> =
+    CalendarDisplayMode.entries.map { it.label }
+
+internal fun calendarDisplayModeLabel(index: Int): String {
+    val safe = index.coerceIn(0, CalendarDisplayMode.entries.size - 1)
+    return CalendarDisplayMode.entries[safe].label
+}
+
+/**
+ * 日历视图切换控件：月 / 周 / 议程。
+ * 采用分段按钮样式，选中态用主题主色填充，保证在浅色与深色主题下对比度充足。
+ */
+@Composable
+private fun CalendarDisplayModeSelector(
+    current: CalendarDisplayMode,
+    onSelect: (CalendarDisplayMode) -> Unit,
+    horizontalPadding: androidx.compose.ui.unit.Dp
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = horizontalPadding, vertical = 4.dp),
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+    ) {
+        Row(
+            modifier = Modifier.padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            CalendarDisplayMode.entries.forEach { mode ->
+                val active = mode == current
+                Surface(
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 36.dp)
+                        .clip(MaterialTheme.shapes.large)
+                        .clickable { onSelect(mode) }
+                        .semantics { selected = active },
+                    shape = MaterialTheme.shapes.large,
+                    color = if (active) MaterialTheme.colorScheme.primary else Color.Transparent
+                ) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = mode.label,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = if (active) {
+                                MaterialTheme.colorScheme.onPrimary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable

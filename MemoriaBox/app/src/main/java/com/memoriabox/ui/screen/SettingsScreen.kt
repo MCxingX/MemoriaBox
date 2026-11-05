@@ -36,6 +36,7 @@ import com.memoriabox.ui.theme.group
 import com.memoriabox.update.UpdateManager
 import com.memoriabox.update.UpdateState
 import com.memoriabox.utils.NotificationHelper
+import com.memoriabox.utils.AppSettings
 import com.memoriabox.utils.installedAppVersion
 import com.memoriabox.viewmodel.*
 import java.util.Date
@@ -47,6 +48,7 @@ fun SettingsScreen(
     onThemeModeChange: (AppThemeMode) -> Unit,
     onNavigateToCustomization: () -> Unit,
     onNavigateToFriends: () -> Unit,
+    onNavigateToSearch: () -> Unit = {},
     onBackupSettingsClick: () -> Unit,
     onWebDavSettingsClick: () -> Unit,
     onCheckUpdate: () -> Unit
@@ -71,6 +73,21 @@ fun SettingsScreen(
     var showMonthlySummarySettings by remember { mutableStateOf(false) }
     var showUpcomingSettings by remember { mutableStateOf(false) }
     var showHolidaySettings by remember { mutableStateOf(false) }
+    // 自动检查更新：与「永不提醒」互为反向，共用同一份持久化设置
+    var autoCheckUpdate by remember { mutableStateOf(!AppSettings.getUpdateNeverRemind(application)) }
+    val skippedUpdateVersion = remember { AppSettings.getUpdateSkippedVersion(application) }
+
+    // 备份时间不常变化，按时间戳缓存格式化结果即可
+    val lastBackupAt = AppSettings.getLastBackupAt(application)
+    val backupSummary = remember(lastBackupAt) {
+        if (lastBackupAt <= 0L) {
+            "本地备份、导入导出 · 尚未备份"
+        } else {
+            val text = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault())
+                .format(java.util.Date(lastBackupAt))
+            "上次备份 $text"
+        }
+    }
     val updateState by UpdateManager.state.collectAsState()
     val adaptiveUi = rememberAdaptiveUiSize()
 
@@ -85,6 +102,12 @@ fun SettingsScreen(
         ThemeModeCard(currentThemeMode = currentThemeMode, onThemeModeChange = onThemeModeChange)
         SettingsSectionTitle("常用", "每天会用到的功能放在这里")
         SettingsItem(
+            icon = Icons.Default.Search,
+            title = "搜索",
+            description = "按名称、备注查找日子和分类",
+            onClick = onNavigateToSearch
+        )
+        SettingsItem(
             icon = Icons.Default.Palette,
             title = "个性化设置",
             description = "自定义页面背景、固定每日语录",
@@ -98,11 +121,54 @@ fun SettingsScreen(
         )
 
         SettingsSectionTitle("记录和数据", "备份、同步、日记和月度总结")
-        
+
+        // 数据只存在本机，长期未备份时给出提示，避免换机或丢失后无法找回
+        val overdueDays = AppSettings.backupOverdueDays(
+            lastBackupAt = AppSettings.getLastBackupAt(application),
+            now = System.currentTimeMillis()
+        )
+        if (overdueDays != null) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = adaptiveUi.screenPadding, vertical = adaptiveUi.sectionSpacing / 2f),
+                shape = MaterialTheme.shapes.extraLarge,
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Column(modifier = Modifier.padding(if (adaptiveUi.compact) 12.dp else 16.dp)) {
+                    Text(
+                        if (AppSettings.getLastBackupAt(application) <= 0L) {
+                            "还没有备份过数据"
+                        } else {
+                            "已有 $overdueDays 天没有备份"
+                        },
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "数据保存在本机，建议定期备份，换机或误删后可以恢复。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    TextButton(
+                        onClick = onBackupSettingsClick,
+                        colors = ButtonDefaults.textButtonColors(
+                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                    ) { Text("去备份") }
+                }
+            }
+        }
+
         SettingsItem(
             icon = Icons.Default.Backup,
             title = "备份设置",
-            description = "本地备份、导入导出",
+            description = backupSummary,
             onClick = onBackupSettingsClick
         )
         SettingsItem(
@@ -205,6 +271,48 @@ fun SettingsScreen(
             description = updateSummary,
             onClick = onCheckUpdate
         )
+        // 自动检查更新开关：关闭后不再自动提示新版本，手动检查仍可正常使用
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = adaptiveUi.screenPadding, vertical = adaptiveUi.sectionSpacing / 2f),
+            shape = MaterialTheme.shapes.extraLarge,
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.84f)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Column(modifier = Modifier.padding(if (adaptiveUi.compact) 12.dp else 16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("自动检查更新", style = MaterialTheme.typography.titleSmall)
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            if (autoCheckUpdate) "有新版本时自动提示" else "已关闭，点「检查更新」可手动查看",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = autoCheckUpdate,
+                        onCheckedChange = { enabled ->
+                            autoCheckUpdate = enabled
+                            AppSettings.setUpdateNeverRemind(context, !enabled)
+                        }
+                    )
+                }
+                if (!autoCheckUpdate && skippedUpdateVersion != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "已跳过 v$skippedUpdateVersion，更高版本仍会提示。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
         SettingsItem(
             icon = Icons.Default.Info,
             title = "关于",

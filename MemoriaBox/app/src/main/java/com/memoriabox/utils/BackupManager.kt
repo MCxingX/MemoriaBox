@@ -169,6 +169,8 @@ class BackupManager(
             if (resultUri != null) {
                 rotateBackups(dir)
             }
+            // 自动备份成功也算一次有效备份，用于备份提醒计时
+            AppSettings.markBackupCompleted(context, timestamp)
             Log.d(TAG, "Auto backup completed: $fileName")
         } catch (e: Exception) {
             Log.e(TAG, "Auto backup failed", e)
@@ -197,6 +199,8 @@ class BackupManager(
 
             val resultUri = copyFileToDir(archiveFile, outputDir, fileName)
             onProgress(100)
+            // 记录备份时间，用于首页/设置页的备份提醒
+            AppSettings.markBackupCompleted(context, timestamp)
 
             Result.success(resultUri)
         } catch (e: Exception) {

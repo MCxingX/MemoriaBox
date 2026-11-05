@@ -7,8 +7,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import com.memoriabox.data.model.Box
 import com.memoriabox.data.model.Event
@@ -18,10 +20,20 @@ import com.memoriabox.viewmodel.createCalendarViewModel
 import com.memoriabox.viewmodel.createMainViewModel
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
+import com.memoriabox.utils.AppSettings
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SearchScreen(application: Application) {
+fun SearchScreen(
+    application: Application,
+    onNavigateBack: () -> Unit = {},
+    onOpenBox: (String) -> Unit = {},
+    onOpenEvent: (com.memoriabox.data.model.Event) -> Unit = {}
+) {
     val boxVM = remember { createMainViewModel(application) }
     val eventVM = remember { createCalendarViewModel(application) }
     val boxes by boxVM.boxes.collectAsState(initial = emptyList())
@@ -46,29 +58,53 @@ fun SearchScreen(application: Application) {
         } else emptyList()
     }
 
-    // Recent searches
-    var recentSearches by remember { mutableStateOf(listOf<String>()) }
+    val focusManager = LocalFocusManager.current
+
+    // 最近搜索持久化到 AppSettings，退出页面或杀进程后仍然保留
+    var recentSearches by remember { mutableStateOf(AppSettings.getRecentSearches(application)) }
+
+    fun commitSearch(keyword: String) {
+        if (keyword.isBlank()) return
+        AppSettings.addRecentSearch(application, keyword)
+        recentSearches = AppSettings.getRecentSearches(application)
+    }
 
     Scaffold(
         topBar = {
-            SearchBar(
-                query = searchQuery,
-                onQueryChange = { searchQuery = it },
-                onSearch = { },
-                active = false,
-                onActiveChange = {},
-                placeholder = { Text("搜索事件、分类、备注...") },
-                leadingIcon = { Icon(Icons.Default.Search, null) },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { searchQuery = "" }) {
-                            Icon(Icons.Default.Clear, contentDescription = "清除搜索")
+            Column {
+                TopAppBar(
+                    title = { Text("搜索") },
+                    navigationIcon = {
+                        IconButton(onClick = onNavigateBack) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = "返回")
                         }
                     }
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                // Search suggestions dropdown
+                )
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text("搜索事件、分类、备注...") },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(Icons.Default.Clear, contentDescription = "清除搜索")
+                            }
+                        }
+                    },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(
+                        onSearch = {
+                            commitSearch(searchQuery)
+                            focusManager.clearFocus()
+                        }
+                    ),
+                    singleLine = true,
+                    shape = MaterialTheme.shapes.extraLarge,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                )
             }
         }
     ) { paddingValues ->
@@ -136,14 +172,29 @@ fun SearchScreen(application: Application) {
                         .fillMaxSize()
                         .padding(16.dp)
                 ) {
-                    Text("最近搜索", style = MaterialTheme.typography.titleMedium)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("最近搜索", style = MaterialTheme.typography.titleMedium)
+                        if (recentSearches.isNotEmpty()) {
+                            TextButton(onClick = {
+                                AppSettings.clearRecentSearches(application)
+                                recentSearches = emptyList()
+                            }) { Text("清空") }
+                        }
+                    }
                     Spacer(Modifier.height(12.dp))
                     if (recentSearches.isEmpty()) {
                         Text("暂无搜索历史", style = MaterialTheme.typography.bodyMedium)
                     } else {
                         recentSearches.forEach { query ->
                             AssistChip(
-                                onClick = { searchQuery = query },
+                                onClick = {
+                                    searchQuery = query
+                                    commitSearch(query)
+                                },
                                 label = { Text(query) },
                                 leadingIcon = { Icon(Icons.Default.History, null) },
                                 modifier = Modifier.padding(bottom = 8.dp)
@@ -164,7 +215,10 @@ fun SearchScreen(application: Application) {
                                 title = box.name,
                                 subtitle = "分类 · ${if (box.icon.isImageUri()) "自定义图标" else box.icon}",
                                 icon = Icons.Default.Folder,
-                                onClick = null
+                                onClick = {
+                                    commitSearch(searchQuery)
+                                    onOpenBox(box.id)
+                                }
                             )
                         }
                     }
@@ -175,7 +229,10 @@ fun SearchScreen(application: Application) {
                                 title = event.name,
                                 subtitle = buildEventSubtitle(event),
                                 icon = getEventIcon(event),
-                                onClick = null
+                                onClick = {
+                                    commitSearch(searchQuery)
+                                    onOpenEvent(event)
+                                }
                             )
                         }
                     }

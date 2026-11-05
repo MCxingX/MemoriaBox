@@ -23,6 +23,8 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 import androidx.navigation.compose.*
 import androidx.navigation.compose.rememberNavController
 import com.memoriabox.ui.navigation.BottomNavigationItem
@@ -70,7 +72,13 @@ fun MainScreen(
     var autoOpenCalendarSummary by remember { mutableStateOf<Long?>(null) }
     val updateState by UpdateManager.state.collectAsState()
     var showUpdateDialog by remember { mutableStateOf(false) }
-    var dismissedUpdateVersion by rememberSaveable { mutableStateOf<String?>(null) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
+    // 跳过的版本号与「永不提醒」都持久化，保证重启应用后仍然生效
+    var skippedUpdateVersion by remember(settingsVersion) { mutableStateOf(AppSettings.getUpdateSkippedVersion(context)) }
+    var updateNeverRemind by remember(settingsVersion) { mutableStateOf(AppSettings.getUpdateNeverRemind(context)) }
+    // 本次会话是否由用户手动触发检查，手动检查时要忽略跳过与永不提醒
+    var updateCheckIsManual by remember { mutableStateOf(false) }
     var showInstallConfirmation by remember { mutableStateOf(false) }
     var pendingInstallPath by rememberSaveable { mutableStateOf<String?>(null) }
     val installPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
@@ -146,8 +154,9 @@ fun MainScreen(
 
     LaunchedEffect(initialOpenUpdate) {
         if (initialOpenUpdate) {
+            // 由通知点进来属于用户主动查看，忽略跳过与永不提醒
+            updateCheckIsManual = true
             showUpdateDialog = true
-            dismissedUpdateVersion = null
             onOpenUpdateConsumed()
         }
     }
@@ -204,7 +213,8 @@ fun MainScreen(
                     )
                 }
             }
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
         NavHost(
             navController = navController,
@@ -220,11 +230,23 @@ fun MainScreen(
                     onNavigateToStatistics = { navController.navigate(Screen.Statistics.route) }
                 )
             }
-            composable(Screen.BoxDetail.route) { backStackEntry ->
+            composable(
+                route = Screen.BoxDetail.route,
+                arguments = listOf(
+                    navArgument("boxId") { type = NavType.StringType },
+                    navArgument("eventId") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    }
+                )
+            ) { backStackEntry ->
                 val boxId = backStackEntry.arguments?.getString("boxId") ?: return@composable
+                val highlightEventId = backStackEntry.arguments?.getString("eventId")
                 BoxDetailScreen(
                     application = application,
                     boxId = boxId,
+                    highlightEventId = highlightEventId,
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
@@ -352,11 +374,17 @@ fun MainScreen(
                     onThemeModeChange = onThemeModeChange,
                     onNavigateToCustomization = { navController.navigate(Screen.CustomizationSettings.route) },
                     onNavigateToFriends = { navController.navigate(Screen.Friends.route) },
+                    onNavigateToSearch = { navController.navigate(Screen.Search.route) },
                     onBackupSettingsClick = { navController.navigate(Screen.BackupSettings.route) },
                     onWebDavSettingsClick = { navController.navigate(Screen.WebDavSettings.route) },
                     onCheckUpdate = {
+                        // 手动检查更新：重置永久屏蔽并清空跳过记录，让弹窗正常出现
+                        AppSettings.setUpdateNeverRemind(context, false)
+                        AppSettings.clearUpdateSkippedVersion(context)
+                        updateNeverRemind = false
+                        skippedUpdateVersion = null
+                        updateCheckIsManual = true
                         showUpdateDialog = true
-                        dismissedUpdateVersion = null
                         UpdateManager.check(context, manual = true)
                     }
                 )
@@ -422,6 +450,16 @@ fun MainScreen(
                 LabelManageScreen(
                     application = application,
                     onNavigateBack = { navController.popBackStack() }
+                )
+            }
+            composable(Screen.Search.route) {
+                SearchScreen(
+                    application = application,
+                    onNavigateBack = { navController.popBackStack() },
+                    onOpenBox = { boxId -> navController.navigate(Screen.BoxDetail.createRoute(boxId)) },
+                    onOpenEvent = { event ->
+                        navController.navigate(Screen.BoxDetail.createRoute(event.boxId, event.id))
+                    }
                 )
             }
             composable(
@@ -541,17 +579,58 @@ fun MainScreen(
             is UpdateState.Error -> state.info
             else -> null
         }
-        if (visibleUpdateInfo != null && dismissedUpdateVersion != visibleUpdateInfo.versionName) {
+        /*
+         * 弹窗显示条件：
+         * - 手动检查时始终显示；
+         * - 自动检查时，开启「永不提醒」则不显示；
+         * - 该版本已被跳过则不显示，但更高版本会重新弹出。
+         */
+        val blockedByPreference = visibleUpdateInfo != null && !AppSettings.shouldPromptUpdate(
+            targetVersion = visibleUpdateInfo.versionName,
+            skippedVersion = skippedUpdateVersion,
+            neverRemind = updateNeverRemind,
+            manual = updateCheckIsManual
+        )
+
+        if (visibleUpdateInfo != null && !blockedByPreference) {
             UpdateAvailableDialog(
                 info = visibleUpdateInfo,
                 state = updateState,
                 onDismiss = {
-                    dismissedUpdateVersion = visibleUpdateInfo.versionName
+                    // 点弹窗外部等同跳过当前版本，并给出同样的反馈
+                    skippedUpdateVersion = visibleUpdateInfo.versionName
+                    AppSettings.setUpdateSkippedVersion(context, visibleUpdateInfo.versionName)
                     showUpdateDialog = false
+                    coroutineScope.launch {
+                        snackbarHostState.showSnackbar(
+                            "已跳过 v${visibleUpdateInfo.versionName}，出现更高版本会再次提示"
+                        )
+                    }
+                },
+                onSkipVersion = {
+                    skippedUpdateVersion = visibleUpdateInfo.versionName
+                    AppSettings.setUpdateSkippedVersion(context, visibleUpdateInfo.versionName)
+                    showUpdateDialog = false
+                    coroutineScope.launch {
+                        snackbarHostState.showSnackbar(
+                            "已跳过 v${visibleUpdateInfo.versionName}，出现更高版本会再次提示"
+                        )
+                    }
+                },
+                onNeverRemind = {
+                    updateNeverRemind = true
+                    AppSettings.setUpdateNeverRemind(context, true)
+                    AppSettings.clearUpdateSkippedVersion(context)
+                    skippedUpdateVersion = null
+                    showUpdateDialog = false
+                    coroutineScope.launch {
+                        snackbarHostState.showSnackbar(
+                            "已关闭自动提示，可到「设置 → 自动检查更新」重新开启"
+                        )
+                    }
                 },
                 onCancelDownload = {
                     UpdateManager.cancelActiveDownload(context)
-                    dismissedUpdateVersion = null
                     showUpdateDialog = true
                 },
                 onUpdate = {
@@ -563,6 +642,9 @@ fun MainScreen(
                     }
                 }
             )
+        } else if (visibleUpdateInfo != null && blockedByPreference) {
+            // 被偏好拦截时不显示更新弹窗，也不提示「已是最新」
+            showUpdateDialog = false
         } else if (updateState is UpdateState.Checking || updateState is UpdateState.UpToDate || updateState is UpdateState.Error) {
             val isChecking = updateState is UpdateState.Checking
             val errorMessage = (updateState as? UpdateState.Error)?.message
@@ -625,6 +707,8 @@ private fun UpdateAvailableDialog(
     info: UpdateInfo,
     state: UpdateState,
     onDismiss: () -> Unit,
+    onSkipVersion: () -> Unit,
+    onNeverRemind: () -> Unit,
     onCancelDownload: () -> Unit,
     onUpdate: () -> Unit
 ) {
@@ -655,6 +739,25 @@ private fun UpdateAvailableDialog(
                     is UpdateState.Error -> Text(state.message, color = MaterialTheme.colorScheme.error)
                     else -> Unit
                 }
+                // 跳过与永不提醒只在未开始下载时提供，下载中只保留取消下载
+                if (state !is UpdateState.Downloading) {
+                    HorizontalDivider()
+                    Text(
+                        "跳过仅针对 v${info.versionName}，下次出现更高版本仍会提示。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    // 次要操作放进正文并独占整行，避免和主按钮在小屏上挤在一起
+                    TextButton(
+                        onClick = onNeverRemind,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            "不再提醒新版本",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
         },
         dismissButton = {
@@ -664,10 +767,10 @@ private fun UpdateAvailableDialog(
                         // 取消下载不应关闭弹窗、也不应记录 dismissed 版本，方便立即重新下载。
                         onCancelDownload()
                     } else {
-                        onDismiss()
+                        onSkipVersion()
                     }
                 }
-            ) { Text(if (state is UpdateState.Downloading) "取消下载" else "稍后") }
+            ) { Text(if (state is UpdateState.Downloading) "取消下载" else "跳过此版本") }
         },
         confirmButton = {
             Button(

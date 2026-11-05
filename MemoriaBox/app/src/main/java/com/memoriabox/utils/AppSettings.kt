@@ -41,6 +41,11 @@ object AppSettings {
         settingsVersion++
     }
 
+    private fun saveLong(context: Context, key: String, value: Long) {
+        getPrefs(context).edit().putLong(key, value).apply()
+        settingsVersion++
+    }
+
     private fun monthlyMediaKey(year: Int, month: Int): String = "%04d-%02d".format(year.coerceIn(1900, 2100), month.coerceIn(1, 12))
 
     const val HOME_BG_URI = "home_bg_uri"
@@ -71,6 +76,18 @@ object AppSettings {
     const val UPCOMING_EVENTS_NORMAL_COLOR = "upcoming_events_normal_color"
     const val UPCOMING_EVENTS_REMINDER_ENABLED = "upcoming_events_reminder_enabled"
     const val HOLIDAY_REMINDER_ENABLED = "holiday_reminder_enabled"
+    const val UPDATE_SKIPPED_VERSION = "update_skipped_version"
+    const val UPDATE_NEVER_REMIND = "update_never_remind"
+    const val RECENT_SEARCHES = "recent_searches"
+    const val RECENT_SEARCH_LIMIT = 8
+    const val LAST_BACKUP_AT = "last_backup_at"
+    const val LAST_BACKUP_NOTICE_AT = "last_backup_notice_at"
+
+    /** 超过这个天数没有备份就提醒用户 */
+    const val BACKUP_REMIND_DAYS = 30
+
+    /** 提醒最多每 7 天出现一次，避免频繁打扰 */
+    private const val BACKUP_NOTICE_INTERVAL_MS = 7L * 24 * 60 * 60 * 1000
 
     fun getHomeBgUri(context: Context) = getPrefs(context).getString(HOME_BG_URI, null)
     fun setHomeBgUri(context: Context, uri: String?) = saveString(context, HOME_BG_URI, uri)
@@ -204,6 +221,127 @@ object AppSettings {
 
     fun getHolidayReminderEnabled(context: Context) = getPrefs(context).getBoolean(HOLIDAY_REMINDER_ENABLED, true)
     fun setHolidayReminderEnabled(context: Context, enabled: Boolean) = saveBoolean(context, HOLIDAY_REMINDER_ENABLED, enabled)
+
+    /**
+     * 被用户跳过的版本号。只对这一个版本生效：
+     * 出现更高版本时仍会正常弹出更新提示。
+     */
+    fun getUpdateSkippedVersion(context: Context): String? =
+        getPrefs(context).getString(UPDATE_SKIPPED_VERSION, null)?.takeIf { it.isNotBlank() }
+
+    fun setUpdateSkippedVersion(context: Context, versionName: String?) =
+        saveString(context, UPDATE_SKIPPED_VERSION, versionName)
+
+    fun clearUpdateSkippedVersion(context: Context) = setUpdateSkippedVersion(context, null)
+
+    /**
+     * 永久屏蔽自动更新提示。开启后除非用户手动点「检查更新」，否则不再自动弹窗。
+     * 手动检查更新成功后会由界面重置该项。
+     */
+    fun getUpdateNeverRemind(context: Context) = getPrefs(context).getBoolean(UPDATE_NEVER_REMIND, false)
+    fun setUpdateNeverRemind(context: Context, enabled: Boolean) = saveBoolean(context, UPDATE_NEVER_REMIND, enabled)
+
+    /**
+     * 是否应弹出更新提示。抽成纯函数便于测试，界面只负责传入当前偏好。
+     *
+     * @param targetVersion 远端发现的新版本号
+     * @param skippedVersion 用户跳过的版本号，只对同一版本生效
+     * @param neverRemind 是否永久屏蔽自动提示
+     * @param manual 是否由用户手动检查触发
+     */
+    fun shouldPromptUpdate(
+        targetVersion: String,
+        skippedVersion: String?,
+        neverRemind: Boolean,
+        manual: Boolean
+    ): Boolean {
+        // 手动检查更新始终弹窗，用户可以随时主动查看新版本
+        if (manual) return true
+        if (neverRemind) return false
+        val skipped = skippedVersion?.takeIf { it.isNotBlank() } ?: return true
+        return skipped != targetVersion
+    }
+
+    /**
+     * 上次成功备份的时间戳，0 表示从未备份。
+     */
+    fun getLastBackupAt(context: Context): Long = getPrefs(context).getLong(LAST_BACKUP_AT, 0L)
+
+    fun markBackupCompleted(context: Context, timestamp: Long = System.currentTimeMillis()) {
+        saveLong(context, LAST_BACKUP_AT, timestamp)
+    }
+
+    fun getLastBackupNoticeAt(context: Context): Long = getPrefs(context).getLong(LAST_BACKUP_NOTICE_AT, 0L)
+
+    private fun markBackupNoticeShown(context: Context, timestamp: Long) {
+        saveLong(context, LAST_BACKUP_NOTICE_AT, timestamp)
+    }
+
+    /**
+     * 是否需要提醒备份。抽成纯函数便于测试。
+     *
+     * @param lastBackupAt 上次备份时间戳，0 表示从未备份
+     * @param now 当前时间戳
+     * @param remindDays 超过多少天算过期
+     * @return 过期的天数；不需要提醒时返回 null
+     */
+    fun backupOverdueDays(
+        lastBackupAt: Long,
+        now: Long,
+        remindDays: Int = BACKUP_REMIND_DAYS
+    ): Int? {
+        val thresholdMs = remindDays.toLong() * 24 * 60 * 60 * 1000
+        // 从未备份过视为过期，返回完整周期天数
+        if (lastBackupAt <= 0L) return remindDays
+        val elapsed = now - lastBackupAt
+        if (elapsed < thresholdMs) return null
+        return (elapsed / (24 * 60 * 60 * 1000)).toInt()
+    }
+
+    /**
+     * 是否现在应该弹出/展示备份提醒：数据过期，且距上次提醒已超过间隔。
+     * 提醒节流只影响展示频率，不影响「从未备份」的首次提醒。
+     */
+    fun shouldShowBackupNotice(
+        lastBackupAt: Long,
+        lastNoticeAt: Long,
+        now: Long,
+        remindDays: Int = BACKUP_REMIND_DAYS
+    ): Boolean {
+        if (backupOverdueDays(lastBackupAt, now, remindDays) == null) return false
+        if (lastNoticeAt <= 0L) return true
+        return now - lastNoticeAt >= BACKUP_NOTICE_INTERVAL_MS
+    }
+
+    /** 记录提醒已展示，用于节流 */
+    fun markBackupNoticeShown(context: Context) = markBackupNoticeShown(context, System.currentTimeMillis())
+    fun getRecentSearches(context: Context): List<String> =
+        getStringList(context, RECENT_SEARCHES).take(RECENT_SEARCH_LIMIT)
+
+    fun addRecentSearch(context: Context, query: String) {
+        val merged = mergeRecentSearch(getRecentSearches(context), query, RECENT_SEARCH_LIMIT)
+        saveStringList(context, RECENT_SEARCHES, merged)
+    }
+
+    fun clearRecentSearches(context: Context) {
+        saveStringList(context, RECENT_SEARCHES, emptyList())
+    }
+
+    /**
+     * 把新关键词并入历史：去空白、去重、置顶、截断。
+     * 抽成纯函数便于测试，避免把键盘每次输入都写进历史。
+     */
+    fun mergeRecentSearch(
+        existing: List<String>,
+        query: String,
+        limit: Int = RECENT_SEARCH_LIMIT
+    ): List<String> {
+        val keyword = query.trim()
+        if (keyword.isBlank()) return existing.take(limit)
+        return (listOf(keyword) + existing.map { it.trim() }.filter { it.isNotBlank() })
+            .distinct()
+            .take(limit)
+    }
 
     private fun getStringList(context: Context, key: String): List<String> {
         val stored = getPrefs(context).getString(key, null) ?: return emptyList()

@@ -98,6 +98,7 @@ fun BoxDialog(
     var selectedBgValue by remember { mutableStateOf(existingBox?.bgValue ?: "#7C4DFF") }
     var showEmojiPicker by remember { mutableStateOf(false) }
     var showColorPicker by remember { mutableStateOf(false) }
+    var showBackgroundCustomizer by remember { mutableStateOf(false) }
     val iconCropLauncher = com.memoriabox.utils.UCropHelper.rememberCropLauncher("box_icons") { result ->
         selectedIcon = result ?: selectedIcon
     }
@@ -212,12 +213,12 @@ fun BoxDialog(
                         Text("上传图片")
                     }
                     OutlinedButton(
-                        onClick = { showColorPicker = true },
+                        onClick = { showBackgroundCustomizer = true },
                         modifier = Modifier.weight(1f)
                     ) {
                         Icon(Icons.Default.Palette, contentDescription = null)
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("选择颜色")
+                        Text("自定义背景")
                     }
                     }
                 }
@@ -237,6 +238,19 @@ fun BoxDialog(
             }
         }
     )
+
+    if (showBackgroundCustomizer) {
+        BackgroundCustomizerDialog(
+            initialBgType = selectedBgType,
+            initialBgValue = selectedBgValue,
+            onDismiss = { showBackgroundCustomizer = false },
+            onSave = { bgType, bgValue ->
+                selectedBgType = bgType
+                selectedBgValue = bgValue
+                showBackgroundCustomizer = false
+            }
+        )
+    }
 
     if (showEmojiPicker) {
         EmojiPickerDialog(

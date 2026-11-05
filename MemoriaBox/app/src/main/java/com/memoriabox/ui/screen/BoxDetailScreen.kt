@@ -26,6 +26,7 @@ import com.memoriabox.viewmodel.*
 fun BoxDetailScreen(
     application: Application,
     boxId: String,
+    highlightEventId: String? = null,
     onNavigateBack: () -> Unit
 ) {
     val viewModel = remember { createBoxDetailViewModel(application) }
@@ -45,6 +46,19 @@ fun BoxDetailScreen(
 
     LaunchedEffect(boxId) {
         viewModel.loadBox(boxId)
+    }
+
+    /*
+     * 从搜索结果进入时定位目标事件。
+     * 事件列表是异步加载的，这里等数据到位后再打开，避免打开空弹窗。
+     * 只执行一次，用户关闭后不会再次弹出。
+     */
+    var highlightConsumed by remember(highlightEventId) { mutableStateOf(false) }
+    LaunchedEffect(highlightEventId, events) {
+        if (highlightEventId.isNullOrBlank() || highlightConsumed) return@LaunchedEffect
+        val target = events.firstOrNull { it.id == highlightEventId } ?: return@LaunchedEffect
+        showEditEvent = target
+        highlightConsumed = true
     }
 
     Scaffold(
