@@ -7,24 +7,86 @@ import java.util.concurrent.TimeUnit
 object LunarDateUtils {
     val monthNames = listOf("正月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "腊月")
 
+    /**
+     * 下一次农历月日对应的公历时间。
+     *
+     * 直接按「农历月+日」逐天搜索有两个死路：
+     * - 农历三十在只有 29 天的月份里根本不存在；
+     * - 闰月（如闰四月）十几年才出现一次，420 天窗口内完全搜不到。
+     * 两种情况都会返回 null，调用方（NotificationHelper）拿到 null 直接 return，
+     * 结果就是一整年都没有提醒。所以改为先定位最近的这个农历月，再在月内取日，
+     * 该月没有这一天就落到月末；闰月搜不到就退回同名平月。
+     */
     fun nextOccurrenceMillis(lunar: String, nowMillis: Long = System.currentTimeMillis()): Long? {
         val parsed = parseMonthDayWithLeap(lunar) ?: return null
         val (month, day, leap) = parsed
-        val cursor = startOfDay(nowMillis)
-        repeat(420) {
-            if (isMonthDay(cursor.timeInMillis, month, day, leap)) return cursor.timeInMillis
+        var monthStart = findLunarMonthStart(nowMillis, month, leap, LUNAR_SEARCH_DAYS)
+        var usedLeap = leap
+        if (monthStart == null && leap) {
+            // 闰月在几十年里只出现几次，搜不到就退回同名平月，
+            // 总比返回 null 导致整年不提醒要好。
+            monthStart = findLunarMonthStart(nowMillis, month, false, LUNAR_SEARCH_DAYS)
+            usedLeap = false
+        }
+        val resolvedMonthStart = monthStart ?: return null
+        return resolveDayInLunarMonth(resolvedMonthStart, month, day, usedLeap)
+    }
+
+    /** 从 nowMillis 起向后找目标农历月的初一。 */
+    private fun findLunarMonthStart(startMillis: Long, month: Int, leap: Boolean, rangeDays: Int): Long? {
+        val chinese = ChineseCalendar()
+        val cursor = startOfDay(startMillis)
+        repeat(rangeDays) {
+            chinese.timeInMillis = cursor.timeInMillis
+            if (chinese.get(Calendar.MONTH) + 1 == month &&
+                (chinese.get(ChineseCalendar.IS_LEAP_MONTH) != 0) == leap &&
+                chinese.get(Calendar.DAY_OF_MONTH) == 1
+            ) {
+                return cursor.timeInMillis
+            }
             cursor.add(Calendar.DAY_OF_YEAR, 1)
         }
         return null
     }
 
+    /** 在该农历月内取第 day 天；该月不足 day 天时返回月末。 */
+    private fun resolveDayInLunarMonth(monthStart: Long, month: Int, day: Int, leap: Boolean): Long {
+        val chinese = ChineseCalendar()
+        val cursor = Calendar.getInstance().apply { timeInMillis = monthStart }
+        var result = monthStart
+        repeat(day) { offset ->
+            if (offset > 0) cursor.add(Calendar.DAY_OF_YEAR, 1)
+            chinese.timeInMillis = cursor.timeInMillis
+            if (chinese.get(Calendar.MONTH) + 1 != month ||
+                (chinese.get(ChineseCalendar.IS_LEAP_MONTH) != 0) != leap
+            ) {
+                return result
+            }
+            result = cursor.timeInMillis
+        }
+        return result
+    }
+
+    /** 农历一年最多 385 天，留足余量覆盖「今年这一天已过，要到明年」的情况。 */
+    private const val LUNAR_SEARCH_DAYS = 420
+
     fun monthDayToGregorian(year: Int, month: Int, day: Int): Long? {
+        // 复用同一个 ChineseCalendar 实例：逐天 new 一个对象时，
+        // 420 天的搜索会分配 420 次 ICU 对象，主线程调用会有明显卡顿。
+        val chinese = ChineseCalendar()
         val cursor = Calendar.getInstance().apply {
             clear()
             set(year.coerceIn(1900, 2100), Calendar.JANUARY, 1, 0, 0, 0)
         }
         repeat(420) {
-            if (isYearMonthDay(cursor.timeInMillis, year, month, day)) return cursor.timeInMillis
+            chinese.timeInMillis = cursor.timeInMillis
+            if (chinese.get(ChineseCalendar.EXTENDED_YEAR) == year + 2637 &&
+                chinese.get(Calendar.MONTH) + 1 == month &&
+                chinese.get(Calendar.DAY_OF_MONTH) == day &&
+                chinese.get(ChineseCalendar.IS_LEAP_MONTH) == 0
+            ) {
+                return cursor.timeInMillis
+            }
             cursor.add(Calendar.DAY_OF_YEAR, 1)
         }
         return null

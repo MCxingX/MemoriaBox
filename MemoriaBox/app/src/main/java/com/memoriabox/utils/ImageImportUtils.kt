@@ -89,6 +89,35 @@ object ImageImportUtils {
         }
     }
 
+    /**
+     * 删除导入到私有目录的媒体副本（含视频封面缓存与裁剪状态）。
+     *
+     * 以前删除日记或事件只删数据库行，filesDir 里的原图、裁剪图、视频副本
+     * 会永久滞留，用久了能堆到几百 MB。
+     * 只处理 file:// 且严格位于 filesDir 之下的路径，绝不碰用户的外部文件。
+     */
+    fun deletePrivateMedia(context: Context, vararg uriStrings: String?) {
+        if (uriStrings.isEmpty()) return
+        val base = runCatching { context.filesDir.canonicalFile }.getOrNull() ?: return
+        uriStrings.forEach { uriString ->
+            if (uriString.isNullOrBlank()) return@forEach
+            runCatching {
+                val uri = Uri.parse(uriString)
+                if (uri.scheme != "file") return@forEach
+                val target = File(uri.path.orEmpty()).canonicalFile
+                if (!target.path.startsWith(base.path + File.separator)) return@forEach
+                // 封面文件名与 video 同目录且以 _cover.jpg 结尾，随主体一起清掉
+                target.parentFile?.let { parent ->
+                    File(parent, "${target.nameWithoutExtension}_cover.jpg").takeIf { it.isFile }?.delete()
+                }
+                // 非 file:// 来源的封面按 hashCode 落在 video_covers 下，一并清理
+                File(context.filesDir, "video_covers/${uriString.hashCode()}.jpg").takeIf { it.isFile }?.delete()
+                if (target.isFile) target.delete()
+                removeEditState(context, uriString)
+            }
+        }
+    }
+
     fun copyMediaToPrivateStorage(context: Context, uri: Uri, folder: String = "picked_media", fallbackExtension: String = "bin"): String? {
         return runCatching {
             val dir = File(context.filesDir, folder).apply { mkdirs() }

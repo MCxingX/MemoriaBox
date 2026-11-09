@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.memoriabox.ui.utils.rememberAdaptiveUiSize
@@ -115,6 +116,176 @@ fun SettingsItem(
             if (onClick != null) {
                 Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.outline)
             }
+        }
+    }
+}
+
+/** 设置项图标统一使用的渐变色，保证分组内视觉一致。 */
+@Composable
+private fun settingsIconBrush(): Brush = Brush.linearGradient(
+    listOf(
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.92f),
+        MaterialTheme.colorScheme.secondary.copy(alpha = 0.88f),
+        MaterialTheme.colorScheme.tertiary.copy(alpha = 0.84f)
+    )
+)
+
+/**
+ * 设置分组卡片。
+ * 把同一分类下的多个条目收进一张卡片、内部用分隔线相连，
+ * 避免「一条一张悬浮卡」造成的视觉碎片化与重复感。
+ */
+@Composable
+fun SettingsGroup(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val adaptiveUi = rememberAdaptiveUiSize()
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = adaptiveUi.screenPadding, vertical = 3.dp),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth(), content = content)
+    }
+}
+
+/** 分组内分隔线：左侧留出图标宽度，视觉上从文字处起始。 */
+@Composable
+private fun SettingsGroupDivider() {
+    val adaptiveUi = rememberAdaptiveUiSize()
+    HorizontalDivider(
+        modifier = Modifier.padding(start = if (adaptiveUi.compact) 56.dp else 64.dp),
+        thickness = 0.8.dp,
+        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+    )
+}
+
+/** 分组内可点击的设置行（无独立卡片外壳）。 */
+@Composable
+fun SettingsGroupItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    description: String,
+    showTopDivider: Boolean = false,
+    onClick: (() -> Unit)? = null
+) {
+    val adaptiveUi = rememberAdaptiveUiSize()
+    Column(modifier = Modifier.fillMaxWidth()) {
+        if (showTopDivider) SettingsGroupDivider()
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+                .padding(
+                    horizontal = if (adaptiveUi.compact) 12.dp else 14.dp,
+                    vertical = if (adaptiveUi.compact) 10.dp else 12.dp
+                ),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(if (adaptiveUi.compact) 32.dp else 36.dp)
+                    .clip(MaterialTheme.shapes.medium)
+                    .background(settingsIconBrush()),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    icon,
+                    contentDescription = title,
+                    modifier = Modifier.size(if (adaptiveUi.compact) 17.dp else 19.dp),
+                    tint = Color.White
+                )
+            }
+            Spacer(Modifier.width(if (adaptiveUi.compact) 10.dp else 12.dp))
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(1.dp)
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            if (onClick != null) {
+                Icon(
+                    Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+    }
+}
+
+/** 分组内带开关的设置行。 */
+@Composable
+fun SettingsGroupSwitchItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    description: String,
+    checked: Boolean,
+    showTopDivider: Boolean = false,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    val adaptiveUi = rememberAdaptiveUiSize()
+    Column(modifier = Modifier.fillMaxWidth()) {
+        if (showTopDivider) SettingsGroupDivider()
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    horizontal = if (adaptiveUi.compact) 12.dp else 14.dp,
+                    vertical = if (adaptiveUi.compact) 8.dp else 10.dp
+                ),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(if (adaptiveUi.compact) 32.dp else 36.dp)
+                    .clip(MaterialTheme.shapes.medium)
+                    .background(settingsIconBrush()),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    icon,
+                    contentDescription = title,
+                    modifier = Modifier.size(if (adaptiveUi.compact) 17.dp else 19.dp),
+                    tint = Color.White
+                )
+            }
+            Spacer(Modifier.width(if (adaptiveUi.compact) 10.dp else 12.dp))
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(1.dp)
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Switch(checked = checked, onCheckedChange = onCheckedChange)
         }
     }
 }

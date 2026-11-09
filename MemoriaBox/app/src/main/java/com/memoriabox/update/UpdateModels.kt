@@ -17,7 +17,7 @@ data class UpdateInfo(
 sealed interface UpdateState {
     data object Idle : UpdateState
     data class Checking(val manual: Boolean) : UpdateState
-    data class Available(val info: UpdateInfo) : UpdateState
+    data class Available(val info: UpdateInfo, val manual: Boolean = false) : UpdateState
     data class Downloading(val info: UpdateInfo, val progress: Int) : UpdateState
     data class Ready(val info: UpdateInfo, val apkUri: String) : UpdateState
     data class UpToDate(val manual: Boolean) : UpdateState

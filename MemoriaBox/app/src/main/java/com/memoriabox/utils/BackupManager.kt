@@ -102,7 +102,15 @@ class BackupManager(
         val prefs = context.getSharedPreferences("backup_config", Context.MODE_PRIVATE)
         val encryptedPassword = prefs.getString(BACKUP_PASSWORD_KEY, null)
         val legacyPassword = prefs.getString("backup_password", "").orEmpty()
-        val backupPassword = decryptStoredPassword(encryptedPassword) ?: legacyPassword
+        val decryptedPassword = decryptStoredPassword(encryptedPassword)
+        // 有密文却解不开，说明 AndroidKeyStore 的密钥已经失效（换机迁移、锁屏凭据重置等）。
+        // 此时不能静默降级成空密码，否则之后的自动备份会悄悄变成明文备份，
+        // 用户以为数据仍受密码保护。改为停用自动备份，等用户重新设置密码。
+        passwordUnavailable = !encryptedPassword.isNullOrEmpty() && decryptedPassword == null
+        if (passwordUnavailable) {
+            Log.w(TAG, "备份密码无法解密，已暂停自动备份，等待用户重新设置密码")
+        }
+        val backupPassword = if (passwordUnavailable) "" else (decryptedPassword ?: legacyPassword)
         config = BackupConfig(
             autoBackupDelay = prefs.getLong("auto_backup_delay", 20000L),
             maxAutoBackups = prefs.getInt("max_auto_backups", 5),
@@ -115,6 +123,11 @@ class BackupManager(
             backupDirUri = Uri.parse(uriString)
         }
     }
+
+    /** 备份密码是否因密钥失效而无法恢复；为 true 时应暂停自动备份。 */
+    @Volatile
+    var passwordUnavailable: Boolean = false
+        private set
 
     private fun savePreferences() {
         val prefs = context.getSharedPreferences("backup_config", Context.MODE_PRIVATE)
@@ -152,6 +165,11 @@ class BackupManager(
 
     private suspend fun performAutoBackup() {
         try {
+            // 密码不可用时不再生成自动备份，避免把本该加密的数据写成明文
+            if (passwordUnavailable) {
+                Log.w(TAG, "Skip auto backup: backup password unavailable")
+                return
+            }
             val dir = getOrCreateAutoBackupDir() ?: return
             val timestamp = System.currentTimeMillis()
             val fileName = "auto_${formatTimestamp(timestamp)}$BACKUP_EXTENSION"
@@ -181,6 +199,15 @@ class BackupManager(
         outputDir: Uri,
         password: String = "",
         onProgress: (Int) -> Unit = {}
+    ): Result<Uri?> = withContext(Dispatchers.IO) {
+        performManualBackupBlocking(outputDir, password, onProgress)
+    }
+
+    /** 备份的实际执行体：压缩、加密、写文件全是重 IO，必须留在 IO 线程。 */
+    private suspend fun performManualBackupBlocking(
+        outputDir: Uri,
+        password: String,
+        onProgress: (Int) -> Unit
     ): Result<Uri?> {
         return try {
             val timestamp = System.currentTimeMillis()
@@ -212,6 +239,15 @@ class BackupManager(
         backupUri: Uri,
         password: String = "",
         onProgress: (Int) -> Unit = {}
+    ): Result<ImportResult> = withContext(Dispatchers.IO) {
+        importBackupBlocking(backupUri, password, onProgress)
+    }
+
+    /** 导入的实际执行体：解密、解压、建库合并全是重 IO，必须留在 IO 线程。 */
+    private suspend fun importBackupBlocking(
+        backupUri: Uri,
+        password: String,
+        onProgress: (Int) -> Unit
     ): Result<ImportResult> {
         return try {
             onProgress(20)
@@ -280,7 +316,7 @@ class BackupManager(
         val workDir = File(context.cacheDir, "archive_${System.currentTimeMillis()}").apply { mkdirs() }
         try {
             val dbCopy = File(workDir, DB_ENTRY)
-            dbFile.copyTo(dbCopy, overwrite = true)
+            exportPlainDatabase(dbFile, dbCopy)
 
             val settingsDir = File(workDir, SETTINGS_PREFIX).apply { mkdirs() }
             val settingsFiles = SETTINGS_FILES.mapNotNull { name ->
@@ -327,6 +363,39 @@ class BackupManager(
         } finally {
             workDir.deleteRecursively()
         }
+    }
+
+    /**
+     * 备份包里的数据库必须是明文 SQLite。
+     *
+     * 当前数据库默认启用 SQLCipher（全新安装一律加密），直接复制出来的文件
+     * 恢复端用普通 Room 打开会抛 "file is not a database"，备份等于废掉；
+     * 而且加密库的密钥不在备份包内，跨设备也无法解密。
+     * 所以这里统一导出成明文副本：明文库直接复制，加密库用 sqlcipher_export 导出。
+     */
+    private fun exportPlainDatabase(dbFile: File, target: File) {
+        if (isPlainSqliteFile(dbFile)) {
+            dbFile.copyTo(target, overwrite = true)
+            return
+        }
+        target.delete()
+        val raw = AppDatabase.getDatabase(context).openHelper.writableDatabase
+        raw.execSQL("ATTACH DATABASE ? AS plaintext KEY ''", arrayOf(target.absolutePath))
+        try {
+            raw.execSQL("SELECT sqlcipher_export('plaintext')")
+        } finally {
+            runCatching { raw.execSQL("DETACH DATABASE plaintext") }
+        }
+        require(target.isFile && target.length() > 0) { "导出明文数据库失败" }
+    }
+
+    private fun isPlainSqliteFile(file: File): Boolean {
+        if (!file.isFile || file.length() < 16) return false
+        return runCatching {
+            val header = ByteArray(16)
+            FileInputStream(file).use { it.read(header) }
+            String(header, Charsets.ISO_8859_1).startsWith("SQLite format 3")
+        }.getOrDefault(false)
     }
 
     private suspend fun collectMediaEntries(mediaDir: File): List<Triple<String, File, String>> {
@@ -658,10 +727,18 @@ class BackupManager(
         val newFile = pickedDir.createFile("application/octet-stream", fileName)
             ?: throw IllegalStateException("Failed to create file")
 
-        context.contentResolver.openOutputStream(newFile.uri)?.use { output ->
-            FileInputStream(sourceFile).use { input ->
-                input.copyTo(output)
+        try {
+            // openOutputStream 返回 null 时必须报错：之前用 ?.use 静默跳过，
+            // 结果写出 0 字节文件却返回成功，还删掉了源文件。
+            val output = context.contentResolver.openOutputStream(newFile.uri)
+                ?: error("无法写入备份目录，请检查目录读取权限")
+            val written = output.use { out ->
+                FileInputStream(sourceFile).use { input -> input.copyTo(out) }
             }
+            require(written > 0) { "备份文件写入为空，请检查目标目录权限" }
+        } catch (e: Exception) {
+            runCatching { newFile.delete() }
+            throw e
         }
 
         sourceFile.delete()

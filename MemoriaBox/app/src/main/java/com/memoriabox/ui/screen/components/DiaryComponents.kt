@@ -113,7 +113,8 @@ fun ScrollingTextAnimation(
 fun MediaBackgroundPlayer(
     mediaUri: String?,
     mediaType: DiaryMediaType?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    previewOnly: Boolean = false
 ) {
     if (mediaUri.isNullOrEmpty()) {
         Box(
@@ -133,14 +134,19 @@ fun MediaBackgroundPlayer(
 
     when (mediaType) {
         DiaryMediaType.VIDEO -> {
-            DiaryVideoPlayer(
-                uri = mediaUri,
-                modifier = modifier.fillMaxSize(),
-                showControls = false,
-                autoPlay = true,
-                loop = true,
-                muted = true
-            )
+            if (previewOnly) {
+                // 列表/弹窗预览场景只显示封面，不创建播放器，避免多个视频同时解码。
+                DiaryVideoPoster(uri = mediaUri, modifier = modifier.fillMaxSize(), showBadge = false)
+            } else {
+                DiaryVideoPlayer(
+                    uri = mediaUri,
+                    modifier = modifier.fillMaxSize(),
+                    showControls = false,
+                    autoPlay = true,
+                    loop = true,
+                    muted = true
+                )
+            }
         }
         else -> {
             AsyncImage(
@@ -156,6 +162,41 @@ fun MediaBackgroundPlayer(
     }
 }
 
+/** 只渲染视频首帧封面，不创建 ExoPlayer 实例，适合列表与弹窗预览。 */
+@Composable
+fun DiaryVideoPoster(uri: String, modifier: Modifier = Modifier, showBadge: Boolean = true) {
+    val context = LocalContext.current
+    var posterUri by remember(uri) { mutableStateOf<String?>(null) }
+    LaunchedEffect(uri) {
+        posterUri = withContext(Dispatchers.IO) { VideoThumbnailUtils.thumbnailUri(context, uri) }
+    }
+    Box(modifier = modifier.background(Color.Black), contentAlignment = Alignment.Center) {
+        if (posterUri != null) {
+            AsyncImage(
+                model = posterUri,
+                contentDescription = "视频封面",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+        if (showBadge) {
+            Icon(
+                Icons.Default.PlayCircle,
+                contentDescription = "视频",
+                tint = Color.White.copy(alpha = 0.9f),
+                modifier = Modifier.size(44.dp)
+            )
+        }
+    }
+}
+
+/**
+ * 日记视频播放器。
+ *
+ * AspectRatioFrameLayout.RESIZE_MODE_FIT 与 PlayerView 的部分接口在 media3 里
+ * 标记为 @UnstableApi，这里显式 opt-in，避免编译期与 Lint 的告警。
+ */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
 fun DiaryVideoPlayer(
     uri: String,
@@ -173,14 +214,23 @@ fun DiaryVideoPlayer(
     LaunchedEffect(uri) {
         thumbnailUri = withContext(Dispatchers.IO) { VideoThumbnailUtils.thumbnailUri(context, uri) }
     }
-    val exoPlayer = remember(uri) {
-        ExoPlayer.Builder(context.applicationContext).build().apply {
+    // 播放器按需创建：日记详情里可能有多个视频，若每个都立刻 build + prepare，
+    // 会同时占用多份解码器和内存，很容易 OOM。只有真正要播放时才创建。
+    var exoPlayer by remember(uri) { mutableStateOf<ExoPlayer?>(null) }
+
+    LaunchedEffect(uri, started) {
+        if (!started || exoPlayer != null) return@LaunchedEffect
+        exoPlayer = ExoPlayer.Builder(context.applicationContext).build().apply {
             setMediaItem(MediaItem.fromUri(Uri.parse(uri)))
             prepare()
+            repeatMode = if (loop) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+            volume = if (muted) 0f else 1f
+            playWhenReady = true
         }
     }
 
     DisposableEffect(exoPlayer) {
+        val player = exoPlayer ?: return@DisposableEffect onDispose { }
         val listener = object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
                 playbackError = error.errorCodeName
@@ -195,17 +245,18 @@ fun DiaryVideoPlayer(
                 if (isPlaying) playbackError = null
             }
         }
-        exoPlayer.addListener(listener)
+        player.addListener(listener)
         onDispose {
-            exoPlayer.removeListener(listener)
-            exoPlayer.release()
+            player.removeListener(listener)
+            player.release()
         }
     }
 
-    LaunchedEffect(exoPlayer, autoPlay, loop, muted) {
-        exoPlayer.repeatMode = if (loop) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
-        exoPlayer.volume = if (muted) 0f else 1f
-        exoPlayer.playWhenReady = autoPlay || started
+    LaunchedEffect(exoPlayer, loop, muted) {
+        val player = exoPlayer ?: return@LaunchedEffect
+        player.repeatMode = if (loop) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+        player.volume = if (muted) 0f else 1f
+        player.playWhenReady = true
     }
 
     Box(
@@ -214,18 +265,38 @@ fun DiaryVideoPlayer(
             .background(Color.Black),
         contentAlignment = Alignment.Center
     ) {
-        if (!started && thumbnailUri != null) {
-            AsyncImage(
-                model = thumbnailUri,
-                contentDescription = "视频封面",
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clickable {
-                        started = true
-                        exoPlayer.playWhenReady = true
+        // 先挂载播放视图（底层），再把封面与播放按钮盖在最上层，
+        // 这样无论缩略图是否生成成功，播放按钮都在最上面且一定点得到。
+        if (started) {
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { viewContext ->
+                    (android.view.LayoutInflater.from(viewContext)
+                        .inflate(R.layout.diary_video_player, null, false) as PlayerView).apply {
+                        player = exoPlayer
+                        useController = showControls
+                        resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                     }
+                },
+                update = { view ->
+                    view.player = exoPlayer
+                    view.useController = showControls
+                },
+                onRelease = { view -> view.player = null }
             )
+        }
+        if (!started) {
+            if (thumbnailUri != null) {
+                AsyncImage(
+                    model = thumbnailUri,
+                    contentDescription = "视频封面",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clickable { started = true }
+                )
+            }
+            // 缩略图生成失败时也要有播放入口，否则画面全黑且无从点击。
             Icon(
                 Icons.Default.PlayCircle,
                 contentDescription = "播放视频",
@@ -233,30 +304,9 @@ fun DiaryVideoPlayer(
                 modifier = Modifier
                     .size(58.dp)
                     .align(Alignment.Center)
-                    .clickable {
-                        started = true
-                        exoPlayer.playWhenReady = true
-                    }
+                    .clickable { started = true }
             )
         }
-        AndroidView(
-            modifier = Modifier
-                .fillMaxSize()
-                .alpha(if (!started && thumbnailUri != null) 0f else 1f),
-            factory = { viewContext ->
-                (android.view.LayoutInflater.from(viewContext)
-                    .inflate(R.layout.diary_video_player, null, false) as PlayerView).apply {
-                    player = exoPlayer
-                    useController = showControls
-                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                }
-            },
-            update = { view ->
-                view.player = exoPlayer
-                view.useController = showControls
-            },
-            onRelease = { view -> view.player = null }
-        )
         if (playbackError != null) {
             Column(
                 modifier = Modifier
@@ -459,17 +509,27 @@ fun DiaryEditorDialog(
     ) { uri ->
         uri?.let {
             scope.launch(Dispatchers.IO) {
-                val copied = ImageImportUtils.copyMediaToPrivateStorage(context, it, "diary_videos", "mp4")
+                // PickVisualMedia 允许选到图片，类型必须按实际内容判定，
+                // 不能一律写死成 VIDEO，否则图片会被当成视频，详情页报「视频无法播放」。
+                val video = ImageImportUtils.isVideo(context, it)
+                val copied = ImageImportUtils.copyMediaToPrivateStorage(
+                    context,
+                    it,
+                    "diary_videos",
+                    if (video) "mp4" else "jpg"
+                )
                 copied?.let { uri ->
-                    VideoThumbnailUtils.thumbnailUri(context, uri)
-                    mediaItems.add(
-                        DiaryMedia(
-                            diaryId = existingDiary?.id ?: "",
-                            mediaUri = uri,
-                            mediaType = DiaryMediaType.VIDEO,
-                            sortOrder = mediaItems.size
+                    if (video) VideoThumbnailUtils.thumbnailUri(context, uri)
+                    withContext(Dispatchers.Main) {
+                        mediaItems.add(
+                            DiaryMedia(
+                                diaryId = existingDiary?.id ?: "",
+                                mediaUri = uri,
+                                mediaType = if (video) DiaryMediaType.VIDEO else DiaryMediaType.IMAGE,
+                                sortOrder = mediaItems.size
+                            )
                         )
-                    )
+                    }
                 }
             }
         }
@@ -490,10 +550,15 @@ fun DiaryEditorDialog(
                     if (video) "mp4" else "jpg"
                 ) ?: return@launch
                 if (video) VideoThumbnailUtils.thumbnailUri(context, copied)
-                mediaItems[index] = mediaItems[index].copy(
-                    mediaUri = copied,
-                    mediaType = if (video) DiaryMediaType.VIDEO else DiaryMediaType.IMAGE
-                )
+                withContext(Dispatchers.Main) {
+                    // 复制大文件可能耗时数秒，期间用户可能已删掉这一行：
+                    // 必须重新取一次当前值，不能直接用启动时的索引写入。
+                    val current = mediaItems.getOrNull(index) ?: return@withContext
+                    mediaItems[index] = current.copy(
+                        mediaUri = copied,
+                        mediaType = if (video) DiaryMediaType.VIDEO else DiaryMediaType.IMAGE
+                    )
+                }
             }
         }
     }
@@ -512,7 +577,9 @@ fun DiaryEditorDialog(
                     if (video) "mp4" else "jpg"
                 )
                 if (copied != null) {
-                    backgroundUri = copied
+                    withContext(Dispatchers.Main) {
+                        backgroundUri = copied
+                    }
                 }
             }
         }

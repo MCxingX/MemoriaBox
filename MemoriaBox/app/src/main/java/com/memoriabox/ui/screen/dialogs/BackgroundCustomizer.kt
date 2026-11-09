@@ -20,6 +20,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 import com.memoriabox.utils.ColorUtils
 import com.memoriabox.utils.ImageImportUtils
 
@@ -179,11 +180,27 @@ fun CardStyleDialog(
     onDismiss: () -> Unit,
     onSave: (String) -> Unit
 ) {
-    var textColor by remember { mutableStateOf("#000000") }
-    var cornerRadius by remember { mutableFloatStateOf(16f) }
-    var shadowSize by remember { mutableFloatStateOf(4f) }
-    var showLunar by remember { mutableStateOf(true) }
-    var showNote by remember { mutableStateOf(true) }
+    // 必须先解析已有的样式 JSON，否则打开编辑时拿到的全是默认值，
+    // 用户只改一项就会把其余设置悄悄重置。
+    val parsedStyle = remember(initialStyleJson) {
+        if (initialStyleJson.isNullOrBlank()) null
+        else runCatching { JSONObject(initialStyleJson) }.getOrNull()
+    }
+    var textColor by remember(parsedStyle) {
+        mutableStateOf(parsedStyle?.optString("textColor").orEmpty().ifBlank { "#000000" })
+    }
+    var cornerRadius by remember(parsedStyle) {
+        mutableFloatStateOf(parsedStyle?.optDouble("cornerRadius", 16.0)?.toFloat() ?: 16f)
+    }
+    var shadowSize by remember(parsedStyle) {
+        mutableFloatStateOf(parsedStyle?.optDouble("shadowSize", 4.0)?.toFloat() ?: 4f)
+    }
+    var showLunar by remember(parsedStyle) {
+        mutableStateOf(parsedStyle?.optBoolean("showLunar", true) ?: true)
+    }
+    var showNote by remember(parsedStyle) {
+        mutableStateOf(parsedStyle?.optBoolean("showNote", true) ?: true)
+    }
     var showColorPicker by remember { mutableStateOf(false) }
 
     AlertDialog(
@@ -274,7 +291,15 @@ fun CardStyleDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    val styleJson = """{"textColor":"$textColor","cornerRadius":$cornerRadius,"shadowSize":$shadowSize,"showLunar":$showLunar,"showNote":$showNote}"""
+                    // 用 JSONObject 构造而不是字符串模板：颜色值里若出现引号或反斜杠，
+                    // 拼出来的就是非法 JSON，下次读取会解析失败。
+                    val styleJson = JSONObject().apply {
+                        put("textColor", textColor)
+                        put("cornerRadius", cornerRadius.toDouble())
+                        put("shadowSize", shadowSize.toDouble())
+                        put("showLunar", showLunar)
+                        put("showNote", showNote)
+                    }.toString()
                     onSave(styleJson)
                 }
             ) {

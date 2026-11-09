@@ -13,7 +13,12 @@ object VideoThumbnailUtils {
         val videoFile = if (uri.scheme == "file") File(uri.path.orEmpty()) else null
         val output = videoFile?.let { File(it.parentFile, "${it.nameWithoutExtension}_cover.jpg") }
             ?: File(context.filesDir, "video_covers/${videoUri.hashCode()}.jpg").apply { parentFile?.mkdirs() }
-        if (output.isFile && output.length() > 0) return output.toURI().toString()
+        // 缓存必须比源视频新：否则替换成同名的新视频后，仍然显示旧封面。
+        val cacheValid = output.isFile && output.length() > 0 &&
+            (videoFile == null || output.lastModified() >= videoFile.lastModified())
+        // 用 Uri.fromFile 而不是 toURI()：后者生成 file:/xxx 单斜杠形式，
+        // 与项目里只认 file:// 的 isImageUri 判断不兼容。
+        if (cacheValid) return@runCatching Uri.fromFile(output).toString()
 
         val retriever = MediaMetadataRetriever()
         try {
@@ -35,7 +40,7 @@ object VideoThumbnailUtils {
             } finally {
                 bitmap.recycle()
             }
-            output.toURI().toString()
+            Uri.fromFile(output).toString()
         } finally {
             retriever.release()
         }

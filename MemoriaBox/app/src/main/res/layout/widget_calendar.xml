@@ -29,11 +29,14 @@
             android:textColor="#FFFFFF"
             android:layout_marginTop="4dp" />
 
-        <View
+        <!-- RemoteViews 不支持裸 View 控件，用它做分隔线会导致小组件加载崩溃，
+             这里用 TextView 加背景色实现同样的 1dp 横线。 -->
+        <TextView
             android:layout_width="match_parent"
             android:layout_height="1dp"
             android:background="#40FFFFFF"
-            android:layout_marginVertical="8dp" />
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="8dp" />
 
         <TextView
             android:id="@+id/widget_event_count"

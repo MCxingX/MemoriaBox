@@ -154,10 +154,33 @@ fun MainScreen(
 
     LaunchedEffect(initialOpenUpdate) {
         if (initialOpenUpdate) {
-            // 由通知点进来属于用户主动查看，忽略跳过与永不提醒
+            // 由通知点进来属于用户主动查看，忽略跳过与不再提醒
             updateCheckIsManual = true
             showUpdateDialog = true
             onOpenUpdateConsumed()
+        }
+    }
+
+    // 打开 App 时自动检查更新：这是唯一受「跳过该版本」「不再提醒」约束的入口。
+    // 手动点「检查更新」不受任何限制，见设置页的 onCheckUpdate。
+    LaunchedEffect(Unit) {
+        updateCheckIsManual = false
+        UpdateManager.check(context, manual = false)
+    }
+
+    // 自动检查发现新版本后才弹窗；被偏好拦截时保持静默，不打扰用户。
+    // 只处理「自动检查」得到的状态，手动检查的弹窗由点击入口自己打开，
+    // 否则手动关掉弹窗后 Activity 重建会把弹窗又弹回来。
+    LaunchedEffect(updateState) {
+        val state = updateState
+        if (state is UpdateState.Available && !state.manual && !updateCheckIsManual) {
+            val shouldPrompt = AppSettings.shouldPromptUpdate(
+                targetVersion = state.info.versionName,
+                skippedVersion = skippedUpdateVersion,
+                neverRemind = updateNeverRemind,
+                manual = false
+            )
+            if (shouldPrompt) showUpdateDialog = true
         }
     }
 
@@ -378,13 +401,11 @@ fun MainScreen(
                     onBackupSettingsClick = { navController.navigate(Screen.BackupSettings.route) },
                     onWebDavSettingsClick = { navController.navigate(Screen.WebDavSettings.route) },
                     onCheckUpdate = {
-                        // 手动检查更新：重置永久屏蔽并清空跳过记录，让弹窗正常出现
-                        AppSettings.setUpdateNeverRemind(context, false)
-                        AppSettings.clearUpdateSkippedVersion(context)
-                        updateNeverRemind = false
-                        skippedUpdateVersion = null
+                        // 手动检查更新：只绕开偏好判断，绝不修改用户已保存的
+                        // 「跳过该版本」与「不再提醒」设置，否则手动看一眼就会把用户的设置清掉。
                         updateCheckIsManual = true
                         showUpdateDialog = true
+                        UpdateManager.resetTransientState()
                         UpdateManager.check(context, manual = true)
                     }
                 )
@@ -580,48 +601,68 @@ fun MainScreen(
             else -> null
         }
         /*
+         * 本次弹窗是否由用户主动触发（手动点「检查更新」或点通知进入）。
+         * 手动触发时完全忽略「跳过该版本」与「不再提醒」，也不写入任何偏好。
+         * 手动标记随 UpdateState.Available 一起流转，弹窗关闭后自然失效，
+         * 不会污染后续的自动检查。
+         */
+        val manualCheck = updateCheckIsManual || (updateState as? UpdateState.Available)?.manual == true
+        /*
          * 弹窗显示条件：
          * - 手动检查时始终显示；
-         * - 自动检查时，开启「永不提醒」则不显示；
-         * - 该版本已被跳过则不显示，但更高版本会重新弹出。
+         * - 自动检查时，开启「不再提醒」则不显示；
+         * - 该版本已被跳过则不显示，但更高版本会重新弹出；
+         * - 已经在下载 / 已下载完成 / 下载失败重试时一律显示，否则进度会凭空消失。
          */
-        val blockedByPreference = visibleUpdateInfo != null && !AppSettings.shouldPromptUpdate(
+        val inProgress = updateState is UpdateState.Downloading ||
+            updateState is UpdateState.Ready ||
+            updateState is UpdateState.Error
+        val blockedByPreference = visibleUpdateInfo != null && !inProgress && !AppSettings.shouldPromptUpdate(
             targetVersion = visibleUpdateInfo.versionName,
             skippedVersion = skippedUpdateVersion,
             neverRemind = updateNeverRemind,
-            manual = updateCheckIsManual
+            manual = manualCheck
         )
 
         if (visibleUpdateInfo != null && !blockedByPreference) {
             UpdateAvailableDialog(
                 info = visibleUpdateInfo,
                 state = updateState,
+                manual = manualCheck,
                 onDismiss = {
-                    // 点弹窗外部等同跳过当前版本，并给出同样的反馈
-                    skippedUpdateVersion = visibleUpdateInfo.versionName
-                    AppSettings.setUpdateSkippedVersion(context, visibleUpdateInfo.versionName)
-                    showUpdateDialog = false
-                    coroutineScope.launch {
-                        snackbarHostState.showSnackbar(
-                            "已跳过 v${visibleUpdateInfo.versionName}，出现更高版本会再次提示"
-                        )
+                    // 手动检查时关闭弹窗只是关掉：不记录跳过，也不弹「已跳过」提示。
+                    // 否则用户只是看一眼就会被标记成跳过，之后自动检查再也不提示。
+                    if (!manualCheck) {
+                        skippedUpdateVersion = visibleUpdateInfo.versionName
+                        AppSettings.setUpdateSkippedVersion(context, visibleUpdateInfo.versionName)
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar(
+                                "已跳过 v${visibleUpdateInfo.versionName}，出现更高版本会再次提示"
+                            )
+                        }
                     }
+                    updateCheckIsManual = false
+                    showUpdateDialog = false
                 },
                 onSkipVersion = {
-                    skippedUpdateVersion = visibleUpdateInfo.versionName
-                    AppSettings.setUpdateSkippedVersion(context, visibleUpdateInfo.versionName)
-                    showUpdateDialog = false
-                    coroutineScope.launch {
-                        snackbarHostState.showSnackbar(
-                            "已跳过 v${visibleUpdateInfo.versionName}，出现更高版本会再次提示"
-                        )
+                    if (!manualCheck) {
+                        skippedUpdateVersion = visibleUpdateInfo.versionName
+                        AppSettings.setUpdateSkippedVersion(context, visibleUpdateInfo.versionName)
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar(
+                                "已跳过 v${visibleUpdateInfo.versionName}，出现更高版本会再次提示"
+                            )
+                        }
                     }
+                    updateCheckIsManual = false
+                    showUpdateDialog = false
                 },
                 onNeverRemind = {
                     updateNeverRemind = true
                     AppSettings.setUpdateNeverRemind(context, true)
                     AppSettings.clearUpdateSkippedVersion(context)
                     skippedUpdateVersion = null
+                    updateCheckIsManual = false
                     showUpdateDialog = false
                     coroutineScope.launch {
                         snackbarHostState.showSnackbar(
@@ -644,12 +685,16 @@ fun MainScreen(
             )
         } else if (visibleUpdateInfo != null && blockedByPreference) {
             // 被偏好拦截时不显示更新弹窗，也不提示「已是最新」
+            updateCheckIsManual = false
             showUpdateDialog = false
         } else if (updateState is UpdateState.Checking || updateState is UpdateState.UpToDate || updateState is UpdateState.Error) {
             val isChecking = updateState is UpdateState.Checking
             val errorMessage = (updateState as? UpdateState.Error)?.message
             AlertDialog(
-                onDismissRequest = { showUpdateDialog = false },
+                onDismissRequest = {
+                    updateCheckIsManual = false
+                    showUpdateDialog = false
+                },
                 title = { Text("检查更新") },
                 text = {
                     when {
@@ -665,7 +710,10 @@ fun MainScreen(
                 confirmButton = {
                     TextButton(
                         enabled = !isChecking,
-                        onClick = { showUpdateDialog = false }
+                        onClick = {
+                            updateCheckIsManual = false
+                            showUpdateDialog = false
+                        }
                     ) { Text("知道了") }
                 }
             )
@@ -706,6 +754,7 @@ fun MainScreen(
 private fun UpdateAvailableDialog(
     info: UpdateInfo,
     state: UpdateState,
+    manual: Boolean,
     onDismiss: () -> Unit,
     onSkipVersion: () -> Unit,
     onNeverRemind: () -> Unit,
@@ -739,8 +788,9 @@ private fun UpdateAvailableDialog(
                     is UpdateState.Error -> Text(state.message, color = MaterialTheme.colorScheme.error)
                     else -> Unit
                 }
-                // 跳过与永不提醒只在未开始下载时提供，下载中只保留取消下载
-                if (state !is UpdateState.Downloading) {
+                // 「跳过 / 不再提醒」只在自动检查的弹窗里出现；
+                // 手动检查是用户主动要看更新，不给他任何拦截性的选项和提示。
+                if (state !is UpdateState.Downloading && !manual) {
                     HorizontalDivider()
                     Text(
                         "跳过仅针对 v${info.versionName}，下次出现更高版本仍会提示。",
@@ -761,16 +811,25 @@ private fun UpdateAvailableDialog(
             }
         },
         dismissButton = {
+            val downloading = state is UpdateState.Downloading
             TextButton(
                 onClick = {
-                    if (state is UpdateState.Downloading) {
-                        // 取消下载不应关闭弹窗、也不应记录 dismissed 版本，方便立即重新下载。
-                        onCancelDownload()
-                    } else {
-                        onSkipVersion()
+                    when {
+                        downloading -> onCancelDownload()
+                        // 手动检查时这里只是「关闭」，不产生任何跳过记录
+                        manual -> onDismiss()
+                        else -> onSkipVersion()
                     }
                 }
-            ) { Text(if (state is UpdateState.Downloading) "取消下载" else "跳过此版本") }
+            ) {
+                Text(
+                    when {
+                        downloading -> "取消下载"
+                        manual -> "关闭"
+                        else -> "跳过此版本"
+                    }
+                )
+            }
         },
         confirmButton = {
             Button(

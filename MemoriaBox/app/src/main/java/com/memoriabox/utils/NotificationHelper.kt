@@ -180,7 +180,11 @@ class NotificationHelper(private val context: Context) {
         val now = System.currentTimeMillis()
         val candidate = Calendar.getInstance().apply { timeInMillis = event.date }
         var occurrenceIndex = 1
-        while (reminderTriggerTime(candidate.timeInMillis, event) <= now) {
+        // 提前量必须和 scheduleReminder 用同一份（reminderOffsets），
+        // 否则界面显示「提前 N 天」，排期却按另一个值算，
+        // 会出现「以为今天就该提醒、结果被推进到下一周期」。
+        val leadDays = reminderOffsets(event).max()
+        while (reminderTriggerTime(candidate.timeInMillis, event, leadDays) <= now) {
             occurrenceIndex++
             when (mode) {
                 RepeatMode.YEARLY -> candidate.add(Calendar.YEAR, event.repeatInterval.coerceAtLeast(1))
@@ -196,10 +200,10 @@ class NotificationHelper(private val context: Context) {
         return candidate.timeInMillis
     }
 
-    private fun reminderTriggerTime(date: Long, event: Event): Long {
+    private fun reminderTriggerTime(date: Long, event: Event, leadDays: Int): Long {
         return Calendar.getInstance().apply {
             timeInMillis = date
-            add(Calendar.DAY_OF_YEAR, -event.reminderDays)
+            add(Calendar.DAY_OF_YEAR, -leadDays)
             set(Calendar.HOUR_OF_DAY, event.alarmTime.substring(0, 2).toInt())
             set(Calendar.MINUTE, event.alarmTime.substring(3, 5).toInt())
             set(Calendar.SECOND, 0)

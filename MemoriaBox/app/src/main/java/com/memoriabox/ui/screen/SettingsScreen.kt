@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -101,24 +102,28 @@ fun SettingsScreen(
         SettingsSectionTitle("轻松一点", "先选一个舒服的颜色，再整理常用入口")
         ThemeModeCard(currentThemeMode = currentThemeMode, onThemeModeChange = onThemeModeChange)
         SettingsSectionTitle("常用", "每天会用到的功能放在这里")
-        SettingsItem(
-            icon = Icons.Default.Search,
-            title = "搜索",
-            description = "按名称、备注查找日子和分类",
-            onClick = onNavigateToSearch
-        )
-        SettingsItem(
-            icon = Icons.Default.Palette,
-            title = "个性化设置",
-            description = "自定义页面背景、固定每日语录",
-            onClick = onNavigateToCustomization
-        )
-        SettingsItem(
-            icon = Icons.Default.Groups,
-            title = "好友管理",
-            description = "生日按一个月内临近优先排序，全部好友都会保留",
-            onClick = onNavigateToFriends
-        )
+        SettingsGroup {
+            SettingsGroupItem(
+                icon = Icons.Default.Search,
+                title = "搜索",
+                description = "按名称、备注查找日子和分类",
+                onClick = onNavigateToSearch
+            )
+            SettingsGroupItem(
+                icon = Icons.Default.Palette,
+                title = "个性化设置",
+                description = "自定义页面背景、固定每日语录",
+                showTopDivider = true,
+                onClick = onNavigateToCustomization
+            )
+            SettingsGroupItem(
+                icon = Icons.Default.Groups,
+                title = "好友管理",
+                description = "生日按一个月内临近优先排序，全部好友都会保留",
+                showTopDivider = true,
+                onClick = onNavigateToFriends
+            )
+        }
 
         SettingsSectionTitle("记录和数据", "备份、同步、日记和月度总结")
 
@@ -165,83 +170,80 @@ fun SettingsScreen(
             }
         }
 
-        SettingsItem(
-            icon = Icons.Default.Backup,
-            title = "备份设置",
-            description = backupSummary,
-            onClick = onBackupSettingsClick
-        )
-        SettingsItem(
-            icon = Icons.Default.Cloud,
-            title = "WebDAV 同步",
-            description = "配置云端同步服务",
-            onClick = onWebDavSettingsClick
-        )
-        SettingsItem(
-            icon = Icons.Default.Edit,
-            title = "日记设置",
-            description = "滚动动画速度、开关",
-            onClick = { showDiarySettings = true }
-        )
-        SettingsItem(
-            icon = Icons.Default.AutoStories,
-            title = "月度总结",
-            description = "开关、自动推送、播放速度",
-            onClick = { showMonthlySummarySettings = true }
-        )
+        SettingsGroup {
+            SettingsGroupItem(
+                icon = Icons.Default.Backup,
+                title = "备份设置",
+                description = backupSummary,
+                onClick = onBackupSettingsClick
+            )
+            SettingsGroupItem(
+                icon = Icons.Default.Cloud,
+                title = "WebDAV 同步",
+                description = "配置云端同步服务",
+                showTopDivider = true,
+                onClick = onWebDavSettingsClick
+            )
+            SettingsGroupItem(
+                icon = Icons.Default.Edit,
+                title = "日记设置",
+                description = "滚动动画速度、开关",
+                showTopDivider = true,
+                onClick = { showDiarySettings = true }
+            )
+            SettingsGroupItem(
+                icon = Icons.Default.AutoStories,
+                title = "月度总结",
+                description = "开关、自动推送、播放速度",
+                showTopDivider = true,
+                onClick = { showMonthlySummarySettings = true }
+            )
+        }
         
         SettingsSectionTitle("提醒", "需要跨平台推送时再开启")
 
-        SettingsItem(
-            icon = Icons.Default.NotificationsActive,
-            title = "即将到来",
-            description = "首页显示、天数范围、颜色和提醒",
-            onClick = { showUpcomingSettings = true }
-        )
-
-        SettingsItem(
-            icon = Icons.Default.Celebration,
-            title = "节假日提醒",
-            description = "每天上午提醒春节、中秋、国庆等节假日",
-            onClick = { showHolidaySettings = true }
-        )
-
-        // PushPlus settings inline
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = adaptiveUi.screenPadding, vertical = adaptiveUi.sectionSpacing),
-            shape = MaterialTheme.shapes.extraLarge,
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-        ) {
-            Column(modifier = Modifier.padding(if (adaptiveUi.compact) 12.dp else 16.dp)) {
-                Text("PushPlus 推送", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("启用 PushPlus")
-                    Switch(
-                        checked = pushPlusEnabled,
-                        onCheckedChange = { 
-                            pushPlusEnabled = it
-                            pushPlusHelper.setPushPlusEnabled(it)
-                        }
-                    )
+        SettingsGroup {
+            SettingsGroupItem(
+                icon = Icons.Default.NotificationsActive,
+                title = "即将到来",
+                description = "首页显示、天数范围、颜色和提醒",
+                onClick = { showUpcomingSettings = true }
+            )
+            SettingsGroupItem(
+                icon = Icons.Default.Celebration,
+                title = "节假日提醒",
+                description = "每天上午提醒春节、中秋、国庆等节假日",
+                showTopDivider = true,
+                onClick = { showHolidaySettings = true }
+            )
+            SettingsGroupSwitchItem(
+                icon = Icons.Default.Campaign,
+                title = "PushPlus 推送",
+                description = if (pushPlusEnabled) "已开启，可配置 Token 与推送渠道" else "开启后可跨平台接收提醒",
+                checked = pushPlusEnabled,
+                showTopDivider = true,
+                onCheckedChange = {
+                    pushPlusEnabled = it
+                    pushPlusHelper.setPushPlusEnabled(it)
                 }
-                if (pushPlusEnabled) {
-                    Spacer(Modifier.height(8.dp))
+            )
+            if (pushPlusEnabled) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = if (adaptiveUi.compact) 12.dp else 14.dp, end = if (adaptiveUi.compact) 12.dp else 14.dp, bottom = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     OutlinedTextField(
                         value = pushPlusToken,
                         onValueChange = { pushPlusToken = it },
                         label = { Text("Token") },
                         modifier = Modifier.fillMaxWidth()
                     )
-                    Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                         listOf("wechat", "webhook", "mail", "sms").forEach { ch ->
                             FilterChip(
                                 selected = pushPlusChannel == ch,
@@ -265,60 +267,44 @@ fun SettingsScreen(
             is UpdateState.Error -> state.message
             UpdateState.Idle -> "检查官方 GitHub Release 更新"
         }
-        SettingsItem(
-            icon = Icons.Default.SystemUpdate,
-            title = "检查更新",
-            description = updateSummary,
-            onClick = onCheckUpdate
-        )
-        // 自动检查更新开关：关闭后不再自动提示新版本，手动检查仍可正常使用
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = adaptiveUi.screenPadding, vertical = adaptiveUi.sectionSpacing / 2f),
-            shape = MaterialTheme.shapes.extraLarge,
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.84f)),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-        ) {
-            Column(modifier = Modifier.padding(if (adaptiveUi.compact) 12.dp else 16.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("自动检查更新", style = MaterialTheme.typography.titleSmall)
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            if (autoCheckUpdate) "有新版本时自动提示" else "已关闭，点「检查更新」可手动查看",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Switch(
-                        checked = autoCheckUpdate,
-                        onCheckedChange = { enabled ->
-                            autoCheckUpdate = enabled
-                            AppSettings.setUpdateNeverRemind(context, !enabled)
-                        }
-                    )
+        SettingsGroup {
+            SettingsGroupItem(
+                icon = Icons.Default.SystemUpdate,
+                title = "检查更新",
+                description = updateSummary,
+                onClick = onCheckUpdate
+            )
+            SettingsGroupSwitchItem(
+                icon = Icons.Default.Autorenew,
+                title = "自动检查更新",
+                description = if (autoCheckUpdate) "有新版本时自动提示" else "已关闭，点「检查更新」可手动查看",
+                checked = autoCheckUpdate,
+                showTopDivider = true,
+                onCheckedChange = { enabled ->
+                    autoCheckUpdate = enabled
+                    AppSettings.setUpdateNeverRemind(context, !enabled)
                 }
-                if (!autoCheckUpdate && skippedUpdateVersion != null) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "已跳过 v$skippedUpdateVersion，更高版本仍会提示。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (!autoCheckUpdate && skippedUpdateVersion != null) {
+                Text(
+                    "已跳过 v$skippedUpdateVersion，更高版本仍会提示。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(
+                        start = if (adaptiveUi.compact) 12.dp else 14.dp,
+                        end = if (adaptiveUi.compact) 12.dp else 14.dp,
+                        bottom = 10.dp
                     )
-                }
+                )
             }
+            SettingsGroupItem(
+                icon = Icons.Default.Info,
+                title = "关于",
+                description = "版本 ${installedVersion.name} (${installedVersion.code}) · 念记",
+                showTopDivider = true,
+                onClick = { showAboutDialog = true }
+            )
         }
-        SettingsItem(
-            icon = Icons.Default.Info,
-            title = "关于",
-            description = "版本 ${installedVersion.name} (${installedVersion.code}) · 念记",
-            onClick = { showAboutDialog = true }
-        )
     }
 
     if (showAboutDialog) {

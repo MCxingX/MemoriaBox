@@ -28,6 +28,9 @@ import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Locale
 
+/** 视频页自动播放的兜底时长：视频正常播完会先触发推进，这个只用于回调丢失的情况。 */
+private const val VIDEO_FALLBACK_DELAY_MS = 45_000L
+
 @Composable
 fun MonthlySummaryPanel(
     state: MonthlySummaryUiState,
@@ -64,10 +67,15 @@ fun MonthlySummaryPanel(
     }
 
     LaunchedEffect(playing, selectedIndex, selectedMediaIndex, currentMedia?.mediaUri, state.playSpeedFactor, state.slides.size) {
-        if (playing && state.slides.isNotEmpty() && currentMedia?.mediaType != DiaryMediaType.VIDEO) {
+        if (!playing || state.slides.isEmpty()) return@LaunchedEffect
+        if (currentMedia?.mediaType == DiaryMediaType.VIDEO) {
+            // 视频页正常靠播放完成的 onCompletion 推进；但视频损坏、解码失败时
+            // 那个回调永远不来，自动播放会永久卡在这一页。给一个兜底超时。
+            delay(VIDEO_FALLBACK_DELAY_MS)
+        } else {
             delay(MonthlySummaryHelper.slideDelayMillis(state.playSpeedFactor))
-            advancePlayback()
         }
+        advancePlayback()
     }
 
     ImmersiveSummaryDialog(onDismiss = onDismiss, modifier = modifier) {
@@ -129,7 +137,7 @@ fun MonthlySummaryPanel(
                                 if (state.isSummaryEnabled) {
                                     item { SummaryTextCard(state.summaryText) }
                                 }
-                                items(state.slides) { slide ->
+                                items(state.slides, key = { it.dateStart }) { slide ->
                                     MonthlySummarySlideCard(slide = slide, dayText = dayFormat.format(slide.dateStart), textEnabled = state.isSummaryEnabled)
                                 }
                             }

@@ -24,6 +24,7 @@ import com.memoriabox.utils.AppSettings
 import com.memoriabox.utils.MonthlySummaryHelper
 import com.memoriabox.utils.MonthlySummaryUiState
 import com.memoriabox.utils.NotificationHelper
+import com.memoriabox.utils.ImageImportUtils
 import com.memoriabox.utils.SystemCalendarHelper
 import com.memoriabox.utils.startOfMonth
 import kotlinx.coroutines.flow.*
@@ -225,7 +226,10 @@ class BoxDetailViewModel(
     fun deleteEvent(event: Event) = viewModelScope.launch {
         try {
             notificationHelper.cancelReminder(event)
+            runCatching { SystemCalendarHelper(getApplication()).deleteEvent(event.id) }
             eventRepository.deleteEvent(event)
+            // 清掉事件头像等私有副本，避免文件永久滞留
+            ImageImportUtils.deletePrivateMedia(getApplication(), event.avatarUri)
             logRepository.logEventOperation("DELETE", event.id, event.name)
             backupManager.onDataChanged()
         } catch (e: Exception) {
@@ -237,8 +241,16 @@ class BoxDetailViewModel(
         if (ids.isEmpty()) return@launch
         try {
             val selectedEvents = eventRepository.getEventsByIds(ids.toList())
-            selectedEvents.forEach { notificationHelper.cancelReminder(it) }
+            val calendarHelper = SystemCalendarHelper(getApplication())
+            selectedEvents.forEach {
+                notificationHelper.cancelReminder(it)
+                // 同步清掉系统日历里的事件，避免删除后仍有幽灵闹钟
+                runCatching { calendarHelper.deleteEvent(it.id) }
+            }
             eventRepository.deleteEventsByIds(ids.toList())
+            selectedEvents.forEach {
+                ImageImportUtils.deletePrivateMedia(getApplication(), it.avatarUri)
+            }
             logRepository.logEventOperation("BATCH_DELETE", ids.joinToString(), "${ids.size} events")
             backupManager.onDataChanged()
         } catch (e: Exception) {
@@ -362,9 +374,20 @@ class CalendarViewModel(
     }
 
     private suspend fun saveDiaryInternal(existingDiary: DiaryEntry?, date: Long, content: String, mediaItems: List<DiaryMedia>, backgroundUri: String?) {
+        val context = getApplication<Application>()
+        // 先取出旧媒体，保存后统一回收不再被引用的副本文件
+        val previousMedia = existingDiary?.let { diaryRepository.getMediaForDiaryOnce(it.id) }.orEmpty()
+        val previousBackground = existingDiary?.backgroundMediaUri
+
         if (existingDiary != null && content.isBlank() && mediaItems.isEmpty() && backgroundUri == null) {
             diaryRepository.deleteDiary(existingDiary)
             _selectedDiaryMedia.value = emptyList()
+            ImageImportUtils.deletePrivateMedia(
+                context,
+                *previousMedia.map { it.mediaUri }.toTypedArray(),
+                previousBackground
+            )
+            backupManager.onDataChanged()
             return
         }
         val dayStart = startOfDay(date)
@@ -389,12 +412,27 @@ class CalendarViewModel(
         }
         diaryRepository.saveDiary(diary, media)
         _selectedDiaryMedia.value = media
+        // 回收本次保存后不再被引用的旧文件（被替换掉的图片/视频、换掉的背景）
+        val keptUris = media.map { it.mediaUri }.toSet() + setOfNotNull(backgroundUri)
+        ImageImportUtils.deletePrivateMedia(
+            context,
+            *previousMedia.map { it.mediaUri }.filterNot { it in keptUris }.toTypedArray(),
+            previousBackground?.takeIf { it != backgroundUri }
+        )
         backupManager.onDataChanged()
     }
 
     fun deleteDiary(diary: DiaryEntry) = viewModelScope.launch {
+        val context = getApplication<Application>()
+        val media = diaryRepository.getMediaForDiaryOnce(diary.id)
         diaryRepository.deleteDiary(diary)
         _selectedDiaryMedia.value = emptyList()
+        // 删除数据库行的同时释放私有目录里的媒体副本，避免文件永久滞留
+        ImageImportUtils.deletePrivateMedia(
+            context,
+            *media.map { it.mediaUri }.toTypedArray(),
+            diary.backgroundMediaUri
+        )
         backupManager.onDataChanged()
     }
 

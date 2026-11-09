@@ -69,6 +69,8 @@ data class Event(
     val alarmEnabled: Boolean = false,
     @ColumnInfo(name = "alarm_time")
     val alarmTime: String = "09:00",
+    // 保留列：早期版本用它存卡片样式 JSON，现在生效的样式走下面的 cardTemplate。
+    // 不要删除这一列——删除需要数据库迁移，且旧备份文件里该列可能带有数据。
     @ColumnInfo(name = "card_style_json")
     val cardStyleJson: String? = null,
     @ColumnInfo(name = "avatar_uri")
@@ -196,9 +198,16 @@ data class DiaryMedia(
     val aspectRatio: String = "16:9"
 )
 
+/**
+ * 卡片样式的旧数据结构。
+ *
+ * 注意：实际生效的卡片样式是 EventComponents 里的 CardVisualStyle（对应 Event.cardTemplate）。
+ * 这个类目前没有任何读写点，[backgroundImage] 字段更是从未被赋值过——
+ * 保留它只是为了不破坏 Event.cardStyleJson 这个数据库列的既有数据，
+ * 该列的读写一律按字符串处理，因此这里增删字段不会影响已存数据与备份恢复。
+ */
 data class CardStyle(
     val backgroundColor: String? = null,
-    val backgroundImage: String? = null,
     val textColor: String? = "#000000",
     val cornerRadius: Float = 16f,
     val shadowSize: Float = 4f,

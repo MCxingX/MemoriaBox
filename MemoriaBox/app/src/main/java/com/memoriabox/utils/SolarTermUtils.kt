@@ -36,18 +36,19 @@ object SolarTermUtils {
     private const val DAY_MS_F = 86_400_000.0
     private val BEIJING: TimeZone = TimeZone.getTimeZone("Asia/Shanghai")
 
-    @Volatile
-    private var cachedYear: Int = Int.MIN_VALUE
-
-    @Volatile
-    private var cachedMonthDays: IntArray? = null
+    /**
+     * 年份与节气表放在同一个原子引用里。
+     * 分成两个 @Volatile 字段时，并发读可能读到「新年份 + 旧数组」的组合，
+     * 导致节气日期错到上一年。
+     */
+    private val cache = java.util.concurrent.atomic.AtomicReference<Pair<Int, IntArray>?>(null)
 
     /**
      * 返回 [year] 年 24 个节气各自的"月/日"编码，编码为 month * 100 + day。
      * 例如 2025 年清明返回 405。
      */
     private fun monthDaysOfYear(year: Int): IntArray {
-        cachedMonthDays?.let { if (cachedYear == year) return it }
+        cache.get()?.let { (cachedYear, days) -> if (cachedYear == year) return days }
         val result = IntArray(24)
         val calendar = Calendar.getInstance(BEIJING)
         for (i in 0 until 24) {
@@ -57,8 +58,7 @@ object SolarTermUtils {
             calendar.timeInMillis = millis
             result[i] = (calendar.get(Calendar.MONTH) + 1) * 100 + calendar.get(Calendar.DAY_OF_MONTH)
         }
-        cachedYear = year
-        cachedMonthDays = result
+        cache.set(year to result)
         return result
     }
 

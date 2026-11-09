@@ -162,6 +162,9 @@ class MemoriaApp : Application() {
         }
 
         private fun cleanupOldLogsMediaStore(context: Context) {
+            // MediaStore.Downloads 仅 Android 10+ 存在，低版本访问会抛 NoSuchFieldError。
+            // 虽然外层有 runCatching 兜底，但这里显式返回更清晰，也避免走无意义的调用。
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
             runCatching {
                 val collection = MediaStore.Downloads.EXTERNAL_CONTENT_URI
                 val relativePath = "${Environment.DIRECTORY_DOWNLOADS}/$RELATIVE_PATH"
@@ -185,6 +188,7 @@ class MemoriaApp : Application() {
         }
 
         private fun writeViaMediaStore(context: Context, fileName: String, content: String): Boolean {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return false
             return runCatching {
                 val values = ContentValues().apply {
                     put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)

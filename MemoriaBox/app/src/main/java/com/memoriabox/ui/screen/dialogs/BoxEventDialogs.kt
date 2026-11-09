@@ -796,6 +796,9 @@ fun EventDialog(
                                 value = reminderDays.toString(),
                                 onValueChange = {
                                     reminderDays = it.toIntOrNull()?.coerceIn(0, 365) ?: 1
+                                    // 提前天数即唯一真源，同步写回提醒点，
+                                    // 否则两个输入框会各存一份、互相覆盖。
+                                    reminderOffsetsText = reminderDays.toString()
                                 },
                                 modifier = Modifier.width(88.dp),
                                 singleLine = true,
@@ -827,6 +830,8 @@ fun EventDialog(
                                     onClick = {
                                         val updated = if (offset in offsets) offsets - offset else offsets + offset
                                         reminderOffsetsText = updated.sorted().joinToString(",")
+                                        // 同步回「提前 N 天」，保持两个输入框与排期一致
+                                        reminderDays = updated.maxOrNull() ?: 0
                                     },
                                     label = { Text(label) }
                                 )
@@ -879,6 +884,13 @@ fun EventDialog(
         confirmButton = {
             Button(
                 onClick = {
+                    // 提前天数与多提醒点必须是同一份数据：界面上的「提前 N 天」
+                    // 直接取提醒点的最大值，避免显示一个值、实际按另一个值排期。
+                    val normalizedOffsets = reminderOffsetsText.split(",")
+                        .mapNotNull { it.trim().toIntOrNull() }
+                        .filter { it in 0..365 }
+                        .distinct()
+                        .sorted()
                     val event = Event(
                         id = existingEvent?.id ?: UUID.randomUUID().toString(),
                         boxId = selectedBoxId,
@@ -888,8 +900,8 @@ fun EventDialog(
                         type = selectedType,
                         note = note,
                         reminderEnabled = reminderEnabled,
-                        reminderDays = reminderDays,
-                        reminderOffsets = reminderOffsetsText.split(",").mapNotNull { it.trim().toIntOrNull() }.filter { it in 0..365 }.distinct().joinToString(",").ifBlank { reminderDays.toString() },
+                        reminderDays = normalizedOffsets.maxOrNull() ?: reminderDays,
+                        reminderOffsets = normalizedOffsets.joinToString(",").ifBlank { reminderDays.toString() },
                         avatarUri = backgroundUri,
                         isPinned = existingEvent?.isPinned ?: false,
                         pushPlusEnabled = pushPlusEnabled && reminderEnabled,
@@ -1347,11 +1359,27 @@ fun LunarCalendarDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                val selectedGregorianDate = remember(selectedYear, selectedMonth, selectedDay) {
-                    LunarDateUtils.monthDayToGregorian(selectedYear, selectedMonth, selectedDay)
+                // 农历换算要逐天扫描，放在主线程会让每次点选都卡一下，
+                // 改为后台计算，界面先显示"正在换算"。
+                var selectedGregorianDate by remember(selectedYear, selectedMonth, selectedDay) {
+                    mutableStateOf<Long?>(null)
+                }
+                var gregorianCalculating by remember(selectedYear, selectedMonth, selectedDay) {
+                    mutableStateOf(true)
+                }
+                LaunchedEffect(selectedYear, selectedMonth, selectedDay) {
+                    val result = withContext(Dispatchers.Default) {
+                        LunarDateUtils.monthDayToGregorian(selectedYear, selectedMonth, selectedDay)
+                    }
+                    selectedGregorianDate = result
+                    gregorianCalculating = false
                 }
                 Text(
-                    selectedGregorianDate?.let { "对应公历：${formatDate(it)}" } ?: "当前农历日期在所选年份中无法换算",
+                    when {
+                        gregorianCalculating -> "正在换算…"
+                        selectedGregorianDate != null -> "对应公历：${formatDate(selectedGregorianDate!!)}"
+                        else -> "当前农历日期在所选年份中无法换算"
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1433,17 +1461,32 @@ fun LunarCalendarDialog(
     )
 }
 
+/**
+ * 把所选农历日期换算成公历基期。
+ *
+ * 不能因为「这一天今年已经过去」就顺延到明年：那会把「1990 年农历生日」
+ * 写成 1991 年，ELAPSED / 周年天数全部错位。基期就是用户所选年份对应的公历日。
+ * 该年这个农历日不存在时（如只有 29 天的月份里的三十），往前退到最近的合法日。
+ */
 private fun approximateLunarSelectionDate(year: Int, month: Int, day: Int): Long {
-    val today = toLocalStartOfDay(System.currentTimeMillis())
-    LunarDateUtils.monthDayToGregorian(year, month, day)?.takeIf { it >= today }?.let { return it }
-    return LunarDateUtils.monthDayToGregorian(year + 1, month, day) ?: today
+    for (candidate in day downTo 1) {
+        LunarDateUtils.monthDayToGregorian(year, month, candidate)?.let { return it }
+    }
+    return toLocalStartOfDay(System.currentTimeMillis())
 }
 
 private fun parseLunarSelection(lunar: String?, lunarMonths: List<String>): Triple<Int, Int, Int>? {
     if (lunar.isNullOrBlank()) return null
     val year = Regex("(\\d{4})年").find(lunar)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: return null
-    val month = lunarMonths.indexOfFirst { lunar.contains(it) }.takeIf { it >= 0 }?.plus(1) ?: return null
-    val day = LunarDateUtils.parseDay(lunar) ?: return null
+    // 必须用带月名剔除的解析：直接对整串取日号时，
+    // 「农历十一月初五」里的「十一」会被当成日号，农历日期被静默改成十一月十一。
+    val parsed = LunarDateUtils.parseMonthDayWithLeap(lunar)
+    val month = parsed?.first ?: run {
+        val index = lunarMonths.indexOfFirst { lunar.contains(it) }
+        if (index < 0) return null
+        index + 1
+    }
+    val day = parsed?.second ?: LunarDateUtils.parseDay(lunar) ?: return null
     return Triple(year.coerceIn(1900, 2100), month, day)
 }
 

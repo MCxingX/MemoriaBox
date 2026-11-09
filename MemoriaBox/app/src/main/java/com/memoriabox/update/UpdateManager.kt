@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import androidx.core.content.FileProvider
 import com.memoriabox.BuildConfig
 import com.memoriabox.utils.installedAppVersion
 import kotlinx.coroutines.CoroutineScope
@@ -71,7 +72,7 @@ object UpdateManager {
             runCatching { fetchLatestRelease() }
                 .onSuccess { info ->
                     if (UpdateFormat.isNewer(info.versionName, context.installedAppVersion().name)) {
-                        mutableState.value = UpdateState.Available(info)
+                        mutableState.value = UpdateState.Available(info, manual)
                     } else {
                         mutableState.value = UpdateState.UpToDate(manual)
                     }
@@ -318,6 +319,12 @@ object UpdateManager {
     }
 
     private fun saveToDownloads(context: Context, versionName: String, source: File): Uri {
+        // MediaStore.Downloads 是 Android 10（API 29）才有的类，
+        // 低版本访问它会抛 NoSuchFieldError，导致整个更新流程直接失败。
+        // 这些版本直接返回应用私有目录的 FileProvider URI，安装同样可用。
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            return FileProvider.getUriForFile(context, "${context.packageName}.provider", source)
+        }
         val resolver = context.contentResolver
         val values = ContentValues().apply {
             put(MediaStore.Downloads.DISPLAY_NAME, "MemoriaBox-${System.currentTimeMillis()}.apk")

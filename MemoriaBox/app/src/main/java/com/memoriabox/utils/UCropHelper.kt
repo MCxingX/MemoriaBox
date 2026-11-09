@@ -15,6 +15,7 @@ import com.yalantis.ucrop.model.AspectRatio
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 
 object UCropHelper {
@@ -63,7 +64,7 @@ object UCropHelper {
                     uCrop.withAspectRatio(aspectRatio, 1f)
                 }
 
-                launcher.launch(uCrop.getIntent(context))
+                launchOnMainThread(context, uCrop.getIntent(context), launcher)
             }
         }
     }
@@ -109,7 +110,27 @@ object UCropHelper {
                     .withOptions(uCropOptions)
                     .withMaxResultSize(1920, 1920)
 
-                launcher.launch(uCrop.getIntent(context))
+                launchOnMainThread(context, uCrop.getIntent(context), launcher)
+            }
+        }
+    }
+
+    /**
+     * ActivityResultLauncher.launch 必须在主线程调用。
+     * 调用方如果在 Dispatchers.IO 里触发裁剪，直接 launch 会抛异常导致裁剪页打不开，
+     * 这里统一切回主线程。
+     */
+    private fun launchOnMainThread(
+        context: Context,
+        intent: android.content.Intent,
+        launcher: androidx.activity.result.ActivityResultLauncher<android.content.Intent>
+    ) {
+        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+            launcher.launch(intent)
+        } else {
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                runCatching { launcher.launch(intent) }
+                    .onFailure { Log.e(TAG, "Launch crop activity failed", it) }
             }
         }
     }
@@ -127,7 +148,9 @@ object UCropHelper {
                 scope.launch(Dispatchers.IO) {
                     val finalPath = copyToDestination(context, resultUri, folder)
                     runCatching { resultUri.path?.let { File(it).delete() } }
-                    onResult(finalPath)
+                    // 回调来自界面层，必须回主线程更新状态，
+                    // 否则会在 IO 线程写 Compose 状态。
+                    withContext(Dispatchers.Main) { onResult(finalPath) }
                 }
             } else {
                 onResult(null)

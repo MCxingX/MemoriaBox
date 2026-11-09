@@ -2,3 +2,11 @@ keystore.properties
 muyu.keystore
 *.keystore
 *.jks
+
+# Local release scripts and temporary artifacts (not version controlled)
+_backup/
+_rel_body_*.json
+release_body*.json
+publish*.ps1
+build_log.txt
+RELEASE_ARCHIVE.md
